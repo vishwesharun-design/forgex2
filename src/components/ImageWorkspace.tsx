@@ -14,7 +14,12 @@ import {
   Layers,
   Check,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  Wand2,
+  Scissors,
+  Eraser,
+  RefreshCw,
+  Palette
 } from 'lucide-react';
 import { 
   GeneratedImage, 
@@ -36,6 +41,8 @@ interface ImageWorkspaceProps {
   onViewFullscreen: (image: GeneratedImage) => void;
 }
 
+type StudioTool = 'text2img' | 'img2img' | 'inpaint' | 'removeBg' | 'removeObj' | 'upscale' | 'transform';
+
 const ASPECT_RATIOS: ImageAspectRatio[] = ['1:1', '16:9', '9:16', '4:3'];
 const IMAGE_COUNTS: number[] = [1, 2, 4];
 const STYLES: ImageStyle[] = [
@@ -56,6 +63,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   theme,
   onViewFullscreen,
 }) => {
+  const [activeStudioTool, setActiveStudioTool] = useState<StudioTool>('text2img');
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>('16:9');
   const [imageCount, setImageCount] = useState<number>(2);
@@ -63,6 +71,8 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [brushSize, setBrushSize] = useState<number>(24);
+  const [objectToRemove, setObjectToRemove] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isDark = theme === 'dark';
@@ -70,7 +80,21 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
 
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const cleanPrompt = prompt.trim() || 'A surreal futuristic monolith radiating amber thunder energy across dark mirror dunes, 8k cinematic masterpiece';
+    let cleanPrompt = prompt.trim();
+    if (!cleanPrompt) {
+      if (activeStudioTool === 'removeBg') cleanPrompt = 'Isolate foreground subject against transparent studio background, sharp cutout edges';
+      else if (activeStudioTool === 'upscale') cleanPrompt = 'Enhance photorealistic micro-details, 8K ultra-clarity HDR upscale';
+      else if (activeStudioTool === 'removeObj') cleanPrompt = `Remove ${objectToRemove || 'unwanted background elements'}, natural seamless infill`;
+      else cleanPrompt = 'A surreal futuristic monolith radiating amber thunder energy across dark mirror dunes, 8k cinematic masterpiece';
+    }
+
+    if (activeStudioTool === 'removeBg') {
+      cleanPrompt = `Clean foreground cutout, removed background: ${cleanPrompt}`;
+    } else if (activeStudioTool === 'upscale') {
+      cleanPrompt = `8K high-resolution remaster: ${cleanPrompt}`;
+    } else if (activeStudioTool === 'removeObj' && objectToRemove) {
+      cleanPrompt = `Inpainted object removal (${objectToRemove}): ${cleanPrompt}`;
+    }
 
     setIsGenerating(true);
     try {
@@ -183,6 +207,79 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               />
             </div>
           </div>
+
+          {/* Studio Tool Selection Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-none">
+            {[
+              { id: 'text2img', label: 'Text to Image', icon: Sparkles },
+              { id: 'img2img', label: 'Image to Image', icon: Wand2 },
+              { id: 'inpaint', label: 'Inpaint / Edit', icon: Edit3 },
+              { id: 'removeBg', label: 'Remove Background', icon: Scissors },
+              { id: 'removeObj', label: 'Remove Object', icon: Eraser },
+              { id: 'upscale', label: 'Upscale & Enhance', icon: Zap },
+              { id: 'transform', label: 'Style Transform', icon: Palette },
+            ].map((tool) => {
+              const Icon = tool.icon;
+              const isActive = activeStudioTool === tool.id;
+              return (
+                <button
+                  key={tool.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveStudioTool(tool.id as StudioTool);
+                    if (tool.id === 'img2img' && !referenceImage) {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+                    isActive
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                      : isDark
+                      ? 'bg-neutral-950 border border-neutral-800 text-neutral-400 hover:text-white'
+                      : 'bg-neutral-100 border border-neutral-200 text-neutral-700 hover:text-black'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tool.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Contextual tool controls if removeObj or inpaint */}
+          {activeStudioTool === 'removeObj' && (
+            <div className="mb-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-center gap-3">
+              <Eraser className="w-4 h-4 text-amber-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Name or describe the object to erase / remove (e.g. 'watermark', 'person on left', 'telephone pole')..."
+                value={objectToRemove}
+                onChange={(e) => setObjectToRemove(e.target.value)}
+                className={`w-full text-xs bg-transparent border-none focus:outline-none ${isDark ? 'text-white' : 'text-neutral-900'}`}
+              />
+            </div>
+          )}
+
+          {activeStudioTool === 'inpaint' && (
+            <div className="mb-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-center justify-between gap-3 text-xs">
+              <span className="text-amber-400 font-semibold flex items-center gap-1.5">
+                <Edit3 className="w-3.5 h-3.5" />
+                Prompt & Brush Edit:
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-neutral-400">Brush Radius:</span>
+                <input
+                  type="range"
+                  min="8"
+                  max="64"
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  className="w-24 accent-amber-500"
+                />
+                <span className="font-mono text-neutral-300">{brushSize}px</span>
+              </div>
+            </div>
+          )}
 
           {/* Large Prompt Box as specified in Section 13 */}
           <div className="relative mb-5">

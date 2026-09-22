@@ -1,0 +1,527 @@
+export type ForgeXTheme = 'dark' | 'light';
+
+export type ForgeXModelId = 
+  | 'unreal-1' 
+  | 'unreal-2' 
+  | 'unreal-3' 
+  | 'unreal-4' 
+  | 'unreal-5';
+
+export interface ForgeXModel {
+  id: ForgeXModelId;
+  name: string;
+  badge: string; // e.g. 'U1', 'U5'
+  description: string;
+  capabilityLevel: number;
+}
+
+export const FORGEX_MODELS: ForgeXModel[] = [
+  {
+    id: 'unreal-1',
+    name: 'Unreal Engine 1',
+    badge: 'U1',
+    description: 'Basic AI',
+    capabilityLevel: 1,
+  },
+  {
+    id: 'unreal-2',
+    name: 'Unreal Engine 2',
+    badge: 'U2',
+    description: 'Improved reasoning',
+    capabilityLevel: 2,
+  },
+  {
+    id: 'unreal-3',
+    name: 'Unreal Engine 3',
+    badge: 'U3',
+    description: 'Advanced responses',
+    capabilityLevel: 3,
+  },
+  {
+    id: 'unreal-4',
+    name: 'Unreal Engine 4',
+    badge: 'U4',
+    description: 'Advanced creative intelligence',
+    capabilityLevel: 4,
+  },
+  {
+    id: 'unreal-5',
+    name: 'Unreal Engine 5',
+    badge: 'U5',
+    description: 'Highest capability',
+    capabilityLevel: 5,
+  },
+];
+
+export type ActiveWorkspace = 
+  | 'chat' 
+  | 'image' 
+  | 'video' 
+  | 'music' 
+  | 'research' 
+  | 'code'
+  | 'search'
+  | 'agents'
+  | 'datalab'
+  | 'files'
+  | 'writing'
+  | 'presentation'
+  | 'canvas'
+  | 'projects';
+
+export type CodeLanguage = 
+  | 'typescript' 
+  | 'javascript' 
+  | 'python' 
+  | 'html' 
+  | 'css' 
+  | 'json' 
+  | 'sql' 
+  | 'rust' 
+  | 'cpp' 
+  | 'go';
+
+export interface CodeSnippet {
+  id: string;
+  title: string;
+  code: string;
+  language: CodeLanguage;
+  createdAt: number;
+  updatedAt: number;
+  modelId?: ForgeXModelId;
+  isFavorite?: boolean;
+}
+
+export type CodeAlterMode = 'correct' | 'refactor' | 'optimize' | 'types' | 'custom';
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+  snippet: string;
+  sourceDomain?: string;
+}
+
+export interface ResearchStep {
+  id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  description?: string;
+}
+
+export interface DeepResearchReport {
+  id: string;
+  query: string;
+  depth: 'deep' | 'quick';
+  timestamp: number;
+  answer: string;
+  summary: string;
+  keyFindings: string[];
+  detailedAnalysis?: string;
+  sources: ResearchSource[];
+  steps: ResearchStep[];
+  modelId: ForgeXModelId;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  creditsUsed: number;
+  creditsLimit: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  modelUsed?: string;
+  attachments?: {
+    type: 'image' | 'file';
+    name: string;
+    url?: string;
+  }[];
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatMessage[];
+  modelId: ForgeXModelId;
+}
+
+export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '4:3';
+export type ImageStyle = 'Realistic' | 'Cinematic' | 'Anime' | '3D' | 'Illustration' | 'Minimal' | 'Custom';
+
+export interface GeneratedImage {
+  id: string;
+  prompt: string;
+  imageUrl: string;
+  aspectRatio: ImageAspectRatio;
+  style: ImageStyle;
+  modelId: ForgeXModelId;
+  createdAt: number;
+  isFavorite?: boolean;
+  referenceImage?: string;
+}
+
+export type VideoDuration = '5s' | '10s' | '15s' | '20s' | '30s' | '60s' | string;
+export type VideoAspectRatio = '16:9' | '9:16' | '1:1';
+export type VideoQuality = 'Standard' | 'High';
+export type VideoGenerationType = 'text-to-video' | 'image-to-video';
+
+export type CameraMotion = 'zoom-in' | 'zoom-out' | 'pan-left-to-right' | 'pan-right-to-left' | 'orbit';
+
+export interface VideoSlide {
+  id: string;
+  title: string;
+  imageUrl: string;
+  cameraMotion: CameraMotion;
+  caption: string;
+  durationSeconds: number;
+}
+
+export interface GeneratedVideo {
+  id: string;
+  prompt: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  duration: VideoDuration;
+  aspectRatio: VideoAspectRatio;
+  quality: VideoQuality;
+  generationType: VideoGenerationType;
+  modelId: ForgeXModelId;
+  createdAt: number;
+  isFavorite?: boolean;
+  referenceImage?: string;
+  slides?: VideoSlide[];
+  slideCount?: number;
+}
+
+export type SongGenre = 'Synthwave' | 'Lo-Fi' | 'Cinematic' | 'EDM' | 'Rock' | 'Acoustic' | 'Ambient' | 'Hip-Hop';
+export type SongMood = 'Energetic' | 'Chill' | 'Dark' | 'Dreamy' | 'Uplifting' | 'Melancholic';
+
+export interface GeneratedSong {
+  id: string;
+  title: string;
+  prompt: string;
+  genre: SongGenre;
+  mood: SongMood;
+  tempoBpm: number;
+  durationSeconds: number;
+  lyrics?: string;
+  coverUrl: string;
+  modelId: ForgeXModelId;
+  createdAt: number;
+  isFavorite?: boolean;
+  audioSeed?: number;
+}
+
+export interface UserSettings {
+  theme: ForgeXTheme;
+  defaultModel: ForgeXModelId;
+  responsePreference: 'Creative' | 'Balanced' | 'Precise';
+  defaultImageRatio: ImageAspectRatio;
+  defaultVideoDuration: VideoDuration;
+  autoEnhancePrompts: boolean;
+  enableAnimations: boolean;
+  enableStarBackground: boolean;
+  reduceMotion: boolean;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: number;
+  read: boolean;
+  type: 'system' | 'creation' | 'update';
+}
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  theme: 'dark',
+  defaultModel: 'unreal-5',
+  responsePreference: 'Balanced',
+  defaultImageRatio: '16:9',
+  defaultVideoDuration: '10s',
+  autoEnhancePrompts: true,
+  enableAnimations: true,
+  enableStarBackground: true,
+  reduceMotion: false,
+};
+
+// ==========================================
+// 1. FILE / DOCUMENT AI TYPES
+// ==========================================
+export type DocumentFileType = 'pdf' | 'docx' | 'pptx' | 'txt' | 'csv' | 'image' | 'markdown';
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
+
+export interface ExtractedTable {
+  id: string;
+  title: string;
+  headers: string[];
+  rows: string[][];
+}
+
+export interface DocumentItem {
+  id: string;
+  name: string;
+  fileType: DocumentFileType;
+  fileSize: number;
+  uploadTime: number;
+  textContent: string;
+  previewUrl?: string;
+  summary?: string;
+  keyPoints?: string[];
+  tables?: ExtractedTable[];
+  notes?: string;
+  quizzes?: QuizQuestion[];
+  entities?: { label: string; count: number }[];
+}
+
+export interface DocQAMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  documentIds?: string[];
+  citations?: { docName: string; pageOrSection?: string; snippet: string }[];
+}
+
+// ==========================================
+// 2. AI AGENTS TYPES
+// ==========================================
+export type AgentCategory = 
+  | 'Research Agent'
+  | 'Coding Agent'
+  | 'Marketing Agent'
+  | 'Data Analyst'
+  | 'Study Agent'
+  | 'Website Builder'
+  | 'Custom Agent';
+
+export type AgentToolType = 
+  | 'web_search'
+  | 'code_executor'
+  | 'data_cruncher'
+  | 'doc_reader'
+  | 'visual_designer';
+
+export interface AIAgent {
+  id: string;
+  name: string;
+  role: AgentCategory;
+  description: string;
+  avatarIcon: string;
+  systemPrompt: string;
+  enabledTools: AgentToolType[];
+  temperature: number;
+  isCustom?: boolean;
+  capabilities: string[];
+  createdAt: number;
+}
+
+export interface AgentStep {
+  id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'not_configured';
+  detail?: string;
+  toolUsed?: AgentToolType;
+  output?: string;
+}
+
+export interface AgentExecution {
+  id: string;
+  agentId: string;
+  taskPrompt: string;
+  status: 'idle' | 'running' | 'completed' | 'error';
+  steps: AgentStep[];
+  finalResponse?: string;
+  timestamp: number;
+}
+
+// ==========================================
+// 3. IMAGE STUDIO TYPES
+// ==========================================
+export type ImageStudioMode = 
+  | 'text-to-image'
+  | 'image-to-image'
+  | 'remove-background'
+  | 'remove-object'
+  | 'upscale'
+  | 'transform';
+
+// ==========================================
+// 4. DATA LAB TYPES
+// ==========================================
+export interface DataColumnInfo {
+  name: string;
+  type: 'numeric' | 'string' | 'date' | 'boolean';
+  nonNullCount: number;
+  nullCount: number;
+  uniqueCount: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+  median?: number;
+}
+
+export interface DataDataset {
+  id: string;
+  fileName: string;
+  rowCount: number;
+  columnCount: number;
+  columns: DataColumnInfo[];
+  rows: Record<string, any>[];
+  uploadTime: number;
+  summary?: string;
+  insights?: { title: string; detail: string; metric?: string; type: 'trend' | 'stat' | 'anomaly' }[];
+}
+
+export type ChartType = 'bar' | 'line' | 'scatter' | 'pie';
+
+// ==========================================
+// 5. PRESENTATION GENERATOR TYPES
+// ==========================================
+export interface SlideItem {
+  id: string;
+  slideNumber: number;
+  title: string;
+  subtitle?: string;
+  bullets: string[];
+  keyTakeaway?: string;
+  visualNote?: string;
+  layout: 'title' | 'split' | 'bullets' | 'quote' | 'stats';
+  statsData?: { value: string; label: string }[];
+}
+
+export interface PresentationDeck {
+  id: string;
+  topic: string;
+  title: string;
+  themeStyle: 'dark-amber' | 'cyber-neon' | 'minimal-clean' | 'deep-sapphire';
+  slides: SlideItem[];
+  createdTime: number;
+}
+
+// ==========================================
+// 6. WRITING STUDIO TYPES
+// ==========================================
+export type WritingCategory = 
+  | 'Essay'
+  | 'Article'
+  | 'Blog'
+  | 'Story'
+  | 'Email'
+  | 'Resume'
+  | 'Script'
+  | 'Documentation';
+
+export type WritingTone = 
+  | 'Professional'
+  | 'Casual'
+  | 'Persuasive'
+  | 'Academic'
+  | 'Creative'
+  | 'Confident'
+  | 'Empathetic';
+
+export type WritingAction = 
+  | 'rewrite'
+  | 'improve'
+  | 'shorten'
+  | 'expand'
+  | 'grammar'
+  | 'change-tone';
+
+export interface WritingDoc {
+  id: string;
+  title: string;
+  category: WritingCategory;
+  tone: WritingTone;
+  content: string;
+  wordCount: number;
+  charCount: number;
+  lastModified: number;
+}
+
+// ==========================================
+// 7. AI CANVAS / WHITEBOARD TYPES
+// ==========================================
+export type CanvasNodeType = 
+  | 'idea' 
+  | 'mindmap' 
+  | 'process' 
+  | 'decision' 
+  | 'note' 
+  | 'group';
+
+export interface CanvasNode {
+  id: string;
+  type: CanvasNodeType;
+  title: string;
+  content: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  tags?: string[];
+}
+
+export interface CanvasEdge {
+  id: string;
+  fromId: string;
+  toId: string;
+  label?: string;
+  style?: 'solid' | 'dashed';
+}
+
+export interface CanvasBoard {
+  id: string;
+  name: string;
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+  lastModified: number;
+}
+
+// ==========================================
+// 8. FORGEX PROJECTS TYPES
+// ==========================================
+export interface ForgeXProject {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  createdTime: number;
+  lastActive: number;
+  contextNotes: string;
+  chatSessionIds: string[];
+  fileIds: string[];
+  codeSnippetIds: string[];
+  imageIds: string[];
+  researchQueries: string[];
+  tags: string[];
+}
+
+// ==========================================
+// 9. VOICE MODE TYPES
+// ==========================================
+export type VoiceModeStatus = 'idle' | 'listening' | 'thinking' | 'speaking' | 'unsupported';
+
+export interface VoiceOption {
+  id: string;
+  name: string;
+  lang: string;
+  gender?: string;
+}

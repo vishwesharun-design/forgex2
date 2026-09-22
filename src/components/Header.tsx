@@ -45,6 +45,10 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Video Studio';
       case 'music':
         return 'AI Song Studio';
+      case 'research':
+        return 'Deep Research';
+      case 'code':
+        return 'Code Studio';
       default:
         return 'ForgeX Studio';
     }

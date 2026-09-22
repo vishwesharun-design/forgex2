@@ -1,0 +1,461 @@
+import React, { useState } from 'react';
+import {
+  PenTool,
+  Sparkles,
+  FileText,
+  Copy,
+  Check,
+  Trash2,
+  Plus,
+  RefreshCw,
+  Scissors,
+  Maximize2,
+  CheckCheck,
+  SlidersHorizontal,
+  ArrowRight,
+  Download
+} from 'lucide-react';
+import { WritingDoc, WritingCategory, WritingTone, WritingAction, ForgeXTheme, ForgeXModelId } from '../types';
+import { writingStudioService } from '../services/writingStudioService';
+import { ModelSelector } from './ModelSelector';
+
+interface WritingStudioWorkspaceProps {
+  isDark: boolean;
+  theme: ForgeXTheme;
+  selectedModelId: ForgeXModelId;
+  onSelectModel: (id: ForgeXModelId) => void;
+  onSendToChat?: (text: string) => void;
+}
+
+const CATEGORIES: WritingCategory[] = [
+  'Essay',
+  'Article',
+  'Blog',
+  'Story',
+  'Email',
+  'Resume',
+  'Script',
+  'Documentation',
+];
+
+const TONES: WritingTone[] = [
+  'Professional',
+  'Casual',
+  'Persuasive',
+  'Academic',
+  'Creative',
+  'Confident',
+  'Empathetic',
+];
+
+export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
+  isDark,
+  theme,
+  selectedModelId,
+  onSelectModel,
+  onSendToChat,
+}) => {
+  const [documents, setDocuments] = useState<WritingDoc[]>(() => writingStudioService.getDocuments());
+  const [activeDocId, setActiveDocId] = useState<string>(() => documents[0]?.id || '');
+  const [category, setCategory] = useState<WritingCategory>('Article');
+  const [tone, setTone] = useState<WritingTone>('Professional');
+  const [topicInput, setTopicInput] = useState('');
+  const [currentText, setCurrentText] = useState<string>(() => documents[0]?.content || '');
+  const [docTitle, setDocTitle] = useState<string>(() => documents[0]?.title || 'Untitled Writing');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const activeDoc = documents.find((d) => d.id === activeDocId) || documents[0];
+
+  const handleSelectDoc = (doc: WritingDoc) => {
+    setActiveDocId(doc.id);
+    setDocTitle(doc.title);
+    setCurrentText(doc.content);
+    setCategory(doc.category);
+    setTone(doc.tone);
+  };
+
+  const handleNewDoc = () => {
+    const newDoc: WritingDoc = {
+      id: 'doc-' + Date.now(),
+      title: 'New ' + category,
+      category,
+      tone,
+      content: '',
+      wordCount: 0,
+      charCount: 0,
+      lastModified: Date.now(),
+    };
+    writingStudioService.saveDocument(newDoc);
+    const updated = writingStudioService.getDocuments();
+    setDocuments(updated);
+    setActiveDocId(newDoc.id);
+    setDocTitle(newDoc.title);
+    setCurrentText('');
+  };
+
+  const handleDeleteDoc = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = writingStudioService.deleteDocument(id);
+    setDocuments(updated);
+    if (activeDocId === id && updated.length > 0) {
+      handleSelectDoc(updated[0]);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!topicInput.trim() || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const generated = await writingStudioService.generateWriting({
+        category,
+        tone,
+        topic: topicInput.trim(),
+      });
+      setCurrentText(generated);
+      const updatedDoc: WritingDoc = {
+        id: activeDocId || 'doc-' + Date.now(),
+        title: topicInput.trim().slice(0, 40) || 'Untitled',
+        category,
+        tone,
+        content: generated,
+        wordCount: generated.trim().split(/\s+/).length,
+        charCount: generated.length,
+        lastModified: Date.now(),
+      };
+      writingStudioService.saveDocument(updatedDoc);
+      setDocuments(writingStudioService.getDocuments());
+      setActiveDocId(updatedDoc.id);
+      setDocTitle(updatedDoc.title);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Writing generation failed: ${msg}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAlter = async (alterAction: WritingAction) => {
+    if (!currentText.trim() || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const altered = await writingStudioService.alterWriting({
+        category,
+        tone,
+        currentContent: currentText,
+        alterAction,
+      });
+      setCurrentText(altered);
+      if (activeDocId) {
+        const updatedDoc: WritingDoc = {
+          id: activeDocId,
+          title: docTitle,
+          category,
+          tone,
+          content: altered,
+          wordCount: altered.trim().split(/\s+/).length,
+          charCount: altered.length,
+          lastModified: Date.now(),
+        };
+        writingStudioService.saveDocument(updatedDoc);
+        setDocuments(writingStudioService.getDocuments());
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Text alteration failed: ${msg}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!currentText) return;
+    navigator.clipboard.writeText(currentText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportText = () => {
+    if (!currentText) return;
+    const blob = new Blob([currentText], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${docTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+  const charCount = currentText.length;
+
+  return (
+    <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
+      {/* Header */}
+      <div className={`px-6 py-3.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <PenTool className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
+              Writing Studio & Editor
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+                Copywriting AI
+              </span>
+            </h1>
+            <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Draft essays, articles, documentation, stories, and resumes with automated tone shifting, expansion, and rewriting tools.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleNewDoc}
+            className="px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs font-bold flex items-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Document</span>
+          </button>
+          <ModelSelector
+            selectedModelId={selectedModelId}
+            onSelectModel={onSelectModel}
+            theme={theme}
+          />
+        </div>
+      </div>
+
+      {/* Main Dual Workspace */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Control & Documents Vault */}
+        <div className={`w-80 border-r flex flex-col shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
+          {/* Generator Controls */}
+          <div className="p-4 border-b border-neutral-800/40 space-y-3">
+            <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Writing Controls
+            </span>
+
+            <div>
+              <label className="block text-[11px] font-semibold mb-1 text-neutral-400">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as WritingCategory)}
+                className={`w-full px-2.5 py-1.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 ${
+                  isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
+                }`}
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold mb-1 text-neutral-400">Tone</label>
+              <select
+                value={tone}
+                onChange={(e) => setTone(e.target.value as WritingTone)}
+                className={`w-full px-2.5 py-1.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 ${
+                  isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
+                }`}
+              >
+                {TONES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold mb-1 text-neutral-400">Prompt / Topic</label>
+              <textarea
+                rows={3}
+                placeholder="e.g. Write an essay examining quantum computing applications in medicine..."
+                value={topicInput}
+                onChange={(e) => setTopicInput(e.target.value)}
+                className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 resize-none ${
+                  isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
+                }`}
+              />
+            </div>
+
+            <button
+              id="generate-writing-btn"
+              type="button"
+              onClick={handleGenerate}
+              disabled={isProcessing || !topicInput.trim()}
+              className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isProcessing ? 'Generating Prose...' : 'Generate Writing'}</span>
+            </button>
+          </div>
+
+          {/* Documents Vault */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <span className={`text-[10px] font-semibold uppercase tracking-wider px-1 ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+              Saved Writings ({documents.length})
+            </span>
+
+            {documents.length === 0 ? (
+              <div className="text-center py-6 text-neutral-400 text-xs">No saved writings yet.</div>
+            ) : (
+              documents.map((doc) => {
+                const isSelected = activeDocId === doc.id;
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => handleSelectDoc(doc)}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-amber-500 bg-amber-500/10'
+                        : isDark
+                        ? 'border-neutral-850 hover:border-neutral-800 bg-neutral-900/60'
+                        : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-bold truncate">{doc.title}</p>
+                      <button
+                        onClick={(e) => handleDeleteDoc(doc.id, e)}
+                        className="text-neutral-500 hover:text-red-400 p-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between mt-2 pt-1 border-t border-neutral-800/30 text-[10px] text-neutral-400">
+                      <span>{doc.category}</span>
+                      <span>{doc.wordCount || 0} words</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Right Editor & Alteration Toolkit */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Alteration Action Bar */}
+          <div className={`px-6 py-2.5 border-b flex items-center justify-between gap-2 overflow-x-auto ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { id: 'improve', label: 'Improve Flow', icon: Sparkles },
+                { id: 'rewrite', label: 'Rewrite', icon: RefreshCw },
+                { id: 'shorten', label: 'Shorten', icon: Scissors },
+                { id: 'expand', label: 'Expand', icon: Maximize2 },
+                { id: 'grammar', label: 'Fix Grammar', icon: CheckCheck },
+              ].map((tool) => {
+                const Icon = tool.icon;
+                return (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    onClick={() => handleAlter(tool.id as WritingAction)}
+                    disabled={isProcessing || !currentText.trim()}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 transition-colors ${
+                      isDark
+                        ? 'border-neutral-800 hover:bg-neutral-850 text-neutral-300'
+                        : 'border-neutral-200 hover:bg-neutral-100 text-neutral-700'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{tool.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleCopy}
+                disabled={!currentText}
+                className="px-2.5 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-medium flex items-center gap-1.5"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+
+              <button
+                onClick={handleExportText}
+                disabled={!currentText}
+                className="px-2.5 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-medium flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <span>Export .md</span>
+              </button>
+
+              {onSendToChat && (
+                <button
+                  onClick={() => onSendToChat(`[Writing Studio Document: ${docTitle}]\n${currentText.slice(0, 1500)}`)}
+                  disabled={!currentText}
+                  className="px-2.5 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs font-medium flex items-center gap-1.5"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>Send to Chat</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Document Title Header */}
+          <div className={`px-6 py-3 border-b flex items-center justify-between gap-4 ${isDark ? 'border-neutral-850 bg-neutral-900/30' : 'border-neutral-200 bg-neutral-50'}`}>
+            <input
+              type="text"
+              value={docTitle}
+              onChange={(e) => setDocTitle(e.target.value)}
+              placeholder="Document Title..."
+              className="text-base font-bold bg-transparent border-none focus:outline-none flex-1"
+            />
+            <div className="flex items-center gap-3 text-[11px] font-mono text-neutral-400">
+              <span>{wordCount} words</span>
+              <span>•</span>
+              <span>{charCount} characters</span>
+            </div>
+          </div>
+
+          {/* Text Editor Area */}
+          <div className="flex-1 p-6 overflow-hidden flex flex-col">
+            {isProcessing ? (
+              <div className="flex flex-col items-center justify-center h-full space-y-3">
+                <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                <p className="text-xs font-semibold text-amber-400">Crafting prose and refining vocabulary...</p>
+              </div>
+            ) : (
+              <textarea
+                id="writing-studio-editor"
+                value={currentText}
+                onChange={(e) => {
+                  setCurrentText(e.target.value);
+                  if (activeDocId) {
+                    writingStudioService.saveDocument({
+                      id: activeDocId,
+                      title: docTitle,
+                      category,
+                      tone,
+                      content: e.target.value,
+                      wordCount: e.target.value.trim().split(/\s+/).length,
+                      charCount: e.target.value.length,
+                      lastModified: Date.now(),
+                    });
+                  }
+                }}
+                placeholder="Start typing or generate content from the left panel..."
+                className={`w-full flex-1 p-4 rounded-2xl border text-sm leading-relaxed font-sans resize-none focus:outline-none focus:border-amber-500 transition-colors ${
+                  isDark
+                    ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100 placeholder-neutral-500'
+                    : 'bg-white border-neutral-200 text-neutral-900 placeholder-neutral-400'
+                }`}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

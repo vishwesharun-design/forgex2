@@ -222,11 +222,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {!hasMessages ? (
           /* Empty Initial State as specified in Section 10 */
           <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-12 select-none animate-in fade-in duration-300">
-            {/* ⚡ Logo */}
-            <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-6 shadow-xl shadow-amber-500/10">
-              <Zap className="w-9 h-9 fill-amber-400 text-amber-400 glow-lightning" />
-            </div>
-
             {/* How can ForgeX help you today? */}
             <h2 id="chat-empty-title" className="font-display font-bold text-3xl sm:text-4xl tracking-tight mb-2">
               How can ForgeX help you today?

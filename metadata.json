@@ -1,0 +1,6 @@
+{
+  "name": "ForgeX",
+  "description": "All-in-one AI workspace for conversations, image creation, multi-slide video generation, AI song making, deep research, and Code Studio with AI code generation and auto-correction created by VishweshVarman.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

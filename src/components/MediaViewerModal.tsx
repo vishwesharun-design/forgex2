@@ -72,7 +72,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl"
             />
           ) : (
-            <div className="w-full h-full max-h-[75vh] flex items-center justify-center">
+            <div className={`relative max-h-[75vh] flex items-center justify-center ${
+              (item as GeneratedVideo).aspectRatio === '9:16'
+                ? 'aspect-[9/16] h-[75vh] max-w-sm'
+                : (item as GeneratedVideo).aspectRatio === '1:1'
+                ? 'aspect-square h-[75vh] max-w-xl'
+                : 'aspect-video w-full max-w-4xl'
+            }`}>
               <SlideMotionPlayer
                 video={item as GeneratedVideo}
                 isPlaying={true}

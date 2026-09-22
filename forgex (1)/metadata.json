@@ -1,6 +1,0 @@
-{
-  "name": "ForgeX",
-  "description": "All-in-one AI workspace for conversations, image creation, slide-motion video generation, and AI song making created by VishweshVarman.",
-  "requestFramePermissions": ["microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

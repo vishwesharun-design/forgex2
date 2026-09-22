@@ -22,6 +22,191 @@ const COVER_IMAGES: Record<SongGenre, string> = {
   'Hip-Hop': 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=800&auto=format&fit=crop',
 };
 
+export interface LyricsSection {
+  id: string;
+  tag: string;
+  title: string;
+  lines: string[];
+  type: 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro';
+  startTimeSec: number;
+  endTimeSec: number;
+}
+
+export interface GenreChordData {
+  progression: string[];
+  chordsText: string;
+  key: string;
+  scale: string;
+  instrumentStems: string[];
+  description: string;
+}
+
+export function getGenreChordInfo(genre: SongGenre): GenreChordData {
+  switch (genre) {
+    case 'Synthwave':
+      return {
+        progression: ['Am', 'F', 'C', 'G'],
+        chordsText: 'Am → F → C → G (i – VI – III – VII)',
+        key: 'A Minor',
+        scale: 'Aeolian',
+        instrumentStems: ['Analog Lead Sawtooth', 'Sub-Bass Arp', 'Gated Reverb Drums', 'Tape Saturation'],
+        description: 'Retro-futuristic 80s neon nostalgia with driving synthesizer arpeggios.',
+      };
+    case 'Lo-Fi':
+      return {
+        progression: ['Cmaj7', 'Am7', 'Fmaj7', 'G7'],
+        chordsText: 'Cmaj7 → Am7 → Fmaj7 → G7 (Imaj7 – vi7 – IVmaj7 – V7)',
+        key: 'C Major',
+        scale: 'Ionian Jazz',
+        instrumentStems: ['Vinyl Crackle', 'Mellow Electric Piano', 'Acoustic Kick/Snare', 'Warm Lowpass Filter'],
+        description: 'Warm relaxing study aesthetic with gentle jazz chord extensions.',
+      };
+    case 'Cinematic':
+      return {
+        progression: ['Am', 'C', 'Dm', 'F'],
+        chordsText: 'Am → C → Dm → F (i – III – iv – VI)',
+        key: 'A Minor',
+        scale: 'Doric/Aeolian',
+        instrumentStems: ['Sub Harmonic Drone', 'Deep Celli & Strings', 'Volumetric Reverb', 'Dynamic Timpani'],
+        description: 'Epic sweeping orchestral soundscape with atmospheric spatial presence.',
+      };
+    case 'EDM':
+      return {
+        progression: ['A', 'F', 'C', 'G'],
+        chordsText: 'A → F → C → G (I – bVI – bIII – bVII)',
+        key: 'A Minor',
+        scale: 'Aeolian Peak',
+        instrumentStems: ['Supersaw Leads', 'Punchy 909 Kick', 'Sidechain Compressor', 'White Noise Sweeps'],
+        description: 'High-energy mainstage festival sound with driving dynamic cadence.',
+      };
+    case 'Rock':
+      return {
+        progression: ['A5', 'D5', 'C5', 'G5'],
+        chordsText: 'A5 → D5 → C5 → G5 (Power Chords)',
+        key: 'A Pentatonic',
+        scale: 'Blues Rock',
+        instrumentStems: ['Overdrive Guitar Tone', 'Punchy Bass Guitar', 'Heavy Acoustic Drums', 'Plate Reverb'],
+        description: 'Raw amplified rock overdrive with punchy groove dynamics.',
+      };
+    case 'Acoustic':
+      return {
+        progression: ['C', 'G', 'Am', 'F'],
+        chordsText: 'C → G → Am → F (I – V – vi – IV Pop Axis)',
+        key: 'C Major',
+        scale: 'Diatonic Major',
+        instrumentStems: ['Acoustic Guitar Plucks', 'Warm Felt Piano', 'Gentle Shaker Percussion', 'Wood Room Reverb'],
+        description: 'Intimate organic timbre with harmonic clarity and gentle rhythm.',
+      };
+    case 'Ambient':
+      return {
+        progression: ['Fmaj7', 'C', 'Dm7', 'Am'],
+        chordsText: 'Fmaj7 → C → Dm7 → Am (Floating)',
+        key: 'F Lydian / C Major',
+        scale: 'Lydian Modal',
+        instrumentStems: ['Ethereal Shimmer Pad', 'Infinite Reverb Space', 'Granular Texture', 'Stereo Sine Waves'],
+        description: 'Weightless floating sound bath with timeless meditative envelopes.',
+      };
+    case 'Hip-Hop':
+    default:
+      return {
+        progression: ['Am', 'Bm7', 'C', 'G'],
+        chordsText: 'Am → Bm7 → C → G (Boom-Bap Motif)',
+        key: 'A Minor',
+        scale: 'Minor Pentatonic',
+        instrumentStems: ['Heavy 808 Sub-Bass', 'Crisp Sampled Snare', 'Layered Vocal Chops', 'Vinyl Warmth'],
+        description: 'Urban rhythm pocket with heavy sub-bass foundation and soulful chops.',
+      };
+  }
+}
+
+export function parseLyricsSections(lyrics?: string, totalDuration: number = 30): LyricsSection[] {
+  if (!lyrics || !lyrics.trim()) {
+    const secDur = totalDuration / 4;
+    return [
+      {
+        id: 'sec_intro',
+        tag: 'Intro',
+        title: 'Atmospheric Synthesizer Intro',
+        type: 'intro',
+        lines: ['Analog pads swelling in harmony', 'Soft filter sweep building tempo', 'Establishing tonal root frequency'],
+        startTimeSec: 0,
+        endTimeSec: secDur,
+      },
+      {
+        id: 'sec_verse_1',
+        tag: 'Verse 1',
+        title: 'Primary Harmonic Groove',
+        type: 'verse',
+        lines: ['Sub-bass arpeggio enters the mix', 'Lead synth carrying melodic motif', 'Crisp percussive rhythm cadence'],
+        startTimeSec: secDur,
+        endTimeSec: secDur * 2,
+      },
+      {
+        id: 'sec_chorus',
+        tag: 'Chorus / Drop',
+        title: 'Peak Energy Crescendo',
+        type: 'chorus',
+        lines: ['Full four-part chord synthesis', 'Driving dynamic kick and snare impact', 'Maximum melodic resonance and warmth'],
+        startTimeSec: secDur * 2,
+        endTimeSec: secDur * 3,
+      },
+      {
+        id: 'sec_outro',
+        tag: 'Outro',
+        title: 'Harmonic Decay & Resolution',
+        type: 'outro',
+        lines: ['Reverb decay across higher harmonics', 'Gentle melodic taper', 'Peaceful stereo fadeout'],
+        startTimeSec: secDur * 3,
+        endTimeSec: totalDuration,
+      },
+    ];
+  }
+
+  const rawSections = lyrics.split(/\n\s*\n/);
+  const parsed: LyricsSection[] = [];
+
+  rawSections.forEach((block, idx) => {
+    const trimmed = block.trim();
+    if (!trimmed) return;
+
+    let tag = `Verse ${idx + 1}`;
+    let type: LyricsSection['type'] = 'verse';
+    let lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean);
+
+    const tagMatch = lines[0]?.match(/^\[(.*?)\]$/);
+    if (tagMatch) {
+      tag = tagMatch[1];
+      lines = lines.slice(1);
+      const lower = tag.toLowerCase();
+      if (lower.includes('chorus') || lower.includes('hook')) type = 'chorus';
+      else if (lower.includes('intro')) type = 'intro';
+      else if (lower.includes('outro')) type = 'outro';
+      else if (lower.includes('bridge')) type = 'bridge';
+      else type = 'verse';
+    }
+
+    if (lines.length > 0) {
+      parsed.push({
+        id: `section_${idx}_${tag.replace(/\s+/g, '_')}`,
+        tag,
+        title: tag,
+        lines,
+        type,
+        startTimeSec: 0,
+        endTimeSec: 0,
+      });
+    }
+  });
+
+  const count = Math.max(1, parsed.length);
+  const secDuration = totalDuration / count;
+  return parsed.map((sec, i) => ({
+    ...sec,
+    startTimeSec: Math.round(i * secDuration * 10) / 10,
+    endTimeSec: Math.round((i + 1) * secDuration * 10) / 10,
+  }));
+}
+
 export const musicService = {
   getSongs(): GeneratedSong[] {
     try {
@@ -94,7 +279,7 @@ export const musicService = {
 Neon shadows across the floor
 Chasing the sound we were looking for
 Echoes of light in a silent sky
-Every horizon is passing by
+Every new path is opening wide
 
 [Chorus]
 And the rhythm moves in time
@@ -145,20 +330,32 @@ Rising above the ground...`;
     return Boolean(activePlayback);
   },
 
+  setVolume(vol: number): void {
+    if (activePlayback) {
+      try {
+        activePlayback.gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), activePlayback.audioContext.currentTime);
+      } catch (e) {
+        console.warn('Volume set failed', e);
+      }
+    }
+  },
+
   /**
    * Synthesizes audio in real-time through Web Audio API
    */
   playSong(
     song: GeneratedSong,
     onTick?: (currentTime: number, duration: number) => void,
-    onEnded?: () => void
-  ): { stop: () => void } {
+    onEnded?: () => void,
+    startOffset: number = 0,
+    initialVolume: number = 0.3
+  ): { stop: () => void; setVolume: (vol: number) => void } {
     this.stopPlayback();
 
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioContextClass();
     const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0.3, ctx.currentTime);
+    masterGain.gain.setValueAtTime(Math.max(0, Math.min(1, initialVolume)), ctx.currentTime);
     masterGain.connect(ctx.destination);
 
     // Chords depending on genre (frequencies in Hz)
@@ -221,8 +418,9 @@ Rising above the ground...`;
     let isStopped = false;
     const oscillators: OscillatorNode[] = [];
 
-    // Schedule musical loops across duration
-    const startTime = ctx.currentTime;
+    // Schedule musical loops across duration with startOffset
+    const safeOffset = Math.max(0, Math.min(totalDuration - 0.5, startOffset));
+    const startTime = ctx.currentTime - safeOffset;
 
     const playChordBar = (barIndex: number) => {
       if (isStopped) return;
@@ -232,18 +430,23 @@ Rising above the ground...`;
       if (barTime >= startTime + totalDuration) {
         return;
       }
+      if (barTime + beatDuration * 4 < ctx.currentTime) {
+        return; // Bar already passed
+      }
+
+      const noteTrigger = Math.max(ctx.currentTime, barTime);
 
       // 1. Bass note
       const bassOsc = ctx.createOscillator();
       const bassGain = ctx.createGain();
       bassOsc.type = song.genre === 'Synthwave' || song.genre === 'EDM' ? 'sawtooth' : 'triangle';
-      bassOsc.frequency.setValueAtTime(chord[0] / 2, barTime);
-      bassGain.gain.setValueAtTime(0.2, barTime);
+      bassOsc.frequency.setValueAtTime(chord[0] / 2, noteTrigger);
+      bassGain.gain.setValueAtTime(0.2, noteTrigger);
       bassGain.gain.exponentialRampToValueAtTime(0.01, barTime + beatDuration * 3.8);
 
       bassOsc.connect(bassGain);
       bassGain.connect(masterGain);
-      bassOsc.start(barTime);
+      bassOsc.start(noteTrigger);
       bassOsc.stop(barTime + beatDuration * 4);
       oscillators.push(bassOsc);
 
@@ -252,20 +455,20 @@ Rising above the ground...`;
         const osc = ctx.createOscillator();
         const noteGain = ctx.createGain();
         osc.type = song.genre === 'Ambient' ? 'sine' : song.genre === 'Rock' ? 'sawtooth' : 'triangle';
-        osc.frequency.setValueAtTime(freq, barTime);
+        osc.frequency.setValueAtTime(freq, noteTrigger);
 
-        // Arpeggiated or smooth pad
-        const noteStart = song.genre === 'Synthwave' || song.genre === 'EDM'
+        const scheduledStart = song.genre === 'Synthwave' || song.genre === 'EDM'
           ? barTime + noteIdx * (beatDuration / 2)
           : barTime;
+        const actualStart = Math.max(ctx.currentTime, scheduledStart);
         
-        noteGain.gain.setValueAtTime(0.001, noteStart);
-        noteGain.gain.exponentialRampToValueAtTime(0.08, noteStart + 0.1);
+        noteGain.gain.setValueAtTime(0.001, actualStart);
+        noteGain.gain.exponentialRampToValueAtTime(0.08, actualStart + 0.1);
         noteGain.gain.exponentialRampToValueAtTime(0.001, barTime + beatDuration * 3.8);
 
         osc.connect(noteGain);
         noteGain.connect(masterGain);
-        osc.start(noteStart);
+        osc.start(actualStart);
         osc.stop(barTime + beatDuration * 4);
         oscillators.push(osc);
       });
@@ -275,6 +478,7 @@ Rising above the ground...`;
         for (let beat = 0; beat < 4; beat++) {
           const beatTime = barTime + beat * beatDuration;
           if (beatTime >= startTime + totalDuration) break;
+          if (beatTime < ctx.currentTime) continue;
 
           // Kick on beats 0 and 2
           if (beat === 0 || beat === 2) {
@@ -350,13 +554,19 @@ Rising above the ground...`;
       }
     };
 
+    const setVolume = (vol: number) => {
+      try {
+        masterGain.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), ctx.currentTime);
+      } catch {}
+    };
+
     activePlayback = {
       audioContext: ctx,
       gainNode: masterGain,
       stop,
     };
 
-    return { stop };
+    return { stop, setVolume };
   },
 
   /**

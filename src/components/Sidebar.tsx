@@ -7,6 +7,15 @@ import {
   Video as VideoIcon, 
   Music,
   Compass,
+  Code2,
+  FileText,
+  Bot,
+  Globe,
+  PenTool,
+  Presentation,
+  LayoutDashboard,
+  FolderKanban,
+  Mic,
   Settings as SettingsIcon, 
   User as UserIcon, 
   ChevronRight, 
@@ -40,6 +49,7 @@ interface SidebarProps {
   onOpenAuth?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onOpenVoiceMode?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -61,6 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAuth,
   isCollapsed = false,
   onToggleCollapse,
+  onOpenVoiceMode,
 }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement | null>(null);
@@ -222,32 +233,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <ImageIcon className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>Image Gen</span>}
-          </button>
-
-          <button
-            id="nav-workspace-video"
-            onClick={() => {
-              onSelectWorkspace('video');
-              if (window.innerWidth < 768) onCloseMobile();
-            }}
-            title="Video Studio"
-            className={`${
-              isCollapsed
-                ? 'w-11 h-11 justify-center'
-                : 'w-full px-3 py-2.5 gap-3'
-            } flex items-center rounded-xl text-sm font-medium transition-all ${
-              activeWorkspace === 'video'
-                ? isDark
-                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
-                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
-                : isDark
-                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-            }`}
-          >
-            <VideoIcon className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>Video Gen</span>}
+            {!isCollapsed && <span>Image Studio</span>}
           </button>
 
           <button
@@ -299,6 +285,250 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Compass className="w-4 h-4 shrink-0 text-amber-400" />
             {!isCollapsed && <span>Deep Research</span>}
           </button>
+
+          <button
+            id="nav-workspace-code"
+            onClick={() => {
+              onSelectWorkspace('code');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="Code Studio (Write, AI Generate, Alter & Correct Code)"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'code'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <Code2 className="w-4 h-4 shrink-0 text-amber-400" />
+            {!isCollapsed && <span>Code Studio</span>}
+          </button>
+
+          <button
+            id="nav-workspace-files"
+            onClick={() => {
+              onSelectWorkspace('files');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="File & Document AI Workspace"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'files'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <FileText className="w-4 h-4 shrink-0 text-emerald-400" />
+            {!isCollapsed && <span>Document AI</span>}
+          </button>
+
+          <button
+            id="nav-workspace-agents"
+            onClick={() => {
+              onSelectWorkspace('agents');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="AI Agents Workspace"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'agents'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <Bot className="w-4 h-4 shrink-0 text-cyan-400" />
+            {!isCollapsed && <span>AI Agents</span>}
+          </button>
+
+          <button
+            id="nav-workspace-search"
+            onClick={() => {
+              onSelectWorkspace('search');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="Web Search & Grounding"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'search'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <Globe className="w-4 h-4 shrink-0 text-blue-400" />
+            {!isCollapsed && <span>Web Search</span>}
+          </button>
+
+          <button
+            id="nav-workspace-datalab"
+            onClick={() => {
+              onSelectWorkspace('datalab');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="Data Lab & Analytics"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'datalab'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 shrink-0 text-purple-400" />
+            {!isCollapsed && <span>Data Lab</span>}
+          </button>
+
+          <button
+            id="nav-workspace-writing"
+            onClick={() => {
+              onSelectWorkspace('writing');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="Writing Studio"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'writing'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <PenTool className="w-4 h-4 shrink-0 text-amber-400" />
+            {!isCollapsed && <span>Writing Studio</span>}
+          </button>
+
+          <button
+            id="nav-workspace-presentation"
+            onClick={() => {
+              onSelectWorkspace('presentation');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="Presentation Deck Studio"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'presentation'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <Presentation className="w-4 h-4 shrink-0 text-orange-400" />
+            {!isCollapsed && <span>Presentations</span>}
+          </button>
+
+          <button
+            id="nav-workspace-canvas"
+            onClick={() => {
+              onSelectWorkspace('canvas');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="AI Whiteboard & Mindmap Canvas"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'canvas'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4 shrink-0 text-rose-400" />
+            {!isCollapsed && <span>AI Canvas</span>}
+          </button>
+
+          <button
+            id="nav-workspace-projects"
+            onClick={() => {
+              onSelectWorkspace('projects');
+              if (window.innerWidth < 768) onCloseMobile();
+            }}
+            title="Projects System"
+            className={`${
+              isCollapsed
+                ? 'w-11 h-11 justify-center'
+                : 'w-full px-3 py-2.5 gap-3'
+            } flex items-center rounded-xl text-sm font-medium transition-all ${
+              activeWorkspace === 'projects'
+                ? isDark
+                  ? 'bg-neutral-800/80 text-white font-semibold shadow-sm border border-neutral-700/50'
+                  : 'bg-neutral-200/80 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                : isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            }`}
+          >
+            <FolderKanban className="w-4 h-4 shrink-0 text-amber-500" />
+            {!isCollapsed && <span>Projects</span>}
+          </button>
+
+          {onOpenVoiceMode && (
+            <button
+              id="nav-workspace-voice"
+              onClick={() => {
+                onOpenVoiceMode();
+                if (window.innerWidth < 768) onCloseMobile();
+              }}
+              title="Real-Time Voice Mode"
+              className={`${
+                isCollapsed
+                  ? 'w-11 h-11 justify-center'
+                  : 'w-full px-3 py-2.5 gap-3'
+              } flex items-center rounded-xl text-sm font-medium border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all`}
+            >
+              <Mic className="w-4 h-4 shrink-0 animate-pulse" />
+              {!isCollapsed && <span className="font-bold">Voice Mode</span>}
+            </button>
+          )}
         </nav>
 
         {/* Divider */}

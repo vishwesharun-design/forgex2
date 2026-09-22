@@ -14,7 +14,9 @@ import {
   Sparkles,
   Layers,
   Trash2,
-  Film
+  Film,
+  Plus,
+  Sliders
 } from 'lucide-react';
 import { 
   GeneratedVideo, 
@@ -39,7 +41,8 @@ interface VideoWorkspaceProps {
   onViewFullscreenVideo: (video: GeneratedVideo) => void;
 }
 
-const DURATIONS: VideoDuration[] = ['5s', '10s', '15s'];
+const DURATIONS: VideoDuration[] = ['5s', '10s', '15s', '20s', '30s', '60s'];
+const SLIDE_PRESETS: number[] = [2, 4, 6, 8, 12];
 const ASPECT_RATIOS: VideoAspectRatio[] = ['16:9', '9:16', '1:1'];
 const QUALITIES: VideoQuality[] = ['Standard', 'High'];
 
@@ -53,6 +56,9 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState<VideoDuration>('10s');
+  const [isCustomDuration, setIsCustomDuration] = useState<boolean>(false);
+  const [customDurationInput, setCustomDurationInput] = useState<string>('');
+  const [slideCount, setSlideCount] = useState<number>(4);
   const [aspectRatio, setAspectRatio] = useState<VideoAspectRatio>('16:9');
   const [quality, setQuality] = useState<VideoQuality>('High');
   const [generationType, setGenerationType] = useState<VideoGenerationType>('text-to-video');
@@ -65,6 +71,10 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
 
+  const effectiveDuration = isCustomDuration && customDurationInput.trim()
+    ? (customDurationInput.trim().endsWith('s') ? customDurationInput.trim() : `${customDurationInput.trim()}s`)
+    : duration;
+
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleanPrompt = prompt.trim() || 'Cinematic aerial dolly through amber-lit cyber spires with kinetic motion physics and atmospheric volumetric haze, Unreal Engine 5 render';
@@ -75,12 +85,13 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
       await videoService.generateVideo(
         {
           prompt: cleanPrompt,
-          duration,
+          duration: effectiveDuration,
           aspectRatio,
           quality,
           generationType,
           modelId: selectedModelId,
           referenceImage: referenceImage || undefined,
+          slideCount,
         },
         (status) => setGenerationStatus(status)
       );
@@ -90,6 +101,14 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
     } finally {
       setIsGenerating(false);
       setGenerationStatus('');
+    }
+  };
+
+  const handleAddSlide = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = videoService.addSlideToVideo(id);
+    if (updated) {
+      onUpdateVideos(videoService.getVideos());
     }
   };
 
@@ -271,20 +290,28 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
               </div>
             </div>
 
-            {/* Duration (5s, 10s, 15s) */}
+            {/* Duration (Presets + Any Custom Duration) */}
             <div>
-              <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                Duration
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="flex items-center justify-between mb-2">
+                <label className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  Duration
+                </label>
+                <span className="text-[11px] font-mono text-amber-400 font-semibold">
+                  {effectiveDuration}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
                 {DURATIONS.map((dur) => (
                   <button
                     key={dur}
                     id={`btn-dur-${dur}`}
                     type="button"
-                    onClick={() => setDuration(dur)}
-                    className={`py-2 rounded-xl text-xs font-medium border transition-all ${
-                      duration === dur
+                    onClick={() => {
+                      setDuration(dur);
+                      setIsCustomDuration(false);
+                    }}
+                    className={`py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                      !isCustomDuration && duration === dur
                         ? 'bg-amber-500 text-neutral-950 border-amber-500 font-bold shadow-sm'
                         : isDark
                           ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300'
@@ -294,6 +321,75 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
                     {dur}
                   </button>
                 ))}
+              </div>
+              {/* Custom Duration Input */}
+              <div className="flex items-center gap-2">
+                <input
+                  id="input-custom-duration"
+                  type="text"
+                  placeholder="Or enter any duration (e.g. 25s, 45s, 90s)..."
+                  value={customDurationInput}
+                  onChange={(e) => {
+                    setCustomDurationInput(e.target.value);
+                    setIsCustomDuration(true);
+                  }}
+                  className={`w-full px-3 py-1.5 rounded-xl text-xs border focus:outline-none transition-colors ${
+                    isCustomDuration && customDurationInput.trim()
+                      ? 'border-amber-500 ring-1 ring-amber-500/30'
+                      : isDark ? 'border-neutral-800 bg-neutral-950/80 text-white' : 'border-neutral-300 bg-white text-neutral-900'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Slide Count (Presets + Stepper) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  Slide Count (Storyboard Scenes)
+                </label>
+                <span className="text-[11px] font-mono text-amber-400 font-semibold">
+                  {slideCount} Slides
+                </span>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5 mb-2">
+                {SLIDE_PRESETS.map((count) => (
+                  <button
+                    key={count}
+                    id={`btn-slide-${count}`}
+                    type="button"
+                    onClick={() => setSlideCount(count)}
+                    className={`py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                      slideCount === count
+                        ? 'bg-amber-500 text-neutral-950 border-amber-500 font-bold shadow-sm'
+                        : isDark
+                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300'
+                          : 'bg-neutral-50 border-neutral-200 text-neutral-700'
+                    }`}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between px-3 py-1.5 rounded-xl border bg-neutral-900/40 border-neutral-800 text-xs">
+                <span className={isDark ? 'text-neutral-400' : 'text-neutral-500'}>Fine-tune slide count:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSlideCount((c) => Math.max(2, c - 1))}
+                    className="w-6 h-6 rounded flex items-center justify-center bg-neutral-800 hover:bg-neutral-700 text-white"
+                  >
+                    -
+                  </button>
+                  <span className="font-mono text-amber-400 font-bold w-5 text-center">{slideCount}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSlideCount((c) => Math.min(16, c + 1))}
+                    className="w-6 h-6 rounded flex items-center justify-center bg-neutral-800 hover:bg-neutral-700 text-white"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -444,7 +540,9 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
                     }`}
                   >
                   {/* Video Stage Container with Clean Slide Motion Player */}
-                  <div className="relative w-full aspect-video bg-black overflow-hidden flex items-center justify-center">
+                  <div className={`relative w-full ${
+                    vid.aspectRatio === '9:16' ? 'aspect-[9/16] max-h-[460px]' : vid.aspectRatio === '1:1' ? 'aspect-square max-h-[380px]' : 'aspect-video'
+                  } bg-black overflow-hidden flex items-center justify-center`}>
                     <SlideMotionPlayer
                       video={vid}
                       isPlaying={isPlaying}
@@ -459,7 +557,7 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
                     <div className="flex items-center justify-between gap-2 pt-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 font-semibold border border-amber-500/20">
-                          {vid.duration} • 4 Scenes
+                          {vid.duration} • {vid.slides?.length || vid.slideCount || 4} Slides
                         </span>
                         <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
                           isDark ? 'bg-neutral-800/80 border-neutral-700/60 text-neutral-300' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
@@ -470,6 +568,21 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
 
                       {/* Action Icons */}
                       <div className="flex items-center gap-1">
+                        {/* Add Slide Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleAddSlide(vid.id, e)}
+                          title="Add new scene slide to this video"
+                          className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors flex items-center gap-1 ${
+                            isDark
+                              ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                          }`}
+                        >
+                          <Plus className="w-3 h-3 text-amber-400" />
+                          <span>Add Slide</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={(e) => handleToggleFavorite(vid.id, e)}

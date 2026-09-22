@@ -29,6 +29,16 @@ import { ImageWorkspace } from './components/ImageWorkspace';
 import { VideoWorkspace } from './components/VideoWorkspace';
 import { SongWorkspace } from './components/SongWorkspace';
 import { ResearchWorkspace } from './components/ResearchWorkspace';
+import { CodeStudioWorkspace } from './components/CodeStudioWorkspace';
+import { DocumentWorkspace } from './components/DocumentWorkspace';
+import { AgentWorkspace } from './components/AgentWorkspace';
+import { WebSearchWorkspace } from './components/WebSearchWorkspace';
+import { DataLabWorkspace } from './components/DataLabWorkspace';
+import { WritingStudioWorkspace } from './components/WritingStudioWorkspace';
+import { PresentationWorkspace } from './components/PresentationWorkspace';
+import { CanvasWorkspace } from './components/CanvasWorkspace';
+import { ProjectWorkspace } from './components/ProjectWorkspace';
+import { VoiceModeModal } from './components/VoiceModeModal';
 
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryModal } from './components/HistoryModal';
@@ -98,6 +108,7 @@ export default function App() {
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
 
   // Fullscreen Media Viewer Modal
   const [viewingMedia, setViewingMedia] = useState<{
@@ -215,6 +226,18 @@ export default function App() {
     setActiveChatId(updated.id);
   };
 
+  const handleSendMessageToActiveChat = async (text: string) => {
+    setActiveWorkspace('chat');
+    let session = currentChatSession;
+    if (!session) {
+      session = chatService.createNewSession(selectedModelId);
+      setChatSessions(chatService.getSessions());
+      setActiveChatId(session.id);
+    }
+    await chatService.sendMessage(session.id, text, selectedModelId);
+    setChatSessions(chatService.getSessions());
+  };
+
   // User Profile Actions
   const handleUpdateUser = (partial: Partial<UserProfile>) => {
     const updated = authService.updateUser(partial);
@@ -318,6 +341,7 @@ export default function App() {
             onOpenAuth={() => setIsAuthOpen(true)}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleToggleSidebarCollapse}
+            onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
           />
 
           {/* Main Workspace Column */}
@@ -396,6 +420,102 @@ export default function App() {
                 <ResearchWorkspace
                   isDark={isDark}
                   selectedModelId={selectedModelId}
+                />
+              )}
+
+              {activeWorkspace === 'code' && (
+                <CodeStudioWorkspace
+                  isDark={isDark}
+                  selectedModel={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                />
+              )}
+
+              {activeWorkspace === 'files' && (
+                <DocumentWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'agents' && (
+                <AgentWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'search' && (
+                <WebSearchWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'datalab' && (
+                <DataLabWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'writing' && (
+                <WritingStudioWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'presentation' && (
+                <PresentationWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                />
+              )}
+
+              {activeWorkspace === 'canvas' && (
+                <CanvasWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                />
+              )}
+
+              {activeWorkspace === 'projects' && (
+                <ProjectWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSelectWorkspace={setActiveWorkspace}
                 />
               )}
             </main>
@@ -518,6 +638,14 @@ export default function App() {
             }
           }
         }}
+      />
+
+      <VoiceModeModal
+        isOpen={isVoiceModeOpen}
+        onClose={() => setIsVoiceModeOpen(false)}
+        isDark={isDark}
+        theme={settings.theme}
+        selectedModelId={selectedModelId}
       />
     </div>
   );

@@ -8,7 +8,8 @@ import {
   Sparkles, 
   Volume2, 
   VolumeX, 
-  Mic
+  Mic,
+  Maximize2
 } from 'lucide-react';
 import { GeneratedVideo, VideoSlide, CameraMotion } from '../types';
 import { buildSlideStoryboard, createSlideSvgFallback } from '../services/videoService';
@@ -28,21 +29,27 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
   isDark,
   compact = false,
 }) => {
-  // Guarantee 4 distinct slides with unique visuals
+  // Multi-slide storyboard with unique visuals per slide
   const slides: VideoSlide[] = React.useMemo(() => {
-    if (video.slides && video.slides.length >= 4) {
+    if (video.slides && video.slides.length >= 2) {
       const allSame = video.slides.every((s) => s.imageUrl === video.slides![0]?.imageUrl);
-      if (!allSame) return video.slides;
+      const hasOldTitles = video.slides.some(
+        (s) => s.title.includes('Kinetic Drift') || s.title.includes('Detail Horizon') || s.caption.includes('Kinetic') || s.caption.includes('Detail Horizon')
+      );
+      if (!allSame && !hasOldTitles) return video.slides;
     }
-    return buildSlideStoryboard(video.prompt, video.duration, video.aspectRatio);
-  }, [video.id, video.prompt, video.duration, video.aspectRatio, video.slides]);
+    const count = video.slideCount || video.slides?.length || 4;
+    return buildSlideStoryboard(video.prompt, video.duration, video.aspectRatio, count);
+  }, [video.id, video.prompt, video.duration, video.aspectRatio, video.slides, video.slideCount]);
 
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [slideProgress, setSlideProgress] = useState(0);
   const [playMode, setPlayMode] = useState<'slides' | 'stream'>('slides');
   const [internalPlaying, setInternalPlaying] = useState(isPlaying);
-  const [voiceOverEnabled, setVoiceOverEnabled] = useState(true);
+  const [voiceOverEnabled, setVoiceOverEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoFit, setAutoFit] = useState(true);
+  const [showCaptions, setShowCaptions] = useState(true);
   const [imgErrorMap, setImgErrorMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -209,11 +216,11 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
           autoPlay={effectivePlaying}
           loop
           playsInline
-          className="w-full h-full object-cover"
+          className={`w-full h-full ${autoFit ? 'object-contain' : 'object-cover'} transition-all`}
         />
       ) : (
         <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-          {/* Main Slide Scene Image with Dynamic Kinetic Transform */}
+          {/* Main Slide Scene Image with Dynamic Kinetic Transform and Auto-fit */}
           <img
             key={`${activeSlide.id}-${currentSlideIndex}`}
             src={currentSlideSrc}
@@ -225,7 +232,7 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
               transform: getMotionTransform(activeSlide.cameraMotion, slideProgress),
               transition: effectivePlaying ? 'transform 0.08s linear' : 'transform 0.3s ease-out',
             }}
-            className="w-full h-full object-cover transform-gpu will-change-transform"
+            className={`w-full h-full ${autoFit ? 'object-contain' : 'object-cover'} transform-gpu will-change-transform transition-all`}
           />
 
           {/* Cinematic Vignette */}
@@ -244,8 +251,43 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
               </span>
             </div>
 
-            {/* Voice-Over Toggle & Stream Toggle */}
+            {/* Auto-Fit, CC, Voice-Over Toggle & Stream Toggle */}
             <div className="flex items-center gap-1.5 pointer-events-auto">
+              {/* Auto-Fit Toggle Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAutoFit((prev) => !prev);
+                }}
+                title={autoFit ? 'Auto-Fit: ON (Fit full video without cropping)' : 'Auto-Fit: OFF (Crop to fill container)'}
+                className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-md border transition-all ${
+                  autoFit
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                    : 'bg-black/60 text-neutral-400 border-white/10 hover:text-white'
+                }`}
+              >
+                <Maximize2 className="w-3 h-3 text-amber-400" />
+                <span className="hidden sm:inline">{autoFit ? 'Fit Screen' : 'Fill'}</span>
+              </button>
+
+              {/* CC Captions Toggle */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCaptions((prev) => !prev);
+                }}
+                title={showCaptions ? 'Captions: ON' : 'Captions: OFF'}
+                className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-md border transition-all ${
+                  showCaptions
+                    ? 'bg-black/80 text-amber-300 border-amber-500/40'
+                    : 'bg-black/60 text-neutral-400 border-white/10 hover:text-white'
+                }`}
+              >
+                <span className="font-mono text-[10px]">CC</span>
+              </button>
+
               {/* Voice-Over Button */}
               <button
                 type="button"
@@ -271,12 +313,12 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
                 {voiceOverEnabled ? (
                   <>
                     <Volume2 className={`w-3.5 h-3.5 ${isSpeaking ? 'animate-pulse text-amber-400' : ''}`} />
-                    <span>Voice ON</span>
+                    <span className="hidden sm:inline">Voice ON</span>
                   </>
                 ) : (
                   <>
                     <VolumeX className="w-3.5 h-3.5" />
-                    <span>Voice OFF</span>
+                    <span className="hidden sm:inline">Voice OFF</span>
                   </>
                 )}
               </button>
@@ -336,14 +378,14 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
 
           {/* Bottom Captions & Scene Progress Bars */}
           <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 flex flex-col gap-1.5 pointer-events-none">
-            {/* Caption Text */}
-            {!compact && (
-              <div className="text-left px-1">
-                <p className="text-xs font-bold text-white drop-shadow-md line-clamp-1">
+            {/* Caption Text - Clean prompt/scene presentation */}
+            {!compact && showCaptions && (
+              <div className="text-left px-2 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 max-w-lg shadow-lg pointer-events-auto">
+                <p className="text-xs font-semibold text-white drop-shadow-md line-clamp-1">
                   {activeSlide.title}
                 </p>
                 <p className="text-[11px] text-neutral-200 drop-shadow-md line-clamp-2">
-                  {activeSlide.caption}
+                  {activeSlide.caption || video.prompt}
                 </p>
               </div>
             )}
