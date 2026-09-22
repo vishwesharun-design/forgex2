@@ -41,19 +41,22 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
   const [activeDeck, setActiveDeck] = useState<PresentationDeck | null>(() => decks[0] || null);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleGenerate = async () => {
-    if (!topic.trim() || isGenerating) return;
+  const handleGenerate = async (customTopic?: string) => {
+    const targetTopic = customTopic || topic;
+    if (!targetTopic.trim() || isGenerating) return;
     setIsGenerating(true);
+    setErrorMessage(null);
     try {
-      const newDeck = await presentationService.generateDeck(topic.trim(), slideCount, themeStyle);
+      const newDeck = await presentationService.generateDeck(targetTopic.trim(), slideCount, themeStyle);
       const updated = presentationService.getDecks();
       setDecks(updated);
       setActiveDeck(newDeck);
       setActiveSlideIdx(0);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Presentation generation failed: ${msg}`);
+      setErrorMessage(`Presentation generation notice: ${msg}`);
     } finally {
       setIsGenerating(false);
     }
@@ -175,7 +178,34 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                   isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
                 }`}
               />
+              {/* Quick suggestions */}
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {['AI Computing 2026', 'Cybersecurity Strategy', 'Startup Pitch Deck'].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => {
+                      setTopic(sug);
+                      handleGenerate(sug);
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors ${
+                      isDark 
+                        ? 'border-neutral-800 text-neutral-400 hover:text-amber-400 hover:border-amber-500/40' 
+                        : 'border-neutral-200 text-neutral-600 hover:text-amber-600 hover:border-amber-400'
+                    }`}
+                  >
+                    + {sug}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {errorMessage && (
+              <div className="p-2.5 rounded-xl text-xs bg-red-500/10 border border-red-500/30 text-red-400 flex items-start justify-between gap-2">
+                <span>{errorMessage}</span>
+                <button type="button" onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-300 font-bold">×</button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
@@ -215,7 +245,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
             <button
               id="generate-presentation-btn"
               type="button"
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={isGenerating || !topic.trim()}
               className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
             >

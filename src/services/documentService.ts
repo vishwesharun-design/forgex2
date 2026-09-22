@@ -3,13 +3,79 @@ import { DocumentItem, DocumentFileType, DocQAMessage, QuizQuestion } from '../t
 const STORAGE_KEY = 'forgex_documents';
 const QA_KEY = 'forgex_doc_qa_history';
 
+const DEFAULT_DOCS: DocumentItem[] = [
+  {
+    id: 'doc-sample-1',
+    name: 'AI_State_of_Computing_2026.md',
+    fileType: 'markdown',
+    fileSize: 4210,
+    uploadTime: Date.now() - 3600000 * 2,
+    textContent: `# State of Artificial Intelligence & Spatial Computing (2026 Report)
+
+## Executive Summary
+The acceleration of multimodal foundation models has shifted software development toward autonomous compound AI systems. Real-time reasoning pipelines now bridge text, spatial vision, dynamic code generation, and low-latency audio synthesis.
+
+## 1. Key Architectural Trends
+- **Autonomous Subagent Swarms**: Specialized micro-agents communicating via structured RPC contracts replace monolithic single-turn LLMs.
+- **Multimodal Video & World Models**: Models generate high-fidelity physical simulations, camera motion vectors, and frame-accurate timing.
+- **Local Neural Compilation**: High-density quantization allows 8B parameter models to execute client-side at over 60 tokens/second.
+
+## 2. Key Metrics & Benchmark Comparisons
+| Technology Layer | 2024 Baseline | 2026 Benchmark | Year-over-Year Velocity |
+| :--- | :--- | :--- | :--- |
+| Multimodal Audio Latency | 650 ms | 120 ms | -81.5% |
+| Autonomous Code Accuracy | 48.2% | 89.4% | +85.5% |
+| Context Horizon Token Depth | 128k tokens | 2M tokens | +1460% |
+| Memory Footprint (FP8) | 32 GB VRAM | 11 GB VRAM | -65.6% |
+
+## 3. Strategic Recommendations
+1. Decouple orchestration logic from specific model providers to maintain multi-model agility.
+2. Integrate continuous grounding with real-time web verification to mitigate synthetic hallucination.
+3. Standardize structured output schemas to assure downstream tool invocation integrity.`,
+  },
+  {
+    id: 'doc-sample-2',
+    name: 'Quarterly_Product_Roadmap.txt',
+    fileType: 'txt',
+    fileSize: 2850,
+    uploadTime: Date.now() - 3600000 * 5,
+    textContent: `FORGEX PRODUCT DEVELOPMENT & INFRASTRUCTURE ROADMAP - Q3/Q4
+
+1. STRATEGIC OBJECTIVE
+Deliver the most cohesive, unified multi-studio AI creation platform spanning generative creative media, software engineering, autonomous task agents, and deep research intelligence.
+
+2. TARGET MILESTONES:
+- Milestone Alpha: Studio Navigation Architecture
+  * Eliminate horizontal navigation bottlenecks.
+  * Implement categorized studio views (Creative, Intelligence, Productivity).
+  * Ensure full mobile and desktop scrollability across all viewports.
+
+- Milestone Beta: Real-Time Audio & Synthesizer Integration
+  * Web Audio API polyphonic engine for musical generation.
+  * Real-time microphone voice chat loops with visual waveform rendering.
+
+- Milestone Gamma: Presentation & Visual Whiteboard
+  * Automated JSON deck parsing with live slide rendering.
+  * Bidirectional mindmap node graph with interactive dragging.
+
+3. RESOURCE ALLOCATION:
+- Infrastructure & Server Endpoints: 35%
+- Studio UI Ergonomics & Responsiveness: 40%
+- Test Coverage & Fault-Tolerant Fallbacks: 25%`,
+  },
+];
+
 export const documentService = {
   getDocuments(): DocumentItem[] {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return DEFAULT_DOCS;
     } catch (_e) {
-      return [];
+      return DEFAULT_DOCS;
     }
   },
 

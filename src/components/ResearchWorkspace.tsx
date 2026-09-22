@@ -17,7 +17,8 @@ import {
   History,
   Layers,
   FileText,
-  ArrowRight
+  ArrowRight,
+  Zap
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -286,7 +287,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={() => setDepth('deep')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-all ${
                     depth === 'deep'
                       ? 'bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40'
                       : isDark
@@ -294,12 +295,13 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                         : 'bg-neutral-100 text-neutral-600 hover:text-neutral-900 border border-transparent'
                   }`}
                 >
-                  ⚡ Deep Multi-Step (Recommended)
+                  <Zap className="w-3 h-3 shrink-0" />
+                  <span>Deep Multi-Step (Recommended)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setDepth('quick')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-all ${
                     depth === 'quick'
                       ? 'bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/40'
                       : isDark
@@ -307,7 +309,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                         : 'bg-neutral-100 text-neutral-600 hover:text-neutral-900 border border-transparent'
                   }`}
                 >
-                  🔍 Quick Search
+                  <Search className="w-3 h-3 shrink-0" />
+                  <span>Quick Search</span>
                 </button>
               </div>
 

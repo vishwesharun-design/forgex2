@@ -64,6 +64,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
   const [docTitle, setDocTitle] = useState<string>(() => documents[0]?.title || 'Untitled Writing');
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const activeDoc = documents.find((d) => d.id === activeDocId) || documents[0];
 
@@ -103,19 +104,21 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
     }
   };
 
-  const handleGenerate = async () => {
-    if (!topicInput.trim() || isProcessing) return;
+  const handleGenerate = async (customPrompt?: string) => {
+    const promptToUse = customPrompt || topicInput;
+    if (!promptToUse.trim() || isProcessing) return;
     setIsProcessing(true);
+    setErrorMessage(null);
     try {
       const generated = await writingStudioService.generateWriting({
         category,
         tone,
-        topic: topicInput.trim(),
+        topic: promptToUse.trim(),
       });
       setCurrentText(generated);
       const updatedDoc: WritingDoc = {
         id: activeDocId || 'doc-' + Date.now(),
-        title: topicInput.trim().slice(0, 40) || 'Untitled',
+        title: promptToUse.trim().slice(0, 40) || 'Untitled',
         category,
         tone,
         content: generated,
@@ -129,7 +132,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
       setDocTitle(updatedDoc.title);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Writing generation failed: ${msg}`);
+      setErrorMessage(`Writing generation notice: ${msg}`);
     } finally {
       setIsProcessing(false);
     }
@@ -138,6 +141,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
   const handleAlter = async (alterAction: WritingAction) => {
     if (!currentText.trim() || isProcessing) return;
     setIsProcessing(true);
+    setErrorMessage(null);
     try {
       const altered = await writingStudioService.alterWriting({
         category,
@@ -162,7 +166,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Text alteration failed: ${msg}`);
+      setErrorMessage(`Text alteration notice: ${msg}`);
     } finally {
       setIsProcessing(false);
     }
@@ -282,12 +286,39 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
                   isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
                 }`}
               />
+              {/* Quick suggestions */}
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {['AI Ethics Essay', 'Press Release', 'Executive Brief'].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => {
+                      setTopicInput(sug);
+                      handleGenerate(sug);
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors ${
+                      isDark 
+                        ? 'border-neutral-800 text-neutral-400 hover:text-amber-400 hover:border-amber-500/40' 
+                        : 'border-neutral-200 text-neutral-600 hover:text-amber-600 hover:border-amber-400'
+                    }`}
+                  >
+                    + {sug}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {errorMessage && (
+              <div className="p-2.5 rounded-xl text-xs bg-red-500/10 border border-red-500/30 text-red-400 flex items-start justify-between gap-2">
+                <span>{errorMessage}</span>
+                <button type="button" onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-300 font-bold">×</button>
+              </div>
+            )}
 
             <button
               id="generate-writing-btn"
               type="button"
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={isProcessing || !topicInput.trim()}
               className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
             >

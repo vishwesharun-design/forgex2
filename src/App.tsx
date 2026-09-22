@@ -33,7 +33,6 @@ import { CodeStudioWorkspace } from './components/CodeStudioWorkspace';
 import { DocumentWorkspace } from './components/DocumentWorkspace';
 import { AgentWorkspace } from './components/AgentWorkspace';
 import { WebSearchWorkspace } from './components/WebSearchWorkspace';
-import { DataLabWorkspace } from './components/DataLabWorkspace';
 import { WritingStudioWorkspace } from './components/WritingStudioWorkspace';
 import { PresentationWorkspace } from './components/PresentationWorkspace';
 import { CanvasWorkspace } from './components/CanvasWorkspace';
@@ -457,18 +456,6 @@ export default function App() {
 
               {activeWorkspace === 'search' && (
                 <WebSearchWorkspace
-                  isDark={isDark}
-                  theme={settings.theme}
-                  selectedModelId={selectedModelId}
-                  onSelectModel={setSelectedModelId}
-                  onSendToChat={(text) => {
-                    handleSendMessageToActiveChat(text);
-                  }}
-                />
-              )}
-
-              {activeWorkspace === 'datalab' && (
-                <DataLabWorkspace
                   isDark={isDark}
                   theme={settings.theme}
                   selectedModelId={selectedModelId}

@@ -40,20 +40,23 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [zoomScale, setZoomScale] = useState(1);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const handleGenerate = async () => {
-    if (!topicInput.trim() || isGenerating) return;
+  const handleGenerate = async (customTopic?: string) => {
+    const targetTopic = customTopic || topicInput;
+    if (!targetTopic.trim() || isGenerating) return;
     setIsGenerating(true);
+    setErrorMessage(null);
     try {
-      const newBoard = await canvasService.generateCanvas(topicInput.trim(), canvasType);
+      const newBoard = await canvasService.generateCanvas(targetTopic.trim(), canvasType);
       const updated = canvasService.getBoards();
       setBoards(updated);
       setActiveBoard(newBoard);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Canvas generation failed: ${msg}`);
+      setErrorMessage(`Canvas generation notice: ${msg}`);
     } finally {
       setIsGenerating(false);
     }
@@ -190,7 +193,34 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
                   isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
                 }`}
               />
+              {/* Quick suggestions */}
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {['Microservices Graph', 'AI Agent Loop', 'User Auth Flow'].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => {
+                      setTopicInput(sug);
+                      handleGenerate(sug);
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors ${
+                      isDark 
+                        ? 'border-neutral-800 text-neutral-400 hover:text-amber-400 hover:border-amber-500/40' 
+                        : 'border-neutral-200 text-neutral-600 hover:text-amber-600 hover:border-amber-400'
+                    }`}
+                  >
+                    + {sug}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {errorMessage && (
+              <div className="p-2.5 rounded-xl text-xs bg-red-500/10 border border-red-500/30 text-red-400 flex items-start justify-between gap-2">
+                <span>{errorMessage}</span>
+                <button type="button" onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-300 font-bold">×</button>
+              </div>
+            )}
 
             <div>
               <label className="block text-[11px] font-semibold mb-1 text-neutral-400">Layout Format</label>
@@ -210,7 +240,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
             <button
               id="generate-canvas-btn"
               type="button"
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={isGenerating || !topicInput.trim()}
               className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
             >

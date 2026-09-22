@@ -410,7 +410,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* Main Button: ⚡ Generate Image (Section 13) */}
+          {/* Main Button: Generate Image (Section 13) */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               id="btn-generate-image"
@@ -427,7 +427,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               ) : (
                 <>
                   <Zap className="w-4 h-4 fill-neutral-950" />
-                  <span>⚡ Generate Image</span>
+                  <span>Generate Image</span>
                 </>
               )}
             </button>

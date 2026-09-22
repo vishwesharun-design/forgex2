@@ -108,8 +108,8 @@ export const canvasService = {
       {
         id: 'node-3',
         type: 'decision',
-        title: 'Data Lab & Charts',
-        content: 'Statistical variance & interactive trends',
+        title: 'Document & Knowledge AI',
+        content: 'Semantic multi-document summarization & QA',
         x: 80,
         y: 350,
         width: 190,

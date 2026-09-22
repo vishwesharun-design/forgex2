@@ -77,9 +77,9 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   // Execution & Preview
   const [rightPanelTab, setRightPanelTab] = useState<'preview' | 'console' | 'fixes' | 'vault'>('preview');
   const [consoleOutput, setConsoleOutput] = useState<string[]>([
-    '⚡ ForgeX Code Studio Runtime Engine Ready',
+    'ForgeX Code Studio Runtime Engine Ready',
     'Language environment initialized: ' + language.toUpperCase(),
-    'Press "Run / Preview" (▶) to execute live script or view output.'
+    'Press "Run / Preview" to execute live script or view output.'
   ]);
   const [previewKey, setPreviewKey] = useState(1);
   const [isCopied, setIsCopied] = useState(false);
@@ -144,7 +144,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
       setRightPanelTab('preview');
       setConsoleOutput((prev) => [
         ...prev,
-        `[${timestamp}] 🚀 Rendered live HTML5 Canvas/DOM application in isolated sandbox.`
+        `[${timestamp}] Rendered live HTML5 Canvas/DOM application in isolated sandbox.`
       ]);
     } else if (language === 'javascript' || language === 'typescript') {
       setRightPanelTab('console');
@@ -177,7 +177,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
           setConsoleOutput((prev) => [
             ...prev,
             `[${timestamp}] [RUNTIME EXCEPTION]: ${execErr?.message || String(execErr)}`,
-            '💡 Tip: Click "Auto-Correct" to have ForgeX AI instantly fix this bug!'
+            'Tip: Click "Auto-Correct" to have ForgeX AI instantly fix this bug!'
           ]);
         }
       } catch (err: any) {
@@ -835,7 +835,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   </style>
 </head>
 <body>
-  <div class="badge">⚡ ForgeX Code Studio — Active Source Output</div>
+  <div class="badge">ForgeX Code Studio — Active Source Output</div>
   <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
 </body>
 </html>`

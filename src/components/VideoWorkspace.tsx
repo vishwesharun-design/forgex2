@@ -479,7 +479,7 @@ export const VideoWorkspace: React.FC<VideoWorkspaceProps> = ({
               ) : (
                 <>
                   <Zap className="w-4 h-4 fill-neutral-950" />
-                  <span>⚡ Generate Video</span>
+                  <span>Generate Video</span>
                 </>
               )}
             </button>

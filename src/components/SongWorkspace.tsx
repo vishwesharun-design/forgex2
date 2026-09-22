@@ -15,7 +15,15 @@ import {
   RotateCcw,
   Radio,
   Share2,
-  Check
+  Check,
+  Zap,
+  Waves,
+  Coffee,
+  Film,
+  Flame,
+  Leaf,
+  Compass,
+  Mic
 } from 'lucide-react';
 import { 
   GeneratedSong, 
@@ -35,15 +43,15 @@ interface SongWorkspaceProps {
   onSelectModel: (modelId: ForgeXModelId) => void;
 }
 
-const GENRES: { id: SongGenre; label: string; icon: string; desc: string }[] = [
-  { id: 'Synthwave', label: 'Synthwave', icon: '🌆', desc: '80s analog bass, arpeggios & retro neon vibes' },
-  { id: 'Lo-Fi', label: 'Lo-Fi Beats', icon: '☕', desc: 'Warm jazz chords, vinyl dust & relaxed swing' },
-  { id: 'Cinematic', label: 'Cinematic', icon: '🎻', desc: 'Epic orchestral strings, brass & dramatic sub hits' },
-  { id: 'EDM', label: 'EDM / Dance', icon: '⚡', desc: 'Pumping four-on-the-floor kicks & high-energy drops' },
-  { id: 'Rock', label: 'Rock', icon: '🎸', desc: 'Overdriven guitars, heavy bass & driving drum beat' },
-  { id: 'Acoustic', label: 'Acoustic', icon: '🍃', desc: 'Fingerpicked nylon guitars & warm intimate groove' },
-  { id: 'Ambient', label: 'Ambient', icon: '🌌', desc: 'Ethereal drifting soundscapes & cosmic frequencies' },
-  { id: 'Hip-Hop', label: 'Hip-Hop', icon: '🎤', desc: '808 sub bass, crisp trap beats & melodic hooks' },
+const GENRES: { id: SongGenre; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
+  { id: 'Synthwave', label: 'Synthwave', icon: Waves, desc: '80s analog bass, arpeggios & retro neon vibes' },
+  { id: 'Lo-Fi', label: 'Lo-Fi Beats', icon: Coffee, desc: 'Warm jazz chords, vinyl dust & relaxed swing' },
+  { id: 'Cinematic', label: 'Cinematic', icon: Film, desc: 'Epic orchestral strings, brass & dramatic sub hits' },
+  { id: 'EDM', label: 'EDM / Dance', icon: Zap, desc: 'Pumping four-on-the-floor kicks & high-energy drops' },
+  { id: 'Rock', label: 'Rock', icon: Flame, desc: 'Overdriven guitars, heavy bass & driving drum beat' },
+  { id: 'Acoustic', label: 'Acoustic', icon: Leaf, desc: 'Fingerpicked nylon guitars & warm intimate groove' },
+  { id: 'Ambient', label: 'Ambient', icon: Compass, desc: 'Ethereal drifting soundscapes & cosmic frequencies' },
+  { id: 'Hip-Hop', label: 'Hip-Hop', icon: Mic, desc: '808 sub bass, crisp trap beats & melodic hooks' },
 ];
 
 const MOODS: SongMood[] = ['Energetic', 'Chill', 'Dark', 'Dreamy', 'Uplifting', 'Melancholic'];
@@ -285,7 +293,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 fill-current" />
-                    <span>⚡ Synthesize Song</span>
+                    <span>Synthesize Song</span>
                   </>
                 )}
               </button>
@@ -322,6 +330,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {GENRES.map((g) => {
                 const isSelected = selectedGenre === g.id;
+                const GenreIcon = g.icon;
                 return (
                   <button
                     key={g.id}
@@ -335,9 +344,11 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                         : 'bg-neutral-50 border-neutral-200 hover:border-neutral-300 text-neutral-800'
                     }`}
                   >
-                    <div className="text-lg mb-1">{g.icon}</div>
-                    <div className="text-xs font-bold">{g.label}</div>
-                    <div className={`text-[10px] line-clamp-1 mt-0.5 ${isSelected ? 'text-amber-400/80' : 'text-neutral-500'}`}>
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-2">
+                      <GenreIcon className="w-4 h-4" />
+                    </div>
+                    <div className="text-xs font-bold leading-tight">{g.label}</div>
+                    <div className={`text-[10px] line-clamp-1 mt-0.5 leading-normal ${isSelected ? 'text-amber-400/80' : 'text-neutral-500'}`}>
                       {g.desc}
                     </div>
                   </button>

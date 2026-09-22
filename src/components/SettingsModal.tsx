@@ -221,13 +221,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                       {settings.theme === 'dark' && <Check className="w-4 h-4 text-amber-400" />}
                     </div>
-                    <span className="font-semibold text-sm block text-neutral-100">🌙 Dark Theme</span>
+                    <span className="font-semibold text-sm block text-neutral-100">Dark Theme</span>
                     <span className="text-[11px] text-neutral-500 mt-1 block">
                       Dark navy-black canvas with luminous amber lightning
                     </span>
                   </button>
 
-                  {/* ☀️ Light Theme (Section 16) */}
+                  {/* Light Theme (Section 16) */}
                   <button
                     id="btn-theme-select-light"
                     type="button"
@@ -244,7 +244,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                       {settings.theme === 'light' && <Check className="w-4 h-4 text-amber-600" />}
                     </div>
-                    <span className="font-semibold text-sm block text-neutral-900">☀️ Light Theme</span>
+                    <span className="font-semibold text-sm block text-neutral-900">Light Theme</span>
                     <span className="text-[11px] text-neutral-500 mt-1 block">
                       Clean off-white background with soft gray cards
                     </span>

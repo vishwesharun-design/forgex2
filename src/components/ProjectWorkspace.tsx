@@ -12,7 +12,8 @@ import {
   CheckCircle,
   Tag,
   ArrowRight,
-  Bookmark
+  Bookmark,
+  X
 } from 'lucide-react';
 import { ForgeXProject, ForgeXTheme, ForgeXModelId } from '../types';
 import { projectService } from '../services/projectService';
@@ -313,9 +314,10 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-neutral-400 hover:text-white text-xs font-bold"
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition-colors"
+                title="Close"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

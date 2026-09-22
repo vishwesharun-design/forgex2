@@ -62,7 +62,6 @@ export type ActiveWorkspace =
   | 'code'
   | 'search'
   | 'agents'
-  | 'datalab'
   | 'files'
   | 'writing'
   | 'presentation'
@@ -362,36 +361,7 @@ export type ImageStudioMode =
   | 'transform';
 
 // ==========================================
-// 4. DATA LAB TYPES
-// ==========================================
-export interface DataColumnInfo {
-  name: string;
-  type: 'numeric' | 'string' | 'date' | 'boolean';
-  nonNullCount: number;
-  nullCount: number;
-  uniqueCount: number;
-  min?: number;
-  max?: number;
-  mean?: number;
-  median?: number;
-}
-
-export interface DataDataset {
-  id: string;
-  fileName: string;
-  rowCount: number;
-  columnCount: number;
-  columns: DataColumnInfo[];
-  rows: Record<string, any>[];
-  uploadTime: number;
-  summary?: string;
-  insights?: { title: string; detail: string; metric?: string; type: 'trend' | 'stat' | 'anomaly' }[];
-}
-
-export type ChartType = 'bar' | 'line' | 'scatter' | 'pie';
-
-// ==========================================
-// 5. PRESENTATION GENERATOR TYPES
+// 4. PRESENTATION GENERATOR TYPES
 // ==========================================
 export interface SlideItem {
   id: string;

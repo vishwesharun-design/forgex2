@@ -426,8 +426,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     {/* Model badge & actions on assistant reply */}
                     {!isUser && (
                       <div className="mt-3 pt-2.5 border-t border-neutral-800/40 flex items-center justify-between text-xs text-neutral-400">
-                        <span className="text-[11px] font-mono text-amber-400">
-                          ⚡ {message.modelUsed || currentModel.name}
+                        <span className="text-[11px] font-mono text-amber-400 inline-flex items-center gap-1">
+                          <Zap className="w-3 h-3 shrink-0" />
+                          <span>{message.modelUsed || currentModel.name}</span>
                         </span>
 
                         <div className="flex items-center gap-2">

@@ -1927,54 +1927,7 @@ store.set('counter', 42);`,
   });
 
   // ==========================================
-  // 4. DATA LAB ENDPOINT (CSV / Data Analysis)
-  // ==========================================
-  app.post("/api/data-lab", async (req: Request, res: Response) => {
-    try {
-      const { dataset, query } = req.body;
-      const apiKey = getEffectiveApiKey(req);
-
-      if (!dataset) {
-        return res.status(400).json({ error: "Dataset is required." });
-      }
-
-      const { fileName = "dataset.csv", rowCount = 0, columnCount = 0, columns = [], rows = [] } = dataset;
-      const sampleRows = rows.slice(0, 15);
-      const colSummary = columns.map((c: any) => `${c.name} (${c.type}): unique=${c.uniqueCount || 'N/A'}, nulls=${c.nullCount || 0}`).join("; ");
-
-      if (apiKey) {
-        try {
-          const ai = new GoogleGenAI({ apiKey });
-          const prompt = query
-            ? `You are an expert Data Analyst. Answer this specific query regarding the dataset "${fileName}": "${query}"\n\nDataset schema: ${colSummary}\nSample Data: ${JSON.stringify(sampleRows)}\nTotal Rows: ${rowCount}, Columns: ${columnCount}`
-            : `You are an expert Data Analyst. Perform a deep analytical review of the dataset "${fileName}".\nDataset schema: ${colSummary}\nSample Data: ${JSON.stringify(sampleRows)}\nTotal Rows: ${rowCount}, Columns: ${columnCount}\n\nProvide:\n1. Dataset Summary & Data Health\n2. Key Statistical Trends & Patterns\n3. Anomalies or Outliers\n4. Recommended Next Steps & Visualizations\nFormat in clean markdown.`;
-
-          const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
-            contents: prompt,
-          });
-
-          return res.json({ analysis: response.text || "Analysis complete." });
-        } catch (apiErr) {
-          console.warn("Data Lab API error, using algorithmic data analysis:", apiErr);
-        }
-      }
-
-      // Algorithmic Data Analysis Fallback
-      const numericCols = columns.filter((c: any) => c.type === "numeric");
-      const textCols = columns.filter((c: any) => c.type !== "numeric");
-
-      const analysis = `### Data Analysis Report: ${fileName}\n\n- **Volume**: **${rowCount} rows** across **${columnCount} columns**.\n- **Data Types**: ${numericCols.length} numerical columns, ${textCols.length} categorical/text columns.\n\n#### Key Findings & Metrics:\n1. **Data Completeness**: High density of non-null values across primary keys and identifier fields.\n2. **Categorical Distribution**: ${textCols.map((c: any) => `\`${c.name}\``).slice(0, 4).join(", ") || "Standard text fields"} demonstrate diverse sample groupings.\n3. **Numerical Trends**: ${numericCols.map((c: any) => `\`${c.name}\``).slice(0, 4).join(", ") || "Metrics"} show consistent scale without catastrophic zero-variance anomalies.\n\n*Analysis executed on real uploaded dataset records.*`;
-
-      return res.json({ analysis });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return res.status(500).json({ error: msg });
-    }
-  });
-
-  // ==========================================
-  // 5. PRESENTATION GENERATOR ENDPOINT
+  // 4. PRESENTATION GENERATOR ENDPOINT
   // ==========================================
   app.post("/api/presentation-generate", async (req: Request, res: Response) => {
     try {

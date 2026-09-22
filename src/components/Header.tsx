@@ -35,24 +35,40 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const isDark = theme === 'dark';
 
-  const getWorkspaceTitle = () => {
+  const getWorkspaceInfo = () => {
     switch (activeWorkspace) {
       case 'chat':
-        return 'ForgeX Chat';
+        return { title: 'ForgeX Chat', category: 'Intelligence' };
       case 'image':
-        return 'Image Studio';
+        return { title: 'Image Studio', category: 'Creative' };
       case 'video':
-        return 'Video Studio';
+        return { title: 'Video Studio', category: 'Creative' };
       case 'music':
-        return 'AI Song Studio';
+        return { title: 'AI Song Studio', category: 'Creative' };
       case 'research':
-        return 'Deep Research';
+        return { title: 'Deep Research', category: 'Intelligence' };
       case 'code':
-        return 'Code Studio';
+        return { title: 'Code Studio', category: 'Productivity' };
+      case 'files':
+        return { title: 'Document AI', category: 'Productivity' };
+      case 'agents':
+        return { title: 'AI Agents', category: 'Intelligence' };
+      case 'search':
+        return { title: 'Live Web Search', category: 'Intelligence' };
+      case 'writing':
+        return { title: 'Writing Studio', category: 'Productivity' };
+      case 'presentation':
+        return { title: 'Presentations', category: 'Productivity' };
+      case 'canvas':
+        return { title: 'AI Canvas & Mindmap', category: 'Productivity' };
+      case 'projects':
+        return { title: 'Projects Manager', category: 'Productivity' };
       default:
-        return 'ForgeX Studio';
+        return { title: 'ForgeX Studio', category: 'Studio' };
     }
   };
+
+  const workspaceInfo = getWorkspaceInfo();
 
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
 
@@ -100,10 +116,13 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div>
+        <div className="flex items-center gap-2">
           <h1 id="header-workspace-title" className="font-display font-bold text-lg sm:text-xl tracking-tight">
-            {getWorkspaceTitle()}
+            {workspaceInfo.title}
           </h1>
+          <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+            {workspaceInfo.category}
+          </span>
         </div>
       </div>
 

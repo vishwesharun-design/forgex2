@@ -14,7 +14,13 @@ import {
   ArrowRight,
   User,
   CheckCircle2,
-  Lock
+  Lock,
+  Palette,
+  Maximize2,
+  Wrench,
+  Clock,
+  RefreshCw,
+  Film
 } from 'lucide-react';
 import { ForgeXTheme, FORGEX_MODELS, ActiveWorkspace } from '../types';
 
@@ -87,14 +93,15 @@ export const AboutModal: React.FC<AboutModalProps> = ({
           isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
         }`}>
           {[
-            { id: 'overview', label: '🌟 Overview', icon: Sparkles },
-            { id: 'chat', label: '💬 AI Chat', icon: MessageSquare },
-            { id: 'image', label: '🎨 Image Studio', icon: ImageIcon },
-            { id: 'video', label: '🎬 Video Studio', icon: VideoIcon },
-            { id: 'models', label: '⚡ Unreal Models', icon: Cpu },
-            { id: 'auth', label: '🔒 Real Auth & Credits', icon: ShieldCheck },
+            { id: 'overview', label: 'Overview', icon: Sparkles },
+            { id: 'chat', label: 'AI Chat', icon: MessageSquare },
+            { id: 'image', label: 'Image Studio', icon: ImageIcon },
+            { id: 'video', label: 'Video Studio', icon: VideoIcon },
+            { id: 'models', label: 'Unreal Models', icon: Cpu },
+            { id: 'auth', label: 'Real Auth & Credits', icon: ShieldCheck },
           ].map((tab) => {
             const isActive = activeSection === tab.id;
+            const TabIcon = tab.icon;
             return (
               <button
                 key={tab.id}
@@ -107,6 +114,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                       : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/60'
                 }`}
               >
+                <TabIcon className="w-3.5 h-3.5 shrink-0" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -138,7 +146,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 mb-2.5">
                     <MessageSquare className="w-4 h-4" />
                   </div>
-                  <h4 className="font-semibold text-sm mb-1">💬 ForgeX Chat</h4>
+                  <h4 className="font-semibold text-sm mb-1">ForgeX Chat</h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Intelligent conversations, full-stack code synthesis, brainstorming, and multimodal file attachments.
                   </p>
@@ -153,7 +161,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 mb-2.5">
                     <ImageIcon className="w-4 h-4" />
                   </div>
-                  <h4 className="font-semibold text-sm mb-1">🎨 Image Studio</h4>
+                  <h4 className="font-semibold text-sm mb-1">Image Studio</h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Render photorealistic visuals across 7 curated styles, 4 aspect ratios, and reference-guided synthesis.
                   </p>
@@ -168,7 +176,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 mb-2.5">
                     <VideoIcon className="w-4 h-4" />
                   </div>
-                  <h4 className="font-semibold text-sm mb-1">🎬 Video Studio</h4>
+                  <h4 className="font-semibold text-sm mb-1">Video Studio</h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Synthesize fluid motion sequences from text prompts or still reference images with physics-based lighting.
                   </p>
@@ -182,7 +190,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   <span>The Creator’s Vision</span>
                 </div>
                 <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                  Conceived and architected by <strong>VishweshVarman</strong>, ForgeX was designed around a clean, distraction-free aesthetic with instantaneous latency. Every visual element—from the ⚡ lightning insignia to the interactive 3D particle starfield—aims to inspire unhindered creativity.
+                  Conceived and architected by <strong>VishweshVarman</strong>, ForgeX was designed around a clean, distraction-free aesthetic with instantaneous latency. Every visual element—from the lightning insignia to the interactive particle starfield—aims to inspire unhindered creativity.
                 </p>
               </div>
             </div>
@@ -276,28 +284,40 @@ export const AboutModal: React.FC<AboutModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">🎨 7 Style Presets</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Palette className="w-4 h-4 shrink-0" />
+                    <span>7 Style Presets</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Realistic, Cinematic, Anime, 3D Render, Illustration, Minimalist, and Custom prompts.
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">📐 4 Aspect Ratios</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Maximize2 className="w-4 h-4 shrink-0" />
+                    <span>4 Aspect Ratios</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     1:1 (Square), 16:9 (Landscape widescreen), 9:16 (Vertical Reels/Stories), and 4:3 (Classic).
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">🖼️ Image Reference Grounding</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 shrink-0" />
+                    <span>Image Reference Grounding</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Upload sketches, character references, or architectural concepts to guide the diffusion process.
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">⚡ Creation Toolkit</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Wrench className="w-4 h-4 shrink-0" />
+                    <span>Creation Toolkit</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Hover actions on any creation: <strong>Download</strong>, <strong>Fullscreen Canvas</strong>, <strong>Variation</strong>, <strong>Edit Prompt</strong>, and <strong>Favorites</strong>.
                   </p>
@@ -329,28 +349,40 @@ export const AboutModal: React.FC<AboutModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">⏱️ Duration Controls</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 shrink-0" />
+                    <span>Duration Controls</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Select between 5s, 10s, or 15s generation lengths tailored to social teasers or cinematic sequences.
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">🔄 Dual Generation Pipelines</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <RefreshCw className="w-4 h-4 shrink-0" />
+                    <span>Dual Generation Pipelines</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     <strong>Text → Video</strong> creates scenes from scratch; <strong>Image → Video</strong> animates your existing stills into camera moves.
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">💎 Resolution Modes</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span>Resolution Modes</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Choose Standard mode for fast generation or High Quality for enhanced frame sharpness and raytraced reflections.
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400">🎬 Player & Remix Tools</h4>
+                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                    <Film className="w-4 h-4 shrink-0" />
+                    <span>Player & Remix Tools</span>
+                  </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     Direct in-browser looping player, fullscreen playback, regeneration with altered seeds, and MP4 downloads.
                   </p>
@@ -385,8 +417,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold shrink-0">
-                        ⚡
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <Zap className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">

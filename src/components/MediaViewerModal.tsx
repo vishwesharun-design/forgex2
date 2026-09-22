@@ -99,8 +99,9 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold uppercase">
                 {type}
               </span>
-              <span className="text-[11px] font-mono text-neutral-400">
-                ⚡ {modelMeta.name}
+              <span className="text-[11px] font-mono text-neutral-400 inline-flex items-center gap-1">
+                <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                <span>{modelMeta.name}</span>
               </span>
             </div>
 

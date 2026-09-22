@@ -35,7 +35,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
       />
 
       <div className="relative max-w-3xl mx-auto flex flex-col items-center">
-        {/* Large ⚡ ForgeX logo with subtle aura */}
+        {/* Large ForgeX logo with subtle aura */}
         <div className="relative mb-6 group cursor-default">
           <div 
             className="absolute inset-0 rounded-3xl bg-amber-500/20 blur-xl group-hover:bg-amber-400/30 transition-all duration-500" 
@@ -86,7 +86,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             <button
               key={model.id}
               onClick={() => onSelectModel && onSelectModel(model.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+              className={`px-3 py-1 rounded-full text-xs font-medium border inline-flex items-center transition-all ${
                 selectedModelId === model.id
                   ? 'bg-amber-500 text-neutral-950 font-bold border-amber-500 shadow-sm'
                   : isDark
@@ -94,8 +94,8 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                     : 'bg-white/80 border-neutral-200 text-neutral-600 hover:border-neutral-300'
               }`}
             >
-              <span className="text-amber-400 mr-1">⚡</span>
-              {model.name}
+              <Zap className="w-3 h-3 text-amber-400 mr-1 shrink-0" />
+              <span>{model.name}</span>
             </button>
           ))}
         </div>
@@ -143,7 +143,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
                 <MessageSquare className="w-4 h-4" />
               </div>
-              <span className="font-display font-semibold text-sm">💬 ForgeX Chat</span>
+              <span className="font-display font-semibold text-sm">ForgeX Chat</span>
             </div>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
               Multi-model reasoning and coding intelligence. Click to learn how it works.
@@ -163,7 +163,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
                 <ImageIcon className="w-4 h-4" />
               </div>
-              <span className="font-display font-semibold text-sm">🎨 Image Studio</span>
+              <span className="font-display font-semibold text-sm">Image Studio</span>
             </div>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
               High-fidelity visual synthesis across 7 styles. Click to learn how it works.
@@ -183,7 +183,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
                 <VideoIcon className="w-4 h-4" />
               </div>
-              <span className="font-display font-semibold text-sm">🎬 Video Studio</span>
+              <span className="font-display font-semibold text-sm">Video Studio</span>
             </div>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
               Dynamic motion sequence generation. Click to learn how it works.

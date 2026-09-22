@@ -99,7 +99,7 @@ export class ReactiveState<T extends Record<string, unknown>> {
   </style>
 </head>
 <body>
-  <div class="badge">⚡ ForgeX Interactive Canvas</div>
+  <div class="badge">ForgeX Interactive Canvas</div>
   <canvas id="c"></canvas>
   <script>
     const canvas = document.getElementById('c');
