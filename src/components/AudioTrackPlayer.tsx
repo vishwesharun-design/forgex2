@@ -167,10 +167,17 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
         }`}
       >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold">
-            <Music className="w-3.5 h-3.5" />
-            <span>AI Studio Master</span>
-          </div>
+          {song.isRealLifeHit ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold">
+              <span>⭐ Real-Life Hit</span>
+              {song.artist && <span className="opacity-90 font-normal">• {song.artist}</span>}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold">
+              <Music className="w-3.5 h-3.5" />
+              <span>AI Studio Master</span>
+            </div>
+          )}
 
           <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-200 border border-neutral-700">
             {song.genre}
@@ -520,9 +527,21 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
         <div className="lg:col-span-6 flex flex-col justify-between p-5 sm:p-6 space-y-5">
           {/* Top Section: Title & Prompt info */}
           <div>
-            <h3 className="font-display font-extrabold text-lg sm:text-xl line-clamp-1">
-              {song.title}
-            </h3>
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <h3 className="font-display font-extrabold text-lg sm:text-xl line-clamp-1">
+                {song.title}
+              </h3>
+              {song.isRealLifeHit && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                  ⭐ Real Hit
+                </span>
+              )}
+            </div>
+            {song.artist && (
+              <p className="text-xs font-semibold text-amber-400 mb-1">
+                by {song.artist}
+              </p>
+            )}
             <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
               "{song.prompt}"
             </p>

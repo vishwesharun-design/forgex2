@@ -21,7 +21,11 @@ import {
   Sliders,
   RefreshCw,
   Trash2,
-  Plus
+  Plus,
+  Smartphone,
+  Tablet,
+  Monitor,
+  ExternalLink
 } from 'lucide-react';
 import {
   CodeLanguage,
@@ -85,6 +89,10 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
+  // Responsive Mobile & Viewport States
+  const [mobilePanel, setMobilePanel] = useState<'editor' | 'preview' | 'console' | 'fixes'>('preview');
+  const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile' | 'tablet'>('desktop');
+
   // Snippets
   const [snippets, setSnippets] = useState<CodeSnippet[]>(() => codeStudioService.getSnippets());
   const [activeSnippetId, setActiveSnippetId] = useState<string | null>('snip_default');
@@ -142,12 +150,14 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
     
     if (language === 'html') {
       setRightPanelTab('preview');
+      setMobilePanel('preview');
       setConsoleOutput((prev) => [
         ...prev,
         `[${timestamp}] Rendered live HTML5 Canvas/DOM application in isolated sandbox.`
       ]);
     } else if (language === 'javascript' || language === 'typescript') {
       setRightPanelTab('console');
+      setMobilePanel('console');
       try {
         // Safe evaluation simulation
         const logs: string[] = [];
@@ -217,7 +227,9 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
       setCode(res.code);
       setLastResponse(res);
       setPreviewKey((k) => k + 1);
-      setRightPanelTab(res.corrections && res.corrections.length > 0 ? 'fixes' : language === 'html' ? 'preview' : 'console');
+      const nextTab = res.corrections && res.corrections.length > 0 ? 'fixes' : language === 'html' ? 'preview' : 'console';
+      setRightPanelTab(nextTab);
+      setMobilePanel(nextTab);
       setConsoleOutput((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] AI Code Generated: "${promptToUse}"`,
@@ -261,6 +273,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
       setLastResponse(res);
       setPreviewKey((k) => k + 1);
       setRightPanelTab('fixes');
+      setMobilePanel('fixes');
       setConsoleOutput((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] AI ${action.toUpperCase()}: ${res.explanation}`,
@@ -671,12 +684,83 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
         )}
       </div>
 
-      {/* 3. DUAL-PANEL WORKSPACE (EDITOR + PREVIEW/CONSOLE) */}
+      {/* 3. MOBILE PANEL SWITCHER (Visible on screens < md) */}
+      <div className={`flex md:hidden items-center border-b px-2 py-1.5 gap-1 shrink-0 ${
+        isDark ? 'bg-neutral-900/80 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+      }`}>
+        <button
+          type="button"
+          onClick={() => setMobilePanel('editor')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobilePanel === 'editor'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Code2 className="w-3.5 h-3.5" />
+          <span>Editor</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMobilePanel('preview');
+            setRightPanelTab('preview');
+          }}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobilePanel === 'preview'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Eye className="w-3.5 h-3.5" />
+          <span>Preview</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMobilePanel('console');
+            setRightPanelTab('console');
+          }}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobilePanel === 'console'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Terminal className="w-3.5 h-3.5" />
+          <span>Console</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMobilePanel('fixes');
+            setRightPanelTab('fixes');
+          }}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobilePanel === 'fixes'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Fixes</span>
+        </button>
+      </div>
+
+      {/* 4. DUAL-PANEL WORKSPACE (EDITOR + PREVIEW/CONSOLE) */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* LEFT PANEL: CODE EDITOR */}
         <div className={`flex-1 flex flex-col min-w-0 border-r ${
-          isDark ? 'border-neutral-800 bg-[#0d0d10]' : 'border-neutral-200 bg-white'
-        }`}>
+          mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'
+        } ${isDark ? 'border-neutral-800 bg-[#0d0d10]' : 'border-neutral-200 bg-white'}`}>
           {/* Editor Header Bar */}
           <div className={`px-4 py-1.5 border-b flex items-center justify-between text-[11px] ${
             isDark ? 'border-neutral-800/80 bg-neutral-900/30 text-neutral-400' : 'border-neutral-200 bg-neutral-50 text-neutral-500'
@@ -745,17 +829,22 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
         </div>
 
         {/* RIGHT PANEL: LIVE PREVIEW & RUNTIME CONSOLE */}
-        <div className={`flex-1 flex flex-col min-w-0 md:max-w-[50%] lg:max-w-[45%] ${
+        <div className={`flex-1 flex flex-col min-w-0 ${
+          mobilePanel !== 'editor' ? 'flex' : 'hidden md:flex'
+        } md:max-w-[50%] lg:max-w-[45%] ${
           isDark ? 'bg-neutral-950' : 'bg-neutral-50'
         }`}>
           {/* Right Panel Tabs */}
-          <div className={`px-3 py-1.5 border-b flex items-center justify-between text-xs shrink-0 ${
+          <div className={`px-3 py-1.5 border-b flex flex-wrap items-center justify-between text-xs gap-2 shrink-0 ${
             isDark ? 'border-neutral-800 bg-neutral-900/50' : 'border-neutral-200 bg-white'
           }`}>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
               <button
                 id="right-tab-preview"
-                onClick={() => setRightPanelTab('preview')}
+                onClick={() => {
+                  setRightPanelTab('preview');
+                  setMobilePanel('preview');
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
                   rightPanelTab === 'preview'
                     ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30'
@@ -763,12 +852,15 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Live Preview</span>
+                <span>Preview</span>
               </button>
 
               <button
                 id="right-tab-console"
-                onClick={() => setRightPanelTab('console')}
+                onClick={() => {
+                  setRightPanelTab('console');
+                  setMobilePanel('console');
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
                   rightPanelTab === 'console'
                     ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30'
@@ -781,7 +873,10 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
 
               <button
                 id="right-tab-fixes"
-                onClick={() => setRightPanelTab('fixes')}
+                onClick={() => {
+                  setRightPanelTab('fixes');
+                  setMobilePanel('fixes');
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
                   rightPanelTab === 'fixes'
                     ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30'
@@ -789,7 +884,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 }`}
               >
                 <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
-                <span>AI Corrections</span>
+                <span>Fixes</span>
               </button>
 
               <button
@@ -806,26 +901,147 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               </button>
             </div>
 
-            {/* Quick Refresh */}
-            <button
-              onClick={() => setPreviewKey((k) => k + 1)}
-              className="p-1 rounded text-neutral-400 hover:text-amber-400"
-              title="Refresh Preview & State"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+            {/* Right toolbar: Viewport switcher + Quick Refresh */}
+            <div className="flex items-center gap-1.5">
+              {rightPanelTab === 'preview' && (
+                <div className="flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewportMode('desktop')}
+                    title="Desktop full viewport"
+                    className={`p-1 rounded transition-colors ${
+                      viewportMode === 'desktop'
+                        ? 'bg-amber-500 text-neutral-950 font-bold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Monitor className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewportMode('tablet')}
+                    title="Tablet viewport (768px)"
+                    className={`p-1 rounded transition-colors ${
+                      viewportMode === 'tablet'
+                        ? 'bg-amber-500 text-neutral-950 font-bold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Tablet className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewportMode('mobile')}
+                    title="Mobile preview (375px phone screen)"
+                    className={`p-1 rounded transition-colors ${
+                      viewportMode === 'mobile'
+                        ? 'bg-amber-500 text-neutral-950 font-bold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Smartphone className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => setPreviewKey((k) => k + 1)}
+                className="p-1 rounded text-neutral-400 hover:text-amber-400 transition-colors"
+                title="Refresh Preview & State"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Tab Content 1: Live Preview (iFrame sandbox) */}
+          {/* Tab Content 1: Live Preview (iFrame sandbox with Device Viewport support) */}
           {rightPanelTab === 'preview' && (
-            <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-900">
-              <iframe
-                key={previewKey}
-                title="ForgeX Live Code Preview"
-                srcDoc={
-                  language === 'html'
-                    ? code
-                    : `<!DOCTYPE html>
+            <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-950 items-center justify-center p-2 sm:p-4">
+              {viewportMode === 'mobile' ? (
+                /* Interactive Mobile Device Frame */
+                <div className="w-[375px] max-w-full h-full max-h-[667px] my-auto mx-auto rounded-[36px] border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all">
+                  {/* Top status bar & dynamic island */}
+                  <div className="h-7 bg-neutral-950 flex items-center justify-between px-5 text-[10px] text-neutral-400 select-none shrink-0 border-b border-neutral-900">
+                    <span className="font-semibold text-neutral-300">9:41</span>
+                    <div className="w-16 h-3 bg-neutral-800 rounded-full" />
+                    <div className="flex items-center gap-1 text-[9px] text-neutral-400">
+                      <span>5G</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                  {/* Phone Screen Viewport */}
+                  <div className="flex-1 relative overflow-hidden bg-black">
+                    <iframe
+                      key={previewKey}
+                      title="ForgeX Live Code Mobile Preview"
+                      srcDoc={
+                        language === 'html'
+                          ? code
+                          : `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 16px; background: #0a0a0c; color: #fff; font-family: monospace; }
+    .badge { color: #f59e0b; font-size: 13px; font-weight: bold; margin-bottom: 12px; }
+    pre { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; overflow: auto; border: 1px solid rgba(245,158,11,0.2); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="badge">Mobile Output</div>
+  <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+</body>
+</html>`
+                      }
+                      sandbox="allow-scripts allow-modals"
+                      className="w-full h-full border-none bg-black"
+                    />
+                  </div>
+                  {/* Bottom Home Indicator Bar */}
+                  <div className="h-4 bg-neutral-950 flex items-center justify-center select-none shrink-0">
+                    <div className="w-24 h-1 bg-neutral-600 rounded-full" />
+                  </div>
+                </div>
+              ) : viewportMode === 'tablet' ? (
+                /* Interactive Tablet Frame */
+                <div className="w-[768px] max-w-full h-full my-auto mx-auto rounded-[24px] border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all">
+                  <div className="flex-1 relative overflow-hidden bg-black">
+                    <iframe
+                      key={previewKey}
+                      title="ForgeX Live Code Tablet Preview"
+                      srcDoc={
+                        language === 'html'
+                          ? code
+                          : `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 24px; background: #0a0a0c; color: #fff; font-family: monospace; }
+    .badge { color: #f59e0b; font-size: 14px; font-weight: bold; margin-bottom: 12px; }
+    pre { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; overflow: auto; border: 1px solid rgba(245,158,11,0.2); }
+  </style>
+</head>
+<body>
+  <div class="badge">Tablet Output</div>
+  <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+</body>
+</html>`
+                      }
+                      sandbox="allow-scripts allow-modals"
+                      className="w-full h-full border-none bg-black"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Desktop Full Frame */
+                <iframe
+                  key={previewKey}
+                  title="ForgeX Live Code Preview"
+                  srcDoc={
+                    language === 'html'
+                      ? code
+                      : `<!DOCTYPE html>
 <html>
 <head>
   <style>
@@ -839,10 +1055,11 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
 </body>
 </html>`
-                }
-                sandbox="allow-scripts allow-modals"
-                className="w-full h-full border-none bg-black"
-              />
+                  }
+                  sandbox="allow-scripts allow-modals"
+                  className="w-full h-full border-none bg-black"
+                />
+              )}
             </div>
           )}
 

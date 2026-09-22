@@ -1,6 +1,11 @@
 import { GeneratedVideo, VideoDuration, VideoAspectRatio, VideoQuality, VideoGenerationType, ForgeXModelId, VideoSlide, CameraMotion } from '../types';
+import { authService } from './authService';
+import { firestoreStorageService } from './firestoreStorageService';
 
-const STORAGE_KEY_VIDEOS = 'forgex_generated_videos';
+function getVideoStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_generated_videos_${userId}`;
+}
 
 const MOCK_VIDEO_IDS = new Set(['vid_1', 'vid_2', 'vid_3']);
 
@@ -183,7 +188,8 @@ export const videoService = {
 
   getVideos(): GeneratedVideo[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_VIDEOS);
+      const key = getVideoStorageKey();
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: GeneratedVideo[] = JSON.parse(stored);
         // Strictly filter out any legacy mock videos
@@ -222,10 +228,39 @@ export const videoService = {
 
   saveVideos(videos: GeneratedVideo[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY_VIDEOS, JSON.stringify(videos));
+      const key = getVideoStorageKey();
+      localStorage.setItem(key, JSON.stringify(videos));
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest' && videos.length > 0) {
+        // Save latest video to cloud
+        firestoreStorageService.saveUserVideo(userId, videos[0]).catch(() => {});
+      }
     } catch (e) {
       console.error('Failed to save videos', e);
     }
+  },
+
+  async syncWithFirestore(): Promise<GeneratedVideo[]> {
+    try {
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        const cloudVideos = await firestoreStorageService.loadUserVideos(userId);
+        if (cloudVideos && cloudVideos.length > 0) {
+          const key = getVideoStorageKey();
+          localStorage.setItem(key, JSON.stringify(cloudVideos));
+          return cloudVideos;
+        } else {
+          // Push existing local videos for this user
+          const localVideos = this.getVideos();
+          for (const vid of localVideos) {
+            await firestoreStorageService.saveUserVideo(userId, vid);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Video sync error:', err);
+    }
+    return this.getVideos();
   },
 
   async generateVideo(
@@ -452,7 +487,12 @@ export const videoService = {
 
   deleteVideo(videoId: string): GeneratedVideo[] {
     const videos = this.getVideos().filter((v) => v.id !== videoId);
-    this.saveVideos(videos);
+    const key = getVideoStorageKey();
+    localStorage.setItem(key, JSON.stringify(videos));
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.deleteUserVideo(userId, videoId).catch(() => {});
+    }
     return videos;
   }
 };

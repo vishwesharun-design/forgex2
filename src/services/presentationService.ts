@@ -1,11 +1,23 @@
 import { PresentationDeck } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY_DECKS = 'forgex_presentation_decks';
+function getDeckStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_presentation_decks_${userId}`;
+}
 
 export const presentationService = {
   getDecks(): PresentationDeck[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_DECKS);
+      const key = getDeckStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_presentation_decks');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       return stored ? JSON.parse(stored) : [];
     } catch (_e) {
       return [];
@@ -13,7 +25,8 @@ export const presentationService = {
   },
 
   saveDecks(decks: PresentationDeck[]): void {
-    localStorage.setItem(STORAGE_KEY_DECKS, JSON.stringify(decks));
+    const key = getDeckStorageKey();
+    localStorage.setItem(key, JSON.stringify(decks));
   },
 
   saveDeck(deck: PresentationDeck): void {

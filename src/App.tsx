@@ -9,6 +9,7 @@ import {
   UserSettings, 
   DEFAULT_SETTINGS, 
   NotificationItem,
+  ThemeEffectType,
 } from './types';
 import { authService } from './services/authService';
 import { chatService } from './services/chatService';
@@ -26,7 +27,6 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ChatWorkspace } from './components/ChatWorkspace';
 import { ImageWorkspace } from './components/ImageWorkspace';
-import { VideoWorkspace } from './components/VideoWorkspace';
 import { SongWorkspace } from './components/SongWorkspace';
 import { ResearchWorkspace } from './components/ResearchWorkspace';
 import { CodeStudioWorkspace } from './components/CodeStudioWorkspace';
@@ -45,6 +45,7 @@ import { FavoritesModal } from './components/FavoritesModal';
 import { SearchModal } from './components/SearchModal';
 import { NotificationsPopover } from './components/NotificationsPopover';
 import { MediaViewerModal } from './components/MediaViewerModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
 
 export default function App() {
   // State: View Mode (Landing Page vs In-Workspace)
@@ -135,6 +136,26 @@ export default function App() {
     },
   ]);
 
+  // Auto-sync cloud storage when user profile / account is active
+  useEffect(() => {
+    if (user && user.id && user.id !== 'guest') {
+      chatService.syncWithFirestore().then((syncedChats) => {
+        if (syncedChats && syncedChats.length > 0) {
+          setChatSessions(syncedChats);
+          if (!activeChatId) {
+            setActiveChatId(syncedChats[0].id);
+          }
+        }
+      }).catch(() => {});
+
+      imageService.syncWithFirestore().then((syncedImages) => {
+        if (syncedImages && syncedImages.length > 0) {
+          setImages(syncedImages);
+        }
+      }).catch(() => {});
+    }
+  }, [user?.id]);
+
   // Persist Workspace State
   useEffect(() => {
     localStorage.setItem('forgex_in_workspace', String(isInWorkspace));
@@ -178,6 +199,14 @@ export default function App() {
     setSettings((prev) => ({
       ...prev,
       theme: prev.theme === 'dark' ? 'light' : 'dark',
+    }));
+  };
+
+  const handleSelectThemeEffect = (effect: ThemeEffectType) => {
+    setSettings((prev) => ({
+      ...prev,
+      themeEffect: effect,
+      enableStarBackground: effect !== 'none',
     }));
   };
 
@@ -270,6 +299,7 @@ export default function App() {
       {settings.enableStarBackground && (
         <StarField
           theme={settings.theme}
+          effect={settings.themeEffect || 'connected_dots'}
           reduceMotion={settings.reduceMotion}
           intensity={isInWorkspace ? 'subtle' : 'full'}
         />
@@ -280,6 +310,8 @@ export default function App() {
         <div className="relative z-10 min-h-screen flex flex-col justify-between">
           <LandingNav
             theme={settings.theme}
+            themeEffect={settings.themeEffect || 'connected_dots'}
+            onSelectThemeEffect={handleSelectThemeEffect}
             onToggleTheme={handleToggleTheme}
             onOpenAbout={() => setIsAboutOpen(true)}
             onOpenCreator={() => setIsCreatorOpen(true)}
@@ -316,7 +348,7 @@ export default function App() {
         </div>
       ) : (
         /* VIEW 2: APPLICATION WORKSPACE */
-        <div className="relative z-10 flex h-screen overflow-hidden">
+        <div className="relative z-10 flex h-[100dvh] overflow-hidden">
           {/* Left Sidebar */}
           <Sidebar
             activeWorkspace={activeWorkspace}
@@ -351,6 +383,8 @@ export default function App() {
               selectedModelId={selectedModelId}
               onSelectModel={setSelectedModelId}
               theme={settings.theme}
+              themeEffect={settings.themeEffect || 'connected_dots'}
+              onSelectThemeEffect={handleSelectThemeEffect}
               onToggleTheme={handleToggleTheme}
               onToggleMobileNav={() => setIsMobileNavOpen((prev) => !prev)}
               onOpenSearch={() => setIsSearchOpen(true)}
@@ -371,7 +405,7 @@ export default function App() {
             />
 
             {/* Workspace Core Views */}
-            <main className="flex-1 relative flex flex-col min-h-0 overflow-hidden">
+            <main className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-14 md:pb-0">
               {activeWorkspace === 'chat' && (
                 <ChatWorkspace
                   currentSession={currentChatSession}
@@ -381,7 +415,7 @@ export default function App() {
                   selectedModelId={selectedModelId}
                   theme={settings.theme}
                   onNavigateToImage={() => setActiveWorkspace('image')}
-                  onNavigateToVideo={() => setActiveWorkspace('video')}
+                  onNavigateToMusic={() => setActiveWorkspace('music')}
                 />
               )}
 
@@ -393,17 +427,6 @@ export default function App() {
                   onSelectModel={setSelectedModelId}
                   theme={settings.theme}
                   onViewFullscreen={(img) => setViewingMedia({ type: 'image', item: img })}
-                />
-              )}
-
-              {activeWorkspace === 'video' && (
-                <VideoWorkspace
-                  videos={videos}
-                  onUpdateVideos={setVideos}
-                  selectedModelId={selectedModelId}
-                  onSelectModel={setSelectedModelId}
-                  theme={settings.theme}
-                  onViewFullscreenVideo={(vid) => setViewingMedia({ type: 'video', item: vid })}
                 />
               )}
 
@@ -506,6 +529,19 @@ export default function App() {
                 />
               )}
             </main>
+
+            {/* Mobile Bottom Navigation Bar (md:hidden) */}
+            <MobileBottomNav
+              activeWorkspace={activeWorkspace}
+              onSelectWorkspace={(ws) => {
+                setActiveWorkspace(ws);
+                setIsMobileNavOpen(false);
+              }}
+              onOpenMobileSidebar={() => setIsMobileNavOpen(true)}
+              onNewChat={handleNewChat}
+              onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
+              theme={settings.theme}
+            />
           </div>
         </div>
       )}

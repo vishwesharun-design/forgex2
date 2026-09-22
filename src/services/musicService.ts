@@ -1,6 +1,12 @@
 import { GeneratedSong, SongGenre, SongMood, ForgeXModelId } from '../types';
+import { authService } from './authService';
+import { firestoreStorageService } from './firestoreStorageService';
+import { REAL_LIFE_SONGS } from '../data/realLifeSongs';
 
-const STORAGE_KEY_SONGS = 'forgex_generated_songs';
+function getSongStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_generated_songs_${userId}`;
+}
 
 interface SynthesizedAudioPlayback {
   audioContext: AudioContext;
@@ -210,22 +216,106 @@ export function parseLyricsSections(lyrics?: string, totalDuration: number = 30)
 export const musicService = {
   getSongs(): GeneratedSong[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_SONGS);
-      if (stored) {
-        return JSON.parse(stored);
+      const key = getSongStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_generated_songs');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
       }
+
+      let list: GeneratedSong[] = [];
+      if (stored) {
+        try {
+          list = JSON.parse(stored);
+        } catch {
+          list = [];
+        }
+      }
+
+      // Merge real-life hits so they are always available in the library
+      const existingIds = new Set(list.map((s) => s.id));
+      let modified = false;
+      for (const realSong of REAL_LIFE_SONGS) {
+        if (!existingIds.has(realSong.id)) {
+          list.push(realSong);
+          modified = true;
+        }
+      }
+
+      if (modified || !stored) {
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+
+      return list;
     } catch (e) {
       console.error('Failed to load songs', e);
+      return REAL_LIFE_SONGS;
     }
-    return [];
+  },
+
+  getRealLifeSongs(): GeneratedSong[] {
+    return REAL_LIFE_SONGS;
+  },
+
+  reloadRealLifeHits(): GeneratedSong[] {
+    const current = this.getSongs();
+    const userGenerated = current.filter((s) => !s.isRealLifeHit);
+    const combined = [...REAL_LIFE_SONGS, ...userGenerated];
+    this.saveSongs(combined);
+    return combined;
+  },
+
+  async syncWithFirestore(): Promise<GeneratedSong[]> {
+    try {
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        const cloudSongs = await firestoreStorageService.loadUserSongs(userId);
+        if (cloudSongs.length > 0) {
+          this.saveSongs(cloudSongs);
+          return cloudSongs;
+        } else {
+          // Push existing local songs to cloud for this user
+          const localSongs = this.getSongs();
+          for (const s of localSongs) {
+            await firestoreStorageService.saveUserSong(userId, s);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Song sync error:', err);
+    }
+    return this.getSongs();
   },
 
   saveSongs(songs: GeneratedSong[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY_SONGS, JSON.stringify(songs));
+      const key = getSongStorageKey();
+      localStorage.setItem(key, JSON.stringify(songs));
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        songs.slice(0, 15).forEach((s) => {
+          firestoreStorageService.saveUserSong(userId, s).catch(() => {});
+        });
+      }
     } catch (e) {
       console.error('Failed to save songs', e);
     }
+  },
+
+  deleteSong(songId: string): GeneratedSong[] {
+    if (activePlayback) {
+      this.stopPlayback();
+    }
+    const songs = this.getSongs().filter((s) => s.id !== songId);
+    this.saveSongs(songs);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.deleteUserSong(userId, songId).catch(() => {});
+    }
+    return songs;
   },
 
   async generateSong(params: {
@@ -302,15 +392,6 @@ Rising above the ground...`;
     const updated = this.getSongs().map((s) =>
       s.id === songId ? { ...s, isFavorite: !s.isFavorite } : s
     );
-    this.saveSongs(updated);
-    return updated;
-  },
-
-  deleteSong(songId: string): GeneratedSong[] {
-    if (activePlayback) {
-      this.stopPlayback();
-    }
-    const updated = this.getSongs().filter((s) => s.id !== songId);
     this.saveSongs(updated);
     return updated;
   },

@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Health check collection
+    match /test/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Isolated per-user storage: strictly accessible only by the owning authenticated user
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /chats/{chatId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /images/{imageId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /songs/{songId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /videos/{videoId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /webSearches/{searchId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /favorites/{favId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /settings/{settingId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

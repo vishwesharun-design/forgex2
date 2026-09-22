@@ -128,6 +128,8 @@ export interface UserProfile {
   avatarUrl?: string;
   creditsUsed: number;
   creditsLimit: number;
+  username?: string;
+  isGoogleUser?: boolean;
 }
 
 export interface ChatMessage {
@@ -153,7 +155,18 @@ export interface ChatSession {
 }
 
 export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '4:3';
-export type ImageStyle = 'Realistic' | 'Cinematic' | 'Anime' | '3D' | 'Illustration' | 'Minimal' | 'Custom';
+export type ImageStyle = 
+  | 'Realistic' 
+  | 'Cinematic' 
+  | 'Anime' 
+  | '3D' 
+  | 'Illustration' 
+  | 'Minimal' 
+  | 'Cyberpunk' 
+  | 'Fantasy' 
+  | 'Watercolor' 
+  | 'Pixel Art' 
+  | 'Custom';
 
 export interface GeneratedImage {
   id: string;
@@ -217,17 +230,29 @@ export interface GeneratedSong {
   createdAt: number;
   isFavorite?: boolean;
   audioSeed?: number;
+  isRealLifeHit?: boolean;
+  artist?: string;
 }
+
+export type ThemeEffectType = 
+  | 'stars' 
+  | 'connected_dots' 
+  | 'cyber_matrix' 
+  | 'neon_waves' 
+  | 'floating_particles' 
+  | 'geometric_grid' 
+  | 'none';
 
 export interface UserSettings {
   theme: ForgeXTheme;
   defaultModel: ForgeXModelId;
   responsePreference: 'Creative' | 'Balanced' | 'Precise';
   defaultImageRatio: ImageAspectRatio;
-  defaultVideoDuration: VideoDuration;
+  defaultVideoDuration?: VideoDuration;
   autoEnhancePrompts: boolean;
   enableAnimations: boolean;
   enableStarBackground: boolean;
+  themeEffect: ThemeEffectType;
   reduceMotion: boolean;
 }
 
@@ -249,6 +274,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   autoEnhancePrompts: true,
   enableAnimations: true,
   enableStarBackground: true,
+  themeEffect: 'connected_dots',
   reduceMotion: false,
 };
 

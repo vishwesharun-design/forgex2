@@ -1,7 +1,15 @@
 import { DocumentItem, DocumentFileType, DocQAMessage, QuizQuestion } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY = 'forgex_documents';
-const QA_KEY = 'forgex_doc_qa_history';
+function getDocStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_documents_${userId}`;
+}
+
+function getDocQAStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_doc_qa_history_${userId}`;
+}
 
 const DEFAULT_DOCS: DocumentItem[] = [
   {
@@ -68,7 +76,15 @@ Deliver the most cohesive, unified multi-studio AI creation platform spanning ge
 export const documentService = {
   getDocuments(): DocumentItem[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const key = getDocStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_documents');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -80,7 +96,8 @@ export const documentService = {
   },
 
   saveDocuments(docs: DocumentItem[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+    const key = getDocStorageKey();
+    localStorage.setItem(key, JSON.stringify(docs));
   },
 
   addDocument(doc: DocumentItem): void {
@@ -102,7 +119,15 @@ export const documentService = {
 
   getQAHistory(): DocQAMessage[] {
     try {
-      const stored = localStorage.getItem(QA_KEY);
+      const key = getDocQAStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_doc_qa_history');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       return stored ? JSON.parse(stored) : [];
     } catch (_e) {
       return [];
@@ -110,7 +135,8 @@ export const documentService = {
   },
 
   saveQAHistory(history: DocQAMessage[]): void {
-    localStorage.setItem(QA_KEY, JSON.stringify(history));
+    const key = getDocQAStorageKey();
+    localStorage.setItem(key, JSON.stringify(history));
   },
 
   addQAMessage(msg: DocQAMessage): void {

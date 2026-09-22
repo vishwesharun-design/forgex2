@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Zap, Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { X, Zap, Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 import { ForgeXTheme, UserProfile } from '../types';
 import { authService } from '../services/authService';
 
@@ -25,6 +25,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -34,6 +35,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const resetFormState = () => {
     setError(null);
     setSuccessMessage(null);
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setSuccessMessage(null);
+    setIsGoogleLoading(true);
+
+    try {
+      const loggedInUser = await authService.signInWithGoogle();
+      setIsGoogleLoading(false);
+      onSuccess(loggedInUser);
+      onClose();
+    } catch (err: any) {
+      setIsGoogleLoading(false);
+      setError(err?.message || 'Google Sign-In was cancelled or failed. Please try again.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -103,11 +120,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  const handleQuickFill = (testEmail: string) => {
+    setEmail(testEmail);
+    setPassword('password123');
+    setMode('signin');
+    resetFormState();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md bg-black/70 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto backdrop-blur-md bg-black/75 animate-in fade-in duration-200">
       <div
         id="modal-auth-forgex"
-        className={`relative w-full max-w-md rounded-3xl p-6 sm:p-8 border shadow-2xl transition-all ${
+        className={`relative w-full max-w-md rounded-3xl p-5 sm:p-7 border shadow-2xl transition-all my-auto max-h-[92vh] overflow-y-auto custom-scrollbar ${
           isDark
             ? 'bg-neutral-900 border-neutral-800 text-white shadow-black/80'
             : 'bg-white border-neutral-200 text-neutral-900 shadow-neutral-300'
@@ -117,7 +141,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <button
           id="btn-close-auth"
           onClick={onClose}
-          className={`absolute top-6 right-6 p-2 rounded-xl transition-colors ${
+          className={`absolute top-4 sm:top-5 right-4 sm:right-5 p-2 rounded-xl transition-colors ${
             isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
           }`}
         >
@@ -125,24 +149,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 shadow-md shadow-amber-500/10">
-            <Zap className="w-6 h-6 fill-amber-400 text-amber-400 glow-lightning" />
+        <div className="flex flex-col items-center text-center mb-5">
+          <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-2.5 shadow-md shadow-amber-500/10">
+            <Zap className="w-5 h-5 fill-amber-400 text-amber-400 glow-lightning" />
           </div>
-          <h2 id="auth-heading" className="font-display font-bold text-2xl tracking-tight">
-            {mode === 'signin' && 'Sign in to ForgeX'}
+          <h2 id="auth-heading" className="font-display font-bold text-xl sm:text-2xl tracking-tight">
+            {mode === 'signin' && 'Sign In to ForgeX'}
             {mode === 'signup' && 'Create Your ForgeX Account'}
             {mode === 'forgot' && 'Reset Password'}
           </h2>
-          <p className={`text-xs sm:text-sm mt-1.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-            {mode === 'signin' && 'Access your AI chat, image generations, and video creations'}
-            {mode === 'signup' && 'Register your real creator account with 1,000 monthly credits'}
+          <p className={`text-xs sm:text-sm mt-1 max-w-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+            {mode === 'signin' && 'Access your cloud-synced chats, AI songs, and image studio'}
+            {mode === 'signup' && 'Register your creator account with persistent Firebase storage'}
             {mode === 'forgot' && 'Enter your account email to set a new password'}
           </p>
         </div>
 
         {/* Mode Switcher Tabs */}
-        <div className={`flex rounded-xl p-1 mb-6 border ${isDark ? 'bg-neutral-950/80 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
+        <div className={`flex rounded-xl p-1 mb-4 border ${isDark ? 'bg-neutral-950/80 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
           <button
             type="button"
             onClick={() => {
@@ -177,6 +201,55 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
+        {/* --- CONTINUE WITH GOOGLE BUTTON --- */}
+        <div className="mb-4">
+          <button
+            id="btn-auth-google"
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isGoogleLoading || isLoading}
+            className={`w-full py-3 px-4 rounded-2xl border text-sm font-semibold flex items-center justify-center gap-3 transition-all duration-200 active:scale-[0.98] ${
+              isDark
+                ? 'bg-neutral-950 border-neutral-700/80 hover:bg-neutral-800/90 text-white hover:border-neutral-600'
+                : 'bg-white border-neutral-300 hover:bg-neutral-50 text-neutral-800 hover:border-neutral-400 shadow-sm'
+            } disabled:opacity-50`}
+          >
+            {isGoogleLoading ? (
+              <span className="inline-block w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+            )}
+            <span>{isGoogleLoading ? 'Connecting with Google...' : 'Continue with Google'}</span>
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="relative flex items-center justify-center my-4">
+          <div className={`w-full border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`} />
+          <span className={`absolute px-3 text-[11px] font-medium uppercase tracking-wider ${
+            isDark ? 'bg-neutral-900 text-neutral-500' : 'bg-white text-neutral-400'
+          }`}>
+            or continue with email
+          </span>
+        </div>
+
         {error && (
           <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
             <span className="font-bold shrink-0">!</span>
@@ -191,10 +264,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           {mode === 'signup' && (
             <div>
-              <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                 Full Name
               </label>
               <div className="relative">
@@ -205,7 +278,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
+                  placeholder="e.g. Vishwesh Varman"
                   className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border transition-colors outline-none focus:border-amber-500 ${
                     isDark
                       ? 'bg-neutral-950 border-neutral-800 text-white placeholder:text-neutral-600'
@@ -217,7 +290,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           <div>
-            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
               Email Address
             </label>
             <div className="relative">
@@ -239,7 +312,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1">
               <label className={`text-xs font-medium ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                 {mode === 'forgot' ? 'New Password' : 'Password'}
               </label>
@@ -274,7 +347,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 p-1"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -283,7 +356,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {mode === 'signup' && (
             <div>
-              <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                 Confirm Password
               </label>
               <div className="relative">
@@ -306,24 +379,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {mode === 'signup' && (
-            <div className="flex items-center gap-2 text-[11px] text-neutral-500 pt-1">
+            <div className="flex items-center gap-2 text-[11px] text-neutral-500 pt-0.5">
               <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Free 1,000 monthly compute credits included upon registration.</span>
+              <span>Isolated Firestore database storage created for your account.</span>
             </div>
           )}
 
           <button
             id="btn-auth-submit"
             type="submit"
-            disabled={isLoading}
-            className="w-full mt-3 py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+            disabled={isLoading || isGoogleLoading}
+            className="w-full mt-2 py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {isLoading ? (
               <span className="inline-block w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
                 <span>
-                  {mode === 'signin' && 'Sign In'}
+                  {mode === 'signin' && 'Sign In with Email'}
                   {mode === 'signup' && 'Create Account'}
                   {mode === 'forgot' && 'Save New Password'}
                 </span>
@@ -333,7 +406,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        {/* Quick Demo Fill Buttons */}
+        <div className="mt-4 pt-3 border-t border-neutral-800/60">
+          <div className="flex items-center justify-between text-[11px] text-neutral-500 mb-2">
+            <span className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              Quick demo accounts:
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleQuickFill('vishwesh@forgex.local')}
+              className={`py-1.5 px-2 rounded-lg text-xs border text-left truncate transition-colors ${
+                isDark
+                  ? 'border-neutral-800 bg-neutral-950/60 hover:bg-neutral-800 text-neutral-300'
+                  : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700'
+              }`}
+            >
+              <div className="font-semibold text-[11px] text-amber-400">Vishwesh (Creator)</div>
+              <div className="text-[10px] text-neutral-500 truncate">vishwesh@forgex.local</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill('virthika@forgex.local')}
+              className={`py-1.5 px-2 rounded-lg text-xs border text-left truncate transition-colors ${
+                isDark
+                  ? 'border-neutral-800 bg-neutral-950/60 hover:bg-neutral-800 text-neutral-300'
+                  : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700'
+              }`}
+            >
+              <div className="font-semibold text-[11px] text-amber-400">Virthika</div>
+              <div className="text-[10px] text-neutral-500 truncate">virthika@forgex.local</div>
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 text-center">
           {mode === 'forgot' && (
             <button
               type="button"

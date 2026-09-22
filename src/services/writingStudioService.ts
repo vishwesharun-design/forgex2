@@ -1,11 +1,23 @@
 import { WritingDoc, WritingCategory, WritingTone, WritingAction } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY_WRITING = 'forgex_writing_documents';
+function getWritingStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_writing_documents_${userId}`;
+}
 
 export const writingStudioService = {
   getDocuments(): WritingDoc[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_WRITING);
+      const key = getWritingStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_writing_documents');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       return stored ? JSON.parse(stored) : [];
     } catch (_e) {
       return [];
@@ -13,7 +25,8 @@ export const writingStudioService = {
   },
 
   saveDocuments(docs: WritingDoc[]): void {
-    localStorage.setItem(STORAGE_KEY_WRITING, JSON.stringify(docs));
+    const key = getWritingStorageKey();
+    localStorage.setItem(key, JSON.stringify(docs));
   },
 
   saveDocument(doc: WritingDoc): void {

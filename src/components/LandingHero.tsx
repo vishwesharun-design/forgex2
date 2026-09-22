@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, ArrowRight, Sparkles, MessageSquare, Image as ImageIcon, Video as VideoIcon, BookOpen } from 'lucide-react';
+import { Zap, ArrowRight, Sparkles, MessageSquare, Image as ImageIcon, Code2, BookOpen } from 'lucide-react';
 import { ForgeXTheme, ActiveWorkspace, ForgeXModelId, FORGEX_MODELS } from '../types';
 
 interface LandingHeroProps {
@@ -55,7 +55,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
         {/* Brand Name */}
         <h1 
           id="hero-brand-heading"
-          className="font-display font-extrabold text-5xl sm:text-7xl md:text-8xl tracking-tight mb-3"
+          className="font-display font-extrabold text-4xl sm:text-7xl md:text-8xl tracking-tight mb-3"
         >
           Forge<span className="text-amber-400">X</span>
         </h1>
@@ -63,7 +63,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
         {/* Tagline */}
         <h2 
           id="hero-tagline"
-          className={`font-display font-semibold text-2xl sm:text-3xl md:text-4xl tracking-tight mb-4 ${
+          className={`font-display font-semibold text-xl sm:text-3xl md:text-4xl tracking-tight mb-3 sm:mb-4 ${
             isDark ? 'text-neutral-200' : 'text-neutral-800'
           }`}
         >
@@ -73,11 +73,11 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
         {/* Description */}
         <p 
           id="hero-description"
-          className={`text-lg sm:text-xl font-normal max-w-xl mx-auto mb-8 leading-relaxed ${
+          className={`text-base sm:text-xl font-normal max-w-xl mx-auto mb-6 sm:mb-8 leading-relaxed px-2 ${
             isDark ? 'text-neutral-400' : 'text-neutral-600'
           }`}
         >
-          One powerful AI workspace for conversations, images, and videos.
+          One powerful AI workspace for conversations, images, code, and music.
         </p>
 
         {/* Unreal Engine Model Selection Badges */}
@@ -171,7 +171,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
           </div>
 
           <div 
-            id="hero-card-video"
+            id="hero-card-code"
             onClick={onGetStarted}
             className={`p-4 rounded-2xl border backdrop-blur-sm transition-all duration-200 cursor-pointer ${
               isDark 
@@ -181,12 +181,12 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
           >
             <div className="flex items-center gap-2.5 mb-1.5">
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-                <VideoIcon className="w-4 h-4" />
+                <Code2 className="w-4 h-4" />
               </div>
-              <span className="font-display font-semibold text-sm">Video Studio</span>
+              <span className="font-display font-semibold text-sm">Code Studio</span>
             </div>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Dynamic motion sequence generation. Click to learn how it works.
+              Full-stack multi-file coding workspace with live preview.
             </p>
           </div>
         </div>

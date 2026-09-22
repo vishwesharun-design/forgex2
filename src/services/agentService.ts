@@ -1,7 +1,15 @@
 import { AIAgent, AgentExecution } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY_AGENTS = 'forgex_agents';
-const STORAGE_KEY_EXECUTIONS = 'forgex_agent_executions';
+function getAgentStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_agents_${userId}`;
+}
+
+function getExecutionStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_agent_executions_${userId}`;
+}
 
 export const PRESET_AGENTS: AIAgent[] = [
   {
@@ -81,7 +89,15 @@ export const PRESET_AGENTS: AIAgent[] = [
 export const agentService = {
   getAgents(): AIAgent[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_AGENTS);
+      const key = getAgentStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_agents');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         const parsed: AIAgent[] = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -98,7 +114,8 @@ export const agentService = {
   },
 
   saveAgents(agents: AIAgent[]): void {
-    localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(agents));
+    const key = getAgentStorageKey();
+    localStorage.setItem(key, JSON.stringify(agents));
   },
 
   saveCustomAgent(agent: AIAgent): void {
@@ -120,7 +137,15 @@ export const agentService = {
 
   getExecutions(): AgentExecution[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_EXECUTIONS);
+      const key = getExecutionStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_agent_executions');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       return stored ? JSON.parse(stored) : [];
     } catch (_e) {
       return [];
@@ -128,9 +153,10 @@ export const agentService = {
   },
 
   saveExecution(exec: AgentExecution): void {
+    const key = getExecutionStorageKey();
     const list = this.getExecutions();
     list.unshift(exec);
-    localStorage.setItem(STORAGE_KEY_EXECUTIONS, JSON.stringify(list.slice(0, 50)));
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
   },
 
   async runAgentTask(

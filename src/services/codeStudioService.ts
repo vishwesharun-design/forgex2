@@ -1,6 +1,10 @@
 import { CodeLanguage, CodeSnippet, CodeAlterMode, ForgeXModelId } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY_CODE = 'forgex_code_snippets';
+function getCodeStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_code_snippets_${userId}`;
+}
 
 export interface CodeStudioResponse {
   success: boolean;
@@ -385,7 +389,15 @@ export const codeStudioService = {
 
   getSnippets(): CodeSnippet[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_CODE);
+      const key = getCodeStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_code_snippets');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         return JSON.parse(stored);
       }
@@ -408,7 +420,8 @@ export const codeStudioService = {
 
   saveSnippets(snippets: CodeSnippet[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY_CODE, JSON.stringify(snippets));
+      const key = getCodeStorageKey();
+      localStorage.setItem(key, JSON.stringify(snippets));
     } catch (e) {
       console.error('Failed to save code snippets', e);
     }

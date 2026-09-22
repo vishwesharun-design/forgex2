@@ -36,6 +36,7 @@ import {
 import { musicService, parseLyricsSections } from '../services/musicService';
 import { ModelSelector } from './ModelSelector';
 import { AudioTrackPlayer } from './AudioTrackPlayer';
+import { DiscoBackground } from './DiscoBackground';
 
 interface SongWorkspaceProps {
   theme: ForgeXTheme;
@@ -92,6 +93,8 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeLyricsTab, setActiveLyricsTab] = useState(false);
+  const [discoIntensity, setDiscoIntensity] = useState<'full' | 'subtle' | 'off'>('full');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'real-life' | 'ai' | 'favorites'>('all');
 
   useEffect(() => {
     const loaded = musicService.getSongs();
@@ -103,6 +106,21 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
       musicService.stopPlayback();
     };
   }, []);
+
+  const handleReloadRealHits = () => {
+    const updated = musicService.reloadRealLifeHits();
+    setSongs(updated);
+    if (updated.length > 0 && !selectedSongId) {
+      setSelectedSongId(updated[0].id);
+    }
+  };
+
+  const filteredSongs = songs.filter((s) => {
+    if (libraryFilter === 'real-life') return Boolean(s.isRealLifeHit);
+    if (libraryFilter === 'ai') return !s.isRealLifeHit;
+    if (libraryFilter === 'favorites') return Boolean(s.isFavorite);
+    return true;
+  });
 
   const handleGenerateSong = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -239,12 +257,21 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const activeSong = songs.find((s) => s.id === activeSongId);
+
   return (
-    <div className="flex-1 w-full h-full overflow-y-auto p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto space-y-8 pb-32">
+    <div className="relative flex-1 w-full h-full overflow-y-auto p-4 sm:p-8">
+      {/* Exclusive Disco Background for Sing Studio */}
+      <DiscoBackground
+        isPlaying={Boolean(activeSongId)}
+        tempoBpm={activeSong?.tempoBpm || 120}
+        intensity={discoIntensity}
+      />
+
+      <div className="relative z-10 max-w-6xl mx-auto space-y-8 pb-32">
         {/* Studio Header & Generator Card */}
         <div
-          className={`p-6 sm:p-8 rounded-3xl border shadow-xl transition-colors ${
+          className={`p-4 sm:p-8 rounded-3xl border shadow-xl transition-colors ${
             isDark
               ? 'bg-neutral-900/90 border-neutral-800 shadow-black/40'
               : 'bg-white border-neutral-200 shadow-neutral-100'
@@ -264,6 +291,26 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
+              {/* Sing Studio Disco Lighting Controller */}
+              <button
+                id="toggle-disco-lighting-btn"
+                type="button"
+                onClick={() => {
+                  setDiscoIntensity((prev) => (prev === 'full' ? 'subtle' : prev === 'subtle' ? 'off' : 'full'));
+                }}
+                title="Toggle Sing Studio Disco Ambiance"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                  discoIntensity === 'full'
+                    ? 'bg-pink-500/15 border-pink-500/40 text-pink-300 shadow-md shadow-pink-500/20'
+                    : discoIntensity === 'subtle'
+                    ? 'bg-purple-500/15 border-purple-500/30 text-purple-300'
+                    : 'bg-neutral-800/60 border-neutral-700 text-neutral-400'
+                }`}
+              >
+                <Disc3 className={`w-3.5 h-3.5 ${discoIntensity !== 'off' ? 'animate-spin text-pink-400' : ''}`} />
+                <span>Disco: {discoIntensity === 'full' ? 'Club' : discoIntensity === 'subtle' ? 'Subtle' : 'Off'}</span>
+              </button>
+
               <div className="flex items-center gap-2">
                 <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Engine:</span>
                 <ModelSelector
@@ -550,14 +597,98 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
               );
             })()}
 
-            {/* TRACK GALLERY LIST WITH LYRICS SECTIONS PREVIEWS */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 px-1">
-                All Tracks in Library ({songs.length})
-              </h4>
+            {/* TRACK GALLERY LIST WITH LYRICS SECTIONS PREVIEWS & REAL HITS TABS */}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+                    Track Library ({filteredSongs.length} of {songs.length})
+                  </h4>
+                  <p className="text-[11px] text-neutral-500">
+                    Procedural studio compositions & famous real-world hits
+                  </p>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {songs.map((song) => {
+                {/* Filter Tabs & Real-Hits reload */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center p-1 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-xs shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setLibraryFilter('all')}
+                      className={`px-3 py-1 rounded-xl transition-all font-medium ${
+                        libraryFilter === 'all'
+                          ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      All ({songs.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLibraryFilter('real-life')}
+                      className={`px-3 py-1 rounded-xl transition-all font-medium flex items-center gap-1 ${
+                        libraryFilter === 'real-life'
+                          ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                          : 'text-amber-400/90 hover:text-amber-300'
+                      }`}
+                    >
+                      <span>⭐ Real Hits</span>
+                      <span className="text-[10px] opacity-80 font-mono">
+                        ({songs.filter((s) => s.isRealLifeHit).length})
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLibraryFilter('ai')}
+                      className={`px-3 py-1 rounded-xl transition-all font-medium ${
+                        libraryFilter === 'ai'
+                          ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      AI Composed ({songs.filter((s) => !s.isRealLifeHit).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLibraryFilter('favorites')}
+                      className={`px-3 py-1 rounded-xl transition-all font-medium flex items-center gap-1 ${
+                        libraryFilter === 'favorites'
+                          ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      <Heart className="w-3 h-3 text-red-400 fill-current" />
+                      <span>({songs.filter((s) => s.isFavorite).length})</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleReloadRealHits}
+                    title="Reload Real-World Hit Songs into Library"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-800/80 hover:bg-neutral-700 text-xs font-semibold text-neutral-300 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Reload Real Hits</span>
+                  </button>
+                </div>
+              </div>
+
+              {filteredSongs.length === 0 ? (
+                <div className="p-8 rounded-3xl border border-neutral-800 bg-neutral-900/60 text-center space-y-3">
+                  <Disc3 className="w-8 h-8 text-neutral-500 mx-auto animate-spin" />
+                  <p className="text-sm text-neutral-400">No tracks found in this category.</p>
+                  <button
+                    type="button"
+                    onClick={handleReloadRealHits}
+                    className="px-4 py-2 rounded-xl bg-amber-500 text-neutral-950 font-bold text-xs hover:brightness-110"
+                  >
+                    Restore Real-Life Hit Songs
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredSongs.map((song) => {
                   const isPlaying = activeSongId === song.id;
                   const isSelected = (selectedSongId || activeSongId) === song.id;
                   const cardSections = parseLyricsSections(song.lyrics, song.durationSeconds);
@@ -610,7 +741,19 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <h4 className="font-bold text-sm sm:text-base line-clamp-1">{song.title}</h4>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="font-bold text-sm sm:text-base line-clamp-1">{song.title}</h4>
+                                {song.isRealLifeHit && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                                    ⭐ Real Hit
+                                  </span>
+                                )}
+                              </div>
+                              {song.artist && (
+                                <p className="text-xs font-semibold text-amber-400 line-clamp-1 mt-0.5">
+                                  by {song.artist}
+                                </p>
+                              )}
                               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
                                   {song.genre}
@@ -759,6 +902,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                   );
                 })}
               </div>
+            )}
             </div>
           </div>
         )}

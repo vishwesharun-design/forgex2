@@ -30,7 +30,8 @@ interface ChatWorkspaceProps {
   selectedModelId: ForgeXModelId;
   theme: ForgeXTheme;
   onNavigateToImage: () => void;
-  onNavigateToVideo: () => void;
+  onNavigateToVideo?: () => void;
+  onNavigateToMusic?: () => void;
 }
 
 export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
@@ -42,6 +43,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   theme,
   onNavigateToImage,
   onNavigateToVideo,
+  onNavigateToMusic,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,22 +78,34 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   ];
 
   const hasMessages = displayMessages.length > 0;
+  const baseTextRef = useRef<string>('');
 
-  // Real Web Speech API integration
+  // Dual-Engine Web Speech & Gemini Audio Transcription integration
   const {
     isListening,
-    isSupported,
+    isProcessing,
+    audioLevel,
+    durationSeconds,
     error: voiceError,
-    toggleListening,
+    toggleListening: rawToggleListening,
     clearError: clearVoiceError,
   } = useVoiceInput({
-    onTranscript: (transcript: string) => {
-      setInputText((prev) => {
-        const trimmed = prev.trim();
-        return trimmed ? `${trimmed} ${transcript.trim()}` : transcript.trim();
-      });
+    onTranscript: (transcript: string, isFinal: boolean) => {
+      const base = baseTextRef.current.trim();
+      const combined = base ? `${base} ${transcript.trim()}` : transcript.trim();
+      setInputText(combined);
+      if (isFinal) {
+        baseTextRef.current = combined;
+      }
     },
   });
+
+  const toggleListening = () => {
+    if (!isListening) {
+      baseTextRef.current = inputText;
+    }
+    rawToggleListening();
+  };
 
   // Auto scroll to bottom
   const scrollToBottom = () => {
@@ -502,17 +516,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             <span>+ Image</span>
           </button>
 
-          <button
-            id="quick-action-video"
-            onClick={onNavigateToVideo}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all shrink-0 ${
-              isDark
-                ? 'bg-neutral-900/80 hover:bg-neutral-800 border-neutral-800 text-amber-400 hover:border-amber-500/40'
-                : 'bg-white hover:bg-neutral-100 border-neutral-200 text-amber-700 hover:border-amber-300 shadow-sm'
-            }`}
-          >
-            <span>+ Video</span>
-          </button>
+          {onNavigateToMusic && (
+            <button
+              id="quick-action-music"
+              onClick={onNavigateToMusic}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all shrink-0 ${
+                isDark
+                  ? 'bg-neutral-900/80 hover:bg-neutral-800 border-neutral-800 text-amber-400 hover:border-amber-500/40'
+                  : 'bg-white hover:bg-neutral-100 border-neutral-200 text-amber-700 hover:border-amber-300 shadow-sm'
+              }`}
+            >
+              <span>+ Song</span>
+            </button>
+          )}
 
           <button
             id="quick-action-analyze"
@@ -622,22 +638,58 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 id="btn-voice-input"
                 type="button"
                 onClick={toggleListening}
-                title={isListening ? 'Stop listening' : 'Voice input (Microphone)'}
+                title={isListening ? 'Stop recording & transcribe' : 'Voice input (Speak to ForgeX)'}
                 className={`p-2 rounded-xl transition-all ${
                   isListening
-                    ? 'bg-amber-500/20 text-amber-400 animate-pulse border border-amber-500/50 shadow-sm shadow-amber-500/20'
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-sm shadow-red-500/20'
+                    : isProcessing
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse'
                     : isDark
                       ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
                       : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
                 }`}
               >
-                {isListening ? <StopCircle className="w-4 h-4 text-amber-400" /> : <Mic className="w-4 h-4" />}
+                {isListening ? (
+                  <StopCircle className="w-4 h-4 text-red-400 animate-pulse" />
+                ) : isProcessing ? (
+                  <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
               </button>
 
+              {/* Active Audio Visualizer & State Badge */}
               {isListening && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
-                  <span className="text-[11px] font-mono font-medium">Listening...</span>
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
+                  <span className="text-[11px] font-mono font-bold">
+                    00:{durationSeconds < 10 ? '0' : ''}{durationSeconds}
+                  </span>
+                  {/* Dynamic Sound Wave Bars */}
+                  <div className="flex items-center gap-0.5 h-3">
+                    <span
+                      className="w-0.5 bg-red-400 rounded-full transition-all duration-75"
+                      style={{ height: `${Math.max(3, (audioLevel / 100) * 12)}px` }}
+                    />
+                    <span
+                      className="w-0.5 bg-red-400 rounded-full transition-all duration-75"
+                      style={{ height: `${Math.max(4, (audioLevel / 100) * 16)}px` }}
+                    />
+                    <span
+                      className="w-0.5 bg-red-400 rounded-full transition-all duration-75"
+                      style={{ height: `${Math.max(3, (audioLevel / 100) * 10)}px` }}
+                    />
+                  </div>
+                  <span className="text-[10px] hidden sm:inline font-medium text-neutral-300">
+                    Listening...
+                  </span>
+                </div>
+              )}
+
+              {isProcessing && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                  <span className="text-[11px] font-medium">Transcribing voice with Gemini...</span>
                 </div>
               )}
             </div>

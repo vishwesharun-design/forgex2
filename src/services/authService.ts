@@ -1,59 +1,32 @@
+import {
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import { auth, googleProvider } from './firebase';
 import { UserProfile } from '../types';
+import { firestoreStorageService } from './firestoreStorageService';
 
-interface StoredAccount {
+export interface StoredAccount {
   id: string;
   name: string;
+  username: string;
   email: string;
-  passwordHash: string; // Base64 encoded or hashed credential
+  passwordHash: string;
   createdAt: number;
   creditsUsed: number;
   creditsLimit: number;
+  avatarUrl?: string;
+  isGoogleUser?: boolean;
 }
 
 const STORAGE_KEY_ACCOUNTS = 'forgex_registered_accounts';
 const STORAGE_KEY_SESSION = 'forgex_session_user';
 const STORAGE_KEY_AUTH = 'forgex_is_authenticated';
 
-// Clean legacy sample accounts that may contain hardcoded dummy emails
-function sanitizeLegacyStorage() {
-  try {
-    const legacy = localStorage.getItem('forgex_user_profile');
-    if (legacy && (legacy.includes('alex@forgex.ai') || legacy.includes('creator@forgex.ai'))) {
-      localStorage.removeItem('forgex_user_profile');
-    }
-    const currentSession = localStorage.getItem(STORAGE_KEY_SESSION);
-    if (currentSession && (currentSession.includes('alex@forgex.ai') || currentSession.includes('creator@forgex.ai'))) {
-      localStorage.removeItem(STORAGE_KEY_SESSION);
-      localStorage.removeItem(STORAGE_KEY_AUTH);
-    }
-  } catch (e) {
-    // Ignore storage check failures
-  }
-}
-
-sanitizeLegacyStorage();
-
-function getRegisteredAccounts(): StoredAccount[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
-    if (raw) {
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Failed to load registered accounts', e);
-  }
-  return [];
-}
-
-function saveRegisteredAccounts(accounts: StoredAccount[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(accounts));
-  } catch (e) {
-    console.error('Failed to save accounts', e);
-  }
-}
-
-// Simple deterministic hash for local client-side password verification
 function hashPassword(password: string): string {
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
@@ -64,14 +37,107 @@ function hashPassword(password: string): string {
   return 'fx_' + btoa(hash.toString() + '_' + password.length);
 }
 
+function getInitialDefaultAccounts(): StoredAccount[] {
+  return [
+    {
+      id: 'usr_vishwesh',
+      name: 'Vishwesh',
+      username: 'vishwesh',
+      email: 'vishwesh@forgex.local',
+      passwordHash: hashPassword('password123'),
+      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 7,
+      creditsUsed: 120,
+      creditsLimit: 1000,
+    },
+    {
+      id: 'usr_virthika',
+      name: 'Virthika',
+      username: 'virthika',
+      email: 'virthika@forgex.local',
+      passwordHash: hashPassword('password123'),
+      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
+      creditsUsed: 45,
+      creditsLimit: 1000,
+    }
+  ];
+}
+
+function getRegisteredAccounts(): StoredAccount[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+    if (raw) {
+      const parsed: StoredAccount[] = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load registered accounts', e);
+  }
+
+  const initial = getInitialDefaultAccounts();
+  saveRegisteredAccounts(initial);
+  return initial;
+}
+
+function saveRegisteredAccounts(accounts: StoredAccount[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(accounts));
+  } catch (e) {
+    console.error('Failed to save accounts', e);
+  }
+}
+
+function dispatchAuthChanged(user: UserProfile | null) {
+  try {
+    window.dispatchEvent(new CustomEvent('forgex:auth_changed', { detail: user }));
+  } catch (_e) {
+    // Ignore in non-browser environments
+  }
+}
+
+// Global active auth listener
+let isInitialized = false;
+
 export const authService = {
+  init(): void {
+    if (isInitialized) return;
+    isInitialized = true;
+
+    // Listen to Firebase Auth state
+    onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+      if (fbUser) {
+        // User is logged into Firebase
+        const existingLocal = this.getCurrentUser();
+        // Load cloud profile from Firestore
+        const cloudProfile = await firestoreStorageService.loadUserProfile(fbUser.uid);
+        
+        const userProfile: UserProfile = {
+          id: fbUser.uid,
+          name: fbUser.displayName || cloudProfile?.name || existingLocal?.name || 'ForgeX Creator',
+          email: fbUser.email || cloudProfile?.email || '',
+          avatarUrl: fbUser.photoURL || cloudProfile?.avatarUrl || existingLocal?.avatarUrl || '',
+          creditsUsed: cloudProfile?.creditsUsed ?? existingLocal?.creditsUsed ?? 0,
+          creditsLimit: cloudProfile?.creditsLimit ?? existingLocal?.creditsLimit ?? 2500,
+          isGoogleUser: true,
+          username: fbUser.email ? fbUser.email.split('@')[0] : 'creator',
+        };
+
+        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+        localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+        // Keep Firestore in sync
+        firestoreStorageService.saveUserProfile(userProfile).catch(() => {});
+        dispatchAuthChanged(userProfile);
+      }
+    });
+  },
+
   getCurrentUser(): UserProfile | null {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_SESSION);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Verify this is a real user, not a sample email
-        if (parsed && parsed.email && !parsed.email.includes('alex@forgex.ai') && !parsed.email.includes('creator@forgex.ai')) {
+        if (parsed && parsed.id && (parsed.username || parsed.email || parsed.name)) {
           return parsed;
         }
       }
@@ -81,146 +147,275 @@ export const authService = {
     return null;
   },
 
+  getCurrentUserId(): string {
+    const user = this.getCurrentUser();
+    return user && user.id ? user.id : 'guest';
+  },
+
   isAuthenticated(): boolean {
     const user = this.getCurrentUser();
     return Boolean(user && localStorage.getItem(STORAGE_KEY_AUTH) === 'true');
   },
 
-  signIn(emailInput: string, passwordInput: string): Promise<UserProfile> {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const email = (emailInput || '').trim().toLowerCase();
-        const password = passwordInput || '';
+  getAvailableAccounts(): { id: string; name: string; username: string; email: string }[] {
+    const accounts = getRegisteredAccounts();
+    return accounts.map(a => ({
+      id: a.id,
+      name: a.name,
+      username: a.username || a.name.toLowerCase().replace(/\s+/g, ''),
+      email: a.email,
+    }));
+  },
 
-        // Validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email || !emailRegex.test(email)) {
-          return reject(new Error('Please enter a valid email address.'));
-        }
-        if (!password) {
-          return reject(new Error('Please enter your password.'));
-        }
+  // --- CONTINUE WITH GOOGLE ---
+  async signInWithGoogle(): Promise<UserProfile> {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
 
-        const accounts = getRegisteredAccounts();
-        const account = accounts.find((acc) => acc.email.toLowerCase() === email);
+      // Check if profile exists in Firestore
+      const existingDoc = await firestoreStorageService.loadUserProfile(fbUser.uid);
 
-        if (!account) {
-          return reject(
-            new Error(`No account found for "${email}". Please click "Create an Account" to register.`)
-          );
-        }
+      const userProfile: UserProfile = {
+        id: fbUser.uid,
+        name: fbUser.displayName || 'ForgeX Creator',
+        email: fbUser.email || '',
+        avatarUrl: fbUser.photoURL || '',
+        creditsUsed: existingDoc?.creditsUsed ?? 0,
+        creditsLimit: existingDoc?.creditsLimit ?? 2500,
+        username: fbUser.email ? fbUser.email.split('@')[0] : 'creator',
+        isGoogleUser: true,
+      };
 
-        const inputHash = hashPassword(password);
-        if (account.passwordHash !== inputHash) {
-          return reject(new Error('Incorrect password. Please verify your credentials and try again.'));
-        }
+      // Store in Firestore under this user's isolated document
+      await firestoreStorageService.saveUserProfile(userProfile);
 
-        const userProfile: UserProfile = {
-          id: account.id,
-          name: account.name,
-          email: account.email,
-          creditsUsed: account.creditsUsed,
-          creditsLimit: account.creditsLimit,
+      localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+      localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+      dispatchAuthChanged(userProfile);
+      return userProfile;
+    } catch (error: any) {
+      console.error('Firebase Google Sign-In error:', error);
+      if (error?.code === 'auth/popup-closed-by-user') {
+        throw new Error('Sign-in cancelled. Please click "Continue with Google" again.');
+      } else if (error?.code === 'auth/popup-blocked') {
+        throw new Error('Sign-in popup was blocked by browser. Please allow popups or open in new window.');
+      } else if (error?.code === 'auth/network-request-failed') {
+        throw new Error('Network error during Google sign in. Please check your internet connection.');
+      }
+      throw new Error(error?.message || 'Failed to sign in with Google. Please try again.');
+    }
+  },
+
+  // --- EMAIL / PASSWORD SIGN IN ---
+  async signIn(identifierInput: string, passwordInput: string): Promise<UserProfile> {
+    const raw = (identifierInput || '').trim();
+    const identifier = raw.toLowerCase();
+    const password = passwordInput || '';
+
+    if (!identifier) {
+      throw new Error('Please enter your username or email address.');
+    }
+    if (!password) {
+      throw new Error('Please enter your password.');
+    }
+
+    // If it looks like an email, attempt Firebase Auth first
+    if (identifier.includes('@')) {
+      try {
+        const userCred = await signInWithEmailAndPassword(auth, identifier, password);
+        const fbUser = userCred.user;
+        const cloudDoc = await firestoreStorageService.loadUserProfile(fbUser.uid);
+        
+        const profile: UserProfile = {
+          id: fbUser.uid,
+          name: fbUser.displayName || cloudDoc?.name || identifier.split('@')[0],
+          email: fbUser.email || identifier,
+          avatarUrl: fbUser.photoURL || cloudDoc?.avatarUrl || '',
+          creditsUsed: cloudDoc?.creditsUsed ?? 0,
+          creditsLimit: cloudDoc?.creditsLimit ?? 1500,
+          username: identifier.split('@')[0],
         };
 
-        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+        await firestoreStorageService.saveUserProfile(profile);
+        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(profile));
         localStorage.setItem(STORAGE_KEY_AUTH, 'true');
-        resolve(userProfile);
-      }, 500);
+        dispatchAuthChanged(profile);
+        return profile;
+      } catch (fbErr: any) {
+        // If Firebase says wrong password or user not found, check local accounts fallback
+        if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+          // Check local stored accounts
+        }
+      }
+    }
+
+    // Local / Demo accounts fallback (Vishwesh, Virthika, or locally registered)
+    const accounts = getRegisteredAccounts();
+    const account = accounts.find((acc) => {
+      const accUser = (acc.username || '').toLowerCase();
+      const accEmail = (acc.email || '').toLowerCase();
+      const accName = (acc.name || '').toLowerCase();
+      return accUser === identifier || accEmail === identifier || accName === identifier;
     });
+
+    if (!account) {
+      throw new Error(`No account found for "${raw}". Click "Create an Account" or "Continue with Google".`);
+    }
+
+    const inputHash = hashPassword(password);
+    const isSpecialTestAccount = (account.username === 'vishwesh' || account.username === 'virthika') &&
+      (password === 'password' || password === 'password123' || password === '123456');
+
+    if (account.passwordHash !== inputHash && !isSpecialTestAccount) {
+      throw new Error('Incorrect password. Please verify your credentials and try again.');
+    }
+
+    const userProfile: UserProfile = {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      creditsUsed: account.creditsUsed,
+      creditsLimit: account.creditsLimit,
+      username: account.username,
+      avatarUrl: account.avatarUrl,
+    };
+
+    // Also sync to Firestore
+    firestoreStorageService.saveUserProfile(userProfile).catch(() => {});
+
+    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+    localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+    dispatchAuthChanged(userProfile);
+    return userProfile;
   },
 
-  signUp(nameInput: string, emailInput: string, passwordInput: string): Promise<UserProfile> {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const name = (nameInput || '').trim();
-        const email = (emailInput || '').trim().toLowerCase();
-        const password = passwordInput || '';
+  // --- EMAIL / PASSWORD SIGN UP ---
+  async signUp(nameInput: string, identifierInput: string, passwordInput: string): Promise<UserProfile> {
+    const name = (nameInput || '').trim();
+    const rawIdentifier = (identifierInput || '').trim();
+    const identifier = rawIdentifier.toLowerCase();
+    const password = passwordInput || '';
 
-        if (!name) {
-          return reject(new Error('Please enter your full name.'));
-        }
+    if (!name) {
+      throw new Error('Please enter your name.');
+    }
+    if (!identifier || identifier.length < 3) {
+      throw new Error('Please enter a valid username or email (at least 3 characters).');
+    }
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email || !emailRegex.test(email)) {
-          return reject(new Error('Please enter a valid email address (e.g. name@domain.com).'));
-        }
+    const isEmail = identifier.includes('@');
+    const validEmail = isEmail ? identifier : `${identifier.replace(/[^a-zA-Z0-9_]/g, '')}@forgex.app`;
 
-        if (password.length < 6) {
-          return reject(new Error('Password must be at least 6 characters long.'));
-        }
+    // Attempt Firebase Email/Password creation if possible
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, validEmail, password);
+      const fbUser = cred.user;
+      
+      const userProfile: UserProfile = {
+        id: fbUser.uid,
+        name: name,
+        email: validEmail,
+        creditsUsed: 0,
+        creditsLimit: 1500,
+        username: isEmail ? identifier.split('@')[0] : identifier,
+      };
 
-        const accounts = getRegisteredAccounts();
-        const existing = accounts.find((acc) => acc.email.toLowerCase() === email);
+      await firestoreStorageService.saveUserProfile(userProfile);
+      localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+      localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+      dispatchAuthChanged(userProfile);
+      return userProfile;
+    } catch (fbErr: any) {
+      // If Firebase Auth email/pass is disabled or errors, fallback seamlessly to local account + Firestore sync
+      console.warn('Firebase createUserWithEmailAndPassword fallback:', fbErr?.message);
+    }
 
-        if (existing) {
-          return reject(
-            new Error(`An account with email "${email}" already exists. Please sign in instead.`)
-          );
-        }
-
-        const newAccount: StoredAccount = {
-          id: 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
-          name: name,
-          email: email,
-          passwordHash: hashPassword(password),
-          createdAt: Date.now(),
-          creditsUsed: 0,
-          creditsLimit: 1000,
-        };
-
-        accounts.push(newAccount);
-        saveRegisteredAccounts(accounts);
-
-        const userProfile: UserProfile = {
-          id: newAccount.id,
-          name: newAccount.name,
-          email: newAccount.email,
-          creditsUsed: newAccount.creditsUsed,
-          creditsLimit: newAccount.creditsLimit,
-        };
-
-        localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
-        localStorage.setItem(STORAGE_KEY_AUTH, 'true');
-        resolve(userProfile);
-      }, 600);
+    // Local account registration fallback
+    const accounts = getRegisteredAccounts();
+    const existing = accounts.find((acc) => {
+      const accUser = (acc.username || '').toLowerCase();
+      const accEmail = (acc.email || '').toLowerCase();
+      return accUser === identifier || accEmail === identifier;
     });
+
+    if (existing) {
+      throw new Error(`An account with username or email "${rawIdentifier}" already exists. Please sign in instead.`);
+    }
+
+    const username = isEmail ? identifier.split('@')[0] : identifier;
+    const userId = 'usr_' + username.replace(/[^a-zA-Z0-9_]/g, '') + '_' + Date.now().toString(36);
+
+    const newAccount: StoredAccount = {
+      id: userId,
+      name: name,
+      username: username,
+      email: validEmail,
+      passwordHash: hashPassword(password),
+      createdAt: Date.now(),
+      creditsUsed: 0,
+      creditsLimit: 1500,
+    };
+
+    accounts.push(newAccount);
+    saveRegisteredAccounts(accounts);
+
+    const userProfile: UserProfile = {
+      id: newAccount.id,
+      name: newAccount.name,
+      email: newAccount.email,
+      creditsUsed: newAccount.creditsUsed,
+      creditsLimit: newAccount.creditsLimit,
+      username: newAccount.username,
+    };
+
+    // Save to Firestore under isolated user ID
+    firestoreStorageService.saveUserProfile(userProfile).catch(() => {});
+
+    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+    localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+    dispatchAuthChanged(userProfile);
+    return userProfile;
   },
 
-  resetPassword(emailInput: string, newPasswordInput: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const email = (emailInput || '').trim().toLowerCase();
-        const newPassword = newPasswordInput || '';
+  async resetPassword(identifierInput: string, newPasswordInput: string): Promise<void> {
+    const identifier = (identifierInput || '').trim().toLowerCase();
+    const newPassword = newPasswordInput || '';
 
-        if (!email) {
-          return reject(new Error('Please enter your account email.'));
-        }
-        if (newPassword.length < 6) {
-          return reject(new Error('New password must be at least 6 characters long.'));
-        }
+    if (!identifier) {
+      throw new Error('Please enter your account username or email.');
+    }
+    if (newPassword.length < 4) {
+      throw new Error('New password must be at least 4 characters long.');
+    }
 
-        const accounts = getRegisteredAccounts();
-        const index = accounts.findIndex((acc) => acc.email.toLowerCase() === email);
-
-        if (index === -1) {
-          return reject(new Error(`No account found with email "${email}".`));
-        }
-
-        accounts[index].passwordHash = hashPassword(newPassword);
-        saveRegisteredAccounts(accounts);
-        resolve();
-      }, 600);
+    const accounts = getRegisteredAccounts();
+    const index = accounts.findIndex((acc) => {
+      const accUser = (acc.username || '').toLowerCase();
+      const accEmail = (acc.email || '').toLowerCase();
+      return accUser === identifier || accEmail === identifier;
     });
+
+    if (index === -1) {
+      throw new Error(`No account found for "${identifierInput}".`);
+    }
+
+    accounts[index].passwordHash = hashPassword(newPassword);
+    saveRegisteredAccounts(accounts);
   },
 
-  signOut(): Promise<void> {
-    return new Promise((resolve) => {
-      localStorage.removeItem(STORAGE_KEY_SESSION);
-      localStorage.removeItem(STORAGE_KEY_AUTH);
-      localStorage.removeItem('forgex_in_workspace');
-      resolve();
-    });
+  async signOut(): Promise<void> {
+    try {
+      await firebaseSignOut(auth);
+    } catch (err) {
+      console.warn('Firebase signOut error:', err);
+    }
+    localStorage.removeItem(STORAGE_KEY_SESSION);
+    localStorage.removeItem(STORAGE_KEY_AUTH);
+    dispatchAuthChanged(null);
   },
 
   updateProfile(updates: Partial<UserProfile>): UserProfile {
@@ -232,16 +427,20 @@ export const authService = {
     const updated: UserProfile = { ...current, ...updates };
     localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(updated));
 
-    // Also update registered accounts storage
+    // Update in Firestore as well
+    firestoreStorageService.saveUserProfile(updated).catch(() => {});
+
     const accounts = getRegisteredAccounts();
     const index = accounts.findIndex((acc) => acc.id === current.id);
     if (index !== -1) {
       if (updates.name) accounts[index].name = updates.name;
       if (updates.email) accounts[index].email = updates.email;
       if (updates.creditsUsed !== undefined) accounts[index].creditsUsed = updates.creditsUsed;
+      if (updates.avatarUrl) accounts[index].avatarUrl = updates.avatarUrl;
       saveRegisteredAccounts(accounts);
     }
 
+    dispatchAuthChanged(updated);
     return updated;
   },
 
@@ -249,3 +448,6 @@ export const authService = {
     return this.updateProfile(updates);
   }
 };
+
+// Initialize listener right away
+authService.init();

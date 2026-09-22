@@ -1,51 +1,56 @@
-import React, { useState } from 'react';
-import {
-  Presentation,
-  Sparkles,
-  Download,
-  Plus,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
+import React, { useState, useEffect } from 'react';
+import { 
+  Presentation, 
+  Sparkles, 
+  Download, 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus, 
+  Trash2, 
+  Check, 
+  Layout, 
   Palette,
   Layers,
-  ArrowRight,
-  Check,
-  Copy,
-  Edit3
+  AlertCircle
 } from 'lucide-react';
-import { PresentationDeck, SlideItem, ForgeXTheme, ForgeXModelId } from '../types';
+import { PresentationDeck, SlideItem, ForgeXModelId, ForgeXTheme } from '../types';
 import { presentationService } from '../services/presentationService';
 import { ModelSelector } from './ModelSelector';
 
 interface PresentationWorkspaceProps {
-  isDark: boolean;
   theme: ForgeXTheme;
   selectedModelId: ForgeXModelId;
   onSelectModel: (id: ForgeXModelId) => void;
-  onSendToChat?: (text: string) => void;
+  isDark?: boolean;
 }
 
 export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
-  isDark,
   theme,
   selectedModelId,
   onSelectModel,
-  onSendToChat,
 }) => {
-  const [topic, setTopic] = useState('');
-  const [slideCount, setSlideCount] = useState(6);
-  const [themeStyle, setThemeStyle] = useState<'dark-amber' | 'obsidian' | 'cyber-blue' | 'light-minimal'>('dark-amber');
+  const [decks, setDecks] = useState<PresentationDeck[]>([]);
+  const [activeDeck, setActiveDeck] = useState<PresentationDeck | null>(null);
+  const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [decks, setDecks] = useState<PresentationDeck[]>(() => presentationService.getDecks());
-  const [activeDeck, setActiveDeck] = useState<PresentationDeck | null>(() => decks[0] || null);
-  const [activeSlideIdx, setActiveSlideIdx] = useState(0);
-  const [copied, setCopied] = useState(false);
+  const [topic, setTopic] = useState('');
+  const [slideCount, setSlideCount] = useState(5);
+  const [themeStyle, setThemeStyle] = useState<'dark-amber' | 'obsidian' | 'cyber-blue' | 'light-minimal'>('dark-amber');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleGenerate = async (customTopic?: string) => {
-    const targetTopic = customTopic || topic;
-    if (!targetTopic.trim() || isGenerating) return;
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    const list = presentationService.getDecks();
+    setDecks(list);
+    if (list.length > 0 && !activeDeck) {
+      setActiveDeck(list[0]);
+      setActiveSlideIdx(0);
+    }
+  }, []);
+
+  const handleGenerate = async (targetTopic: string = topic) => {
+    if (!targetTopic.trim()) return;
     setIsGenerating(true);
     setErrorMessage(null);
     try {
@@ -96,18 +101,48 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
     };
     presentationService.saveDeck(updatedDeck);
     setActiveDeck(updatedDeck);
+    setDecks(presentationService.getDecks());
     setActiveSlideIdx(updatedDeck.slides.length - 1);
   };
 
   const handleDeleteSlide = (idx: number) => {
-    if (!activeDeck || activeDeck.slides.length <= 1) return;
+    if (!activeDeck || activeDeck.slides.length === 0) return;
     const updatedSlides = activeDeck.slides.filter((_, i) => i !== idx);
     // renumber
     updatedSlides.forEach((s, i) => (s.slideNumber = i + 1));
     const updatedDeck = { ...activeDeck, slides: updatedSlides };
     presentationService.saveDeck(updatedDeck);
     setActiveDeck(updatedDeck);
-    setActiveSlideIdx(Math.max(0, idx - 1));
+    setDecks(presentationService.getDecks());
+    setActiveSlideIdx(Math.max(0, Math.min(idx, updatedSlides.length - 1)));
+  };
+
+  const handleDeleteAllSlides = () => {
+    if (!activeDeck || activeDeck.slides.length === 0) return;
+    const confirmed = window.confirm(`Are you sure you want to delete all ${activeDeck.slides.length} slides in this deck?`);
+    if (!confirmed) return;
+
+    const updatedDeck: PresentationDeck = {
+      ...activeDeck,
+      slides: [],
+    };
+    presentationService.saveDeck(updatedDeck);
+    setActiveDeck(updatedDeck);
+    setDecks(presentationService.getDecks());
+    setActiveSlideIdx(0);
+  };
+
+  const handleDeleteDeck = (deckId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const confirmed = window.confirm('Delete this presentation deck?');
+    if (!confirmed) return;
+
+    const updated = presentationService.deleteDeck(deckId);
+    setDecks(updated);
+    if (activeDeck?.id === deckId) {
+      setActiveDeck(updated[0] || null);
+      setActiveSlideIdx(0);
+    }
   };
 
   const handleExport = () => {
@@ -115,7 +150,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
     presentationService.exportHTML(activeDeck);
   };
 
-  const currentSlide = activeDeck?.slides[activeSlideIdx];
+  const currentSlide = activeDeck?.slides && activeDeck.slides.length > 0 ? activeDeck.slides[activeSlideIdx] : null;
 
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
@@ -133,13 +168,13 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
               </span>
             </h1>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Generate structured, high-impact slide outlines and presentation decks with visual direction and HTML export.
+              Generate structured slide outlines and presentation decks with visual direction and HTML export.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {activeDeck && (
+          {activeDeck && activeDeck.slides.length > 0 && (
             <button
               type="button"
               onClick={handleExport}
@@ -260,6 +295,12 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
               Saved Decks ({decks.length})
             </span>
 
+            {decks.length === 0 && (
+              <div className="p-4 text-center text-xs text-neutral-500">
+                No presentations saved yet.
+              </div>
+            )}
+
             {decks.map((deck) => {
               const isSelected = activeDeck?.id === deck.id;
               return (
@@ -269,7 +310,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                     setActiveDeck(deck);
                     setActiveSlideIdx(0);
                   }}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`group p-3 rounded-xl border cursor-pointer transition-all relative ${
                     isSelected
                       ? 'border-amber-500 bg-amber-500/10'
                       : isDark
@@ -277,7 +318,17 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                       : 'border-neutral-200 hover:border-neutral-300 bg-white'
                   }`}
                 >
-                  <p className="text-xs font-bold truncate">{deck.title}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-bold truncate flex-1">{deck.title}</p>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteDeck(deck.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-400 transition-opacity"
+                      title="Delete deck"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <div className="flex items-center justify-between mt-2 pt-1 border-t border-neutral-800/30 text-[10px] text-neutral-400">
                     <span>{deck.slides.length} slides</span>
                     <span>{new Date(deck.createdTime).toLocaleDateString()}</span>
@@ -291,18 +342,18 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
         {/* Right Slide Canvas & Editor */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {!activeDeck ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-3 p-6">
               <Presentation className="w-12 h-12 text-neutral-500 opacity-40" />
               <h3 className="text-sm font-bold text-neutral-300">No Presentation Deck Active</h3>
               <p className="text-xs text-neutral-500 max-w-sm">
-                Enter a topic on the left to generate an AI presentation or select an existing deck from the vault.
+                Enter a topic on the left to generate an AI presentation or select an existing deck from the list.
               </p>
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Slide Navigator Carousel Bar */}
-              <div className={`px-6 py-3 border-b flex items-center justify-between gap-3 ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
-                <div className="flex items-center gap-2 overflow-x-auto py-1">
+              <div className={`px-6 py-3 border-b flex flex-wrap items-center justify-between gap-3 ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
+                <div className="flex items-center gap-2 overflow-x-auto py-1 max-w-[60%]">
                   {activeDeck.slides.map((slide, idx) => (
                     <button
                       key={slide.id || idx}
@@ -320,7 +371,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                   ))}
                   <button
                     onClick={handleAddSlide}
-                    className="p-1.5 rounded-xl border border-neutral-800 hover:border-amber-500/60 text-neutral-400 hover:text-amber-400 text-xs font-semibold"
+                    className="p-1.5 rounded-xl border border-neutral-800 hover:border-amber-500/60 text-neutral-400 hover:text-amber-400 text-xs font-semibold shrink-0"
                     title="Add slide"
                   >
                     <Plus className="w-4 h-4" />
@@ -328,30 +379,51 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Slide navigation buttons */}
                   <button
                     onClick={() => setActiveSlideIdx((prev) => Math.max(0, prev - 1))}
-                    disabled={activeSlideIdx === 0}
+                    disabled={activeSlideIdx <= 0 || activeDeck.slides.length === 0}
                     className="p-1.5 rounded-lg border border-neutral-800 disabled:opacity-30 hover:bg-neutral-850"
+                    title="Previous slide"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
+
                   <span className="text-xs font-mono font-bold text-amber-400">
-                    {activeSlideIdx + 1} / {activeDeck.slides.length}
+                    {activeDeck.slides.length > 0 ? `${activeSlideIdx + 1} / ${activeDeck.slides.length}` : '0 / 0'}
                   </span>
+
                   <button
                     onClick={() => setActiveSlideIdx((prev) => Math.min(activeDeck.slides.length - 1, prev + 1))}
-                    disabled={activeSlideIdx === activeDeck.slides.length - 1}
+                    disabled={activeDeck.slides.length === 0 || activeSlideIdx >= activeDeck.slides.length - 1}
                     className="p-1.5 rounded-lg border border-neutral-800 disabled:opacity-30 hover:bg-neutral-850"
+                    title="Next slide"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
-                  {activeDeck.slides.length > 1 && (
+
+                  {/* Delete Current Slide */}
+                  {activeDeck.slides.length > 0 && (
                     <button
+                      id="btn-delete-current-slide"
                       onClick={() => handleDeleteSlide(activeSlideIdx)}
-                      className="p-1.5 rounded-lg border border-neutral-800 text-neutral-400 hover:text-red-400 ml-2"
+                      className="p-1.5 rounded-lg border border-neutral-800 text-neutral-400 hover:text-red-400 hover:border-red-500/40 ml-1 transition-colors"
                       title="Delete current slide"
                     >
                       <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Delete All Slides Button */}
+                  {activeDeck.slides.length > 0 && (
+                    <button
+                      id="btn-delete-all-slides"
+                      onClick={handleDeleteAllSlides}
+                      className="px-2.5 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-semibold flex items-center gap-1.5 transition-colors ml-1"
+                      title="Delete all slides in this deck"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete All Slides</span>
                     </button>
                   )}
                 </div>
@@ -359,7 +431,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
 
               {/* Main Slide Card Viewport */}
               <div className="flex-1 overflow-y-auto p-8 flex items-center justify-center">
-                {currentSlide && (
+                {currentSlide ? (
                   <div
                     className={`w-full max-w-3xl aspect-[16/9] rounded-3xl border p-8 flex flex-col justify-between shadow-2xl relative transition-all ${
                       themeStyle === 'dark-amber'
@@ -433,6 +505,27 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                         </div>
                       )}
                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 max-w-md">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                      <Presentation className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-neutral-200">No Slides in this Deck</h3>
+                      <p className={`text-xs mt-1.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                        All slides have been deleted from &ldquo;{activeDeck.title}&rdquo;. You can add new slides or generate a fresh deck anytime.
+                      </p>
+                    </div>
+                    <button
+                      id="btn-add-first-slide"
+                      type="button"
+                      onClick={handleAddSlide}
+                      className="px-4 py-2.5 rounded-xl bg-amber-500 text-neutral-950 font-bold text-xs flex items-center gap-2 hover:bg-amber-400 transition-colors shadow-sm shadow-amber-500/20"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add New Slide</span>
+                    </button>
                   </div>
                 )}
               </div>

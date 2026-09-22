@@ -1,13 +1,27 @@
 import { ChatMessage, ChatSession, ForgeXModelId, FORGEX_MODELS } from '../types';
-
-const STORAGE_KEY_CHATS = 'forgex_chat_sessions';
+import { authService } from './authService';
+import { firestoreStorageService } from './firestoreStorageService';
 
 const MOCK_CHAT_IDS = new Set(['chat_1', 'chat_2', 'chat_3', 'chat_4']);
+
+function getChatStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_chat_sessions_${userId}`;
+}
 
 export const chatService = {
   getSessions(): ChatSession[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_CHATS);
+      const key = getChatStorageKey();
+      let stored = localStorage.getItem(key);
+      // If Vishwesh signs in and has legacy global sessions, migrate them
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_chat_sessions');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         const parsed: ChatSession[] = JSON.parse(stored);
         // Clean out any legacy mock sessions to strictly adhere to NO default/false data
@@ -25,9 +39,38 @@ export const chatService = {
     return [];
   },
 
+  async syncWithFirestore(): Promise<ChatSession[]> {
+    try {
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        const cloudSessions = await firestoreStorageService.loadUserChats(userId);
+        if (cloudSessions.length > 0) {
+          this.saveSessions(cloudSessions);
+          return cloudSessions;
+        } else {
+          // Push existing local sessions to cloud for this user
+          const localSessions = this.getSessions();
+          for (const s of localSessions) {
+            await firestoreStorageService.saveUserChat(userId, s);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Chat sync error:', err);
+    }
+    return this.getSessions();
+  },
+
   saveSessions(sessions: ChatSession[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY_CHATS, JSON.stringify(sessions));
+      const key = getChatStorageKey();
+      localStorage.setItem(key, JSON.stringify(sessions));
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        sessions.slice(0, 15).forEach((s) => {
+          firestoreStorageService.saveUserChat(userId, s).catch(() => {});
+        });
+      }
     } catch (e) {
       console.error('Failed to save chat sessions', e);
     }
@@ -45,6 +88,10 @@ export const chatService = {
     };
     const updated = [newSession, ...sessions];
     this.saveSessions(updated);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.saveUserChat(userId, newSession).catch(() => {});
+    }
     return newSession;
   },
 
@@ -61,6 +108,10 @@ export const chatService = {
   deleteSession(sessionId: string): ChatSession[] {
     const sessions = this.getSessions().filter((s) => s.id !== sessionId);
     this.saveSessions(sessions);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.deleteUserChat(userId, sessionId).catch(() => {});
+    }
     return sessions;
   },
 

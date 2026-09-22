@@ -3,7 +3,7 @@ import {
   X, 
   MessageSquare, 
   Image as ImageIcon, 
-  Video as VideoIcon, 
+  Music, 
   ArrowLeft, 
   Zap, 
   Sparkles, 
@@ -41,7 +41,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   onOpenAuth,
   isAuthenticated = false,
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'chat' | 'image' | 'video' | 'models' | 'auth'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'chat' | 'image' | 'music' | 'models' | 'auth'>('overview');
 
   if (!isOpen) return null;
   const isDark = theme === 'dark';
@@ -96,7 +96,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             { id: 'overview', label: 'Overview', icon: Sparkles },
             { id: 'chat', label: 'AI Chat', icon: MessageSquare },
             { id: 'image', label: 'Image Studio', icon: ImageIcon },
-            { id: 'video', label: 'Video Studio', icon: VideoIcon },
+            { id: 'music', label: 'Make Song', icon: Music },
             { id: 'models', label: 'Unreal Models', icon: Cpu },
             { id: 'auth', label: 'Real Auth & Credits', icon: ShieldCheck },
           ].map((tab) => {
@@ -132,7 +132,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </h3>
                 <p className={`text-sm sm:text-base leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                   ForgeX is an all-in-one AI creation studio where creators, developers, designers, and visionaries can 
-                  <strong className="text-amber-400 font-semibold"> chat with advanced reasoning AI, generate high-fidelity images, and produce cinematic AI videos</strong>—all in one seamless, high-performance workspace without switching tabs or juggling disconnected subscriptions.
+                  <strong className="text-amber-400 font-semibold"> chat with advanced reasoning AI, generate high-fidelity images, and compose synthesized music</strong>—all in one seamless, high-performance workspace without switching tabs or juggling disconnected subscriptions.
                 </p>
               </div>
 
@@ -168,17 +168,17 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </div>
 
                 <div 
-                  onClick={() => setActiveSection('video')}
+                  onClick={() => setActiveSection('music')}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all hover:scale-[1.01] ${
                     isDark ? 'bg-neutral-950/60 border-neutral-800 hover:border-amber-500/40' : 'bg-neutral-50 border-neutral-200 hover:border-amber-500/40'
                   }`}
                 >
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 mb-2.5">
-                    <VideoIcon className="w-4 h-4" />
+                  <div className="w-9 h-9 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 mb-2.5">
+                    <Music className="w-4 h-4" />
                   </div>
-                  <h4 className="font-semibold text-sm mb-1">Video Studio</h4>
+                  <h4 className="font-semibold text-sm mb-1">Make Song</h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    Synthesize fluid motion sequences from text prompts or still reference images with physics-based lighting.
+                    Synthesize original audio songs with polyphonic chords, stem arrangements, and lyrics.
                   </p>
                 </div>
               </div>
@@ -326,65 +326,65 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: VIDEO STUDIO */}
-          {activeSection === 'video' && (
+          {/* TAB 4: MAKE SONG & AUDIO STUDIO */}
+          {activeSection === 'music' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
-                  <VideoIcon className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-400">
+                  <Music className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-xl text-amber-400">
-                    Video Generation Studio
+                  <h3 className="font-display font-bold text-xl text-yellow-400">
+                    Song Composition & Synthesizer Studio
                   </h3>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                    Neural temporal motion synthesis from text and image prompts
+                    Polyphonic Web Audio synthesis with genre chord progressions and lyrics
                   </p>
                 </div>
               </div>
 
               <p className={`text-sm leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                Transform static ideas into dynamic motion sequences. ForgeX Video Studio utilizes deep temporal interpolation to create fluid camera dollies, cinematic lighting passes, and atmospheric effects.
+                Compose complete tracks across 8 diverse genres (Synthwave, Lo-Fi, Cinematic, EDM, Rock, Acoustic, Ambient, and Hip-Hop). ForgeX synthesizes layered instrument stems and chord progressions in real time.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 shrink-0" />
-                    <span>Duration Controls</span>
-                  </h4>
-                  <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    Select between 5s, 10s, or 15s generation lengths tailored to social teasers or cinematic sequences.
-                  </p>
-                </div>
-
-                <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
-                    <RefreshCw className="w-4 h-4 shrink-0" />
-                    <span>Dual Generation Pipelines</span>
-                  </h4>
-                  <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    <strong>Text → Video</strong> creates scenes from scratch; <strong>Image → Video</strong> animates your existing stills into camera moves.
-                  </p>
-                </div>
-
-                <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
+                  <h4 className="font-semibold text-sm mb-1 text-yellow-400 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 shrink-0" />
-                    <span>Resolution Modes</span>
+                    <span>Polyphonic Web Audio</span>
                   </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    Choose Standard mode for fast generation or High Quality for enhanced frame sharpness and raytraced reflections.
+                    Real-time browser synthesizer generating chord voicings, arpeggios, and rhythmic basslines without external media delays.
                   </p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
-                  <h4 className="font-semibold text-sm mb-1 text-amber-400 flex items-center gap-1.5">
-                    <Film className="w-4 h-4 shrink-0" />
-                    <span>Player & Remix Tools</span>
+                  <h4 className="font-semibold text-sm mb-1 text-yellow-400 flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 shrink-0" />
+                    <span>Genre & BPM Controls</span>
                   </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    Direct in-browser looping player, fullscreen playback, regeneration with altered seeds, and MP4 downloads.
+                    Adjust tempo from 60 to 180 BPM, select musical moods, and explore distinct scales and progressions.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
+                  <h4 className="font-semibold text-sm mb-1 text-yellow-400 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 shrink-0" />
+                    <span>Multi-Section Song Structures</span>
+                  </h4>
+                  <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                    Generate synchronized intros, verses, choruses, bridges, and outros with timestamped lyrics.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
+                  <h4 className="font-semibold text-sm mb-1 text-yellow-400 flex items-center gap-1.5">
+                    <Maximize2 className="w-4 h-4 shrink-0" />
+                    <span>Interactive Stem Player</span>
+                  </h4>
+                  <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                    Full playback transport with live audio visualization, track scrubbers, and section jumping.
                   </p>
                 </div>
               </div>

@@ -1,11 +1,23 @@
 import { CanvasBoard, CanvasNode, CanvasEdge } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY_BOARDS = 'forgex_canvas_boards';
+function getBoardStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_canvas_boards_${userId}`;
+}
 
 export const canvasService = {
   getBoards(): CanvasBoard[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_BOARDS);
+      const key = getBoardStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_canvas_boards');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -17,7 +29,8 @@ export const canvasService = {
   },
 
   saveBoards(boards: CanvasBoard[]): void {
-    localStorage.setItem(STORAGE_KEY_BOARDS, JSON.stringify(boards));
+    const key = getBoardStorageKey();
+    localStorage.setItem(key, JSON.stringify(boards));
   },
 
   saveBoard(board: CanvasBoard): void {

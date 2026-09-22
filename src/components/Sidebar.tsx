@@ -83,15 +83,6 @@ const STUDIOS: StudioDefinition[] = [
     description: 'Text-to-image generator with styles & aspect ratios',
   },
   {
-    id: 'video',
-    title: 'Video Studio',
-    category: 'creative',
-    icon: VideoIcon,
-    accentColor: 'text-amber-300',
-    badge: 'Motion',
-    description: 'Cinematic storyboard & multi-slide motion generator',
-  },
-  {
     id: 'music',
     title: 'Make Song',
     category: 'creative',
@@ -200,7 +191,7 @@ const CATEGORY_META = {
   creative: {
     label: 'Creative',
     icon: Palette,
-    desc: 'Image, video & music generation',
+    desc: 'Image & music generation',
   },
   intelligence: {
     label: 'Intelligence',
@@ -304,8 +295,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Main Sidebar Container */}
       <aside
         id="forgex-sidebar"
-        className={`fixed md:sticky top-0 left-0 h-screen z-50 md:z-20 flex flex-col transition-all duration-300 border-r ${
-          isCollapsed ? 'md:w-20 w-72' : 'w-72'
+        className={`fixed md:sticky top-0 left-0 h-[100dvh] z-50 md:z-20 flex flex-col transition-all duration-300 border-r ${
+          isCollapsed ? 'md:w-20 w-72 max-w-[85vw]' : 'w-72 max-w-[85vw]'
         } ${
           isDark
             ? 'bg-neutral-950 border-neutral-850 text-neutral-200'
@@ -330,7 +321,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   Forge<span className="text-amber-400">X</span>
                 </span>
                 <span className="text-[10px] text-neutral-500 font-mono tracking-wider uppercase">
-                  13 AI Studios
+                  {STUDIOS.length} AI Studios
                 </span>
               </div>
             )}
@@ -419,7 +410,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               >
                 <Sparkles className="w-3 h-3" />
-                <span>Studios (13)</span>
+                <span>Studios ({STUDIOS.length})</span>
               </button>
 
               <button

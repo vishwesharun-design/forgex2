@@ -1,10 +1,15 @@
 import { GeneratedImage, ImageAspectRatio, ImageStyle, ForgeXModelId } from '../types';
+import { authService } from './authService';
+import { firestoreStorageService } from './firestoreStorageService';
 
-const STORAGE_KEY_IMAGES = 'forgex_generated_images';
+function getImageStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_generated_images_${userId}`;
+}
 
 const MOCK_IMAGE_IDS = new Set(['img_1', 'img_2', 'img_3', 'img_4', 'img_5', 'img_6']);
 
-// Aesthetic curated imagery matching different themes/styles for high quality instant visual feedback when API key is pending
+// Aesthetic curated imagery matching different themes/styles for high quality instant visual feedback
 const STYLE_IMAGE_POOL: Record<ImageStyle, string[]> = {
   Realistic: [
     'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1200&auto=format&fit=crop',
@@ -19,6 +24,7 @@ const STYLE_IMAGE_POOL: Record<ImageStyle, string[]> = {
   Anime: [
     'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=1000&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
   ],
   '3D': [
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
@@ -28,14 +34,37 @@ const STYLE_IMAGE_POOL: Record<ImageStyle, string[]> = {
   Illustration: [
     'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
   ],
   Minimal: [
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1507499739999-097706ad8914?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?q=80&w=1000&auto=format&fit=crop',
+  ],
+  Cyberpunk: [
+    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
+  ],
+  Fantasy: [
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1000&auto=format&fit=crop',
+  ],
+  Watercolor: [
+    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop',
+  ],
+  'Pixel Art': [
+    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
   ],
   Custom: [
     'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=1000&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1200&auto=format&fit=crop',
   ]
 };
 
@@ -54,7 +83,16 @@ export const imageService = {
 
   getImages(): GeneratedImage[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_IMAGES);
+      const key = getImageStorageKey();
+      let stored = localStorage.getItem(key);
+      // Migrate legacy global images if user has no scoped images yet
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_generated_images');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         const parsed: GeneratedImage[] = JSON.parse(stored);
         // Strictly filter out any legacy mock images
@@ -72,9 +110,38 @@ export const imageService = {
     return [];
   },
 
+  async syncWithFirestore(): Promise<GeneratedImage[]> {
+    try {
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        const cloudImages = await firestoreStorageService.loadUserImages(userId);
+        if (cloudImages.length > 0) {
+          this.saveImages(cloudImages);
+          return cloudImages;
+        } else {
+          // Push existing local images to cloud for this user
+          const localImgs = this.getImages();
+          for (const img of localImgs) {
+            await firestoreStorageService.saveUserImage(userId, img);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Image sync error:', err);
+    }
+    return this.getImages();
+  },
+
   saveImages(images: GeneratedImage[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY_IMAGES, JSON.stringify(images));
+      const key = getImageStorageKey();
+      localStorage.setItem(key, JSON.stringify(images));
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        images.slice(0, 15).forEach((img) => {
+          firestoreStorageService.saveUserImage(userId, img).catch(() => {});
+        });
+      }
     } catch (e) {
       console.error('Failed to save images', e);
     }
@@ -87,6 +154,7 @@ export const imageService = {
     style: ImageStyle;
     modelId: ForgeXModelId;
     referenceImage?: string;
+    customStyle?: string;
   }): Promise<GeneratedImage[]> {
     const apiKey = this.getApiKey();
 
@@ -118,6 +186,7 @@ export const imageService = {
 
     // Local procedural fallback if server is unreachable
     await new Promise((resolve) => setTimeout(resolve, 1400 + Math.random() * 600));
+
     const pool = STYLE_IMAGE_POOL[params.style] || STYLE_IMAGE_POOL['Cinematic'];
     const results: GeneratedImage[] = [];
 
@@ -155,6 +224,10 @@ export const imageService = {
   deleteImage(imageId: string): GeneratedImage[] {
     const images = this.getImages().filter((img) => img.id !== imageId);
     this.saveImages(images);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.deleteUserImage(userId, imageId).catch(() => {});
+    }
     return images;
   }
 };

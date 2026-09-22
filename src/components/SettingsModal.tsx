@@ -11,7 +11,13 @@ import {
   Eye, 
   LogOut, 
   Check, 
-  Zap
+  Zap,
+  Network,
+  Terminal,
+  Activity,
+  Flame,
+  Grid,
+  EyeOff
 } from 'lucide-react';
 import { 
   UserSettings, 
@@ -19,10 +25,10 @@ import {
   ForgeXTheme, 
   ForgeXModelId, 
   FORGEX_MODELS, 
-  ImageAspectRatio, 
-  VideoDuration 
+  ImageAspectRatio,
+  ThemeEffectType
 } from '../types';
-import { videoService } from '../services/videoService';
+import { THEME_EFFECTS_META } from './ThemeEffectBackground';
 import { imageService } from '../services/imageService';
 
 interface SettingsModalProps {
@@ -98,22 +104,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Left Settings Sidebar Navigation */}
         <div
-          className={`w-full md:w-56 p-5 border-b md:border-b-0 md:border-r shrink-0 ${
+          className={`w-full md:w-56 p-3 sm:p-5 border-b md:border-b-0 md:border-r shrink-0 ${
             isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
           }`}
         >
-          <div className="flex items-center gap-2.5 mb-6">
+          <div className="flex items-center gap-2.5 mb-3 md:mb-6">
             <div className="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
             </div>
             <h3 className="font-display font-bold text-base tracking-tight">Settings</h3>
           </div>
 
-          <nav className="space-y-1">
+          <nav className="flex md:flex-col gap-1.5 overflow-x-auto no-scrollbar pb-1 md:pb-0 md:space-y-1">
             <button
               id="settings-tab-appearance"
               onClick={() => setActiveTab('appearance')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'appearance'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : isDark
@@ -128,7 +134,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               id="settings-tab-account"
               onClick={() => setActiveTab('account')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'account'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : isDark
@@ -143,7 +149,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               id="settings-tab-ai"
               onClick={() => setActiveTab('ai')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'ai'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : isDark
@@ -158,7 +164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               id="settings-tab-generation"
               onClick={() => setActiveTab('generation')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'generation'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : isDark
@@ -173,7 +179,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               id="settings-tab-interface"
               onClick={() => setActiveTab('interface')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'interface'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : isDark
@@ -251,6 +257,76 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Theme Background Effects */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <label className={`block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Interactive Canvas Theme Effects
+                    </label>
+                    <p className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      Select dynamic cursor-reactive particle & mesh animations
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    {THEME_EFFECTS_META.length} Effects
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {THEME_EFFECTS_META.map((eff) => {
+                    const isSelected = (settings.themeEffect || 'connected_dots') === eff.id;
+                    const IconComponent = 
+                      eff.iconName === 'Network' ? Network :
+                      eff.iconName === 'Sparkles' ? Sparkles :
+                      eff.iconName === 'Terminal' ? Terminal :
+                      eff.iconName === 'Activity' ? Activity :
+                      eff.iconName === 'Flame' ? Flame :
+                      eff.iconName === 'Grid' ? Grid : EyeOff;
+
+                    return (
+                      <button
+                        key={eff.id}
+                        type="button"
+                        onClick={() => {
+                          updateSetting('themeEffect', eff.id);
+                          updateSetting('enableStarBackground', eff.id !== 'none');
+                        }}
+                        className={`p-3.5 rounded-2xl border text-left transition-all relative ${
+                          isSelected
+                            ? 'border-amber-500 bg-amber-500/10 shadow-sm shadow-amber-500/10'
+                            : isDark
+                              ? 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-700'
+                              : 'border-neutral-200 bg-white hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-1.5 rounded-lg ${
+                              isSelected 
+                                ? 'bg-amber-500 text-neutral-950' 
+                                : isDark ? 'bg-neutral-900 text-amber-400' : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              <IconComponent className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-xs font-bold block">{eff.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800/60 text-neutral-400">
+                              {eff.badge}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                          </div>
+                        </div>
+                        <p className={`text-[11px] leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                          {eff.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -274,7 +350,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div>
                     <h5 className="font-semibold text-base mb-1">No Active Creator Account</h5>
                     <p className={`text-xs max-w-sm mx-auto ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                      Sign in or create your account to save your generated chats, images, and videos with 1,000 free monthly compute credits.
+                      Sign in or create your account to save your generated chats, images, and projects across sessions.
                     </p>
                   </div>
                   <button
@@ -432,7 +508,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <h4 className="font-display font-bold text-lg mb-1">Generation Preferences</h4>
                 <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  Default parameters for Image Studio and Video Studio
+                  Default parameters for Image Studio and creative generation
                 </p>
               </div>
 
@@ -455,30 +531,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }`}
                     >
                       {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  Default Video Duration
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['5s', '10s', '15s'] as VideoDuration[]).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => updateSetting('defaultVideoDuration', d)}
-                      className={`py-2 rounded-xl text-xs font-medium border transition-all ${
-                        settings.defaultVideoDuration === d
-                          ? 'bg-amber-500 text-neutral-950 font-bold border-amber-500'
-                          : isDark
-                            ? 'border-neutral-800 text-neutral-300'
-                            : 'border-neutral-200 text-neutral-700'
-                      }`}
-                    >
-                      {d}
                     </button>
                   ))}
                 </div>
@@ -514,17 +566,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-800/60 bg-neutral-950/20">
                   <div>
-                    <span className="text-xs font-semibold block">Star Background Canvas</span>
+                    <span className="text-xs font-semibold block">Dynamic Canvas Theme Effect</span>
                     <span className="text-[11px] text-neutral-500">
-                      Enable cursor-reactive 3D parallax starfield
+                      Active: <strong className="text-amber-400 font-medium">{(settings.themeEffect || 'connected_dots').replace(/_/g, ' ')}</strong>
                     </span>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.enableStarBackground}
-                    onChange={(e) => updateSetting('enableStarBackground', e.target.checked)}
-                    className="w-4 h-4 accent-amber-500 rounded"
-                  />
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={settings.themeEffect || 'connected_dots'}
+                      onChange={(e) => {
+                        const val = e.target.value as ThemeEffectType;
+                        updateSetting('themeEffect', val);
+                        updateSetting('enableStarBackground', val !== 'none');
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-medium ${
+                        isDark ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-white border-neutral-300 text-neutral-800'
+                      }`}
+                    >
+                      {THEME_EFFECTS_META.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-800/60 bg-neutral-950/20">

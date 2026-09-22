@@ -1,12 +1,28 @@
 import { ForgeXProject } from '../types';
+import { authService } from './authService';
 
-const STORAGE_KEY_PROJECTS = 'forgex_projects';
-const ACTIVE_PROJECT_KEY = 'forgex_active_project_id';
+function getProjectsStorageKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_projects_${userId}`;
+}
+
+function getActiveProjectKey(): string {
+  const userId = authService.getCurrentUserId();
+  return `forgex_active_project_id_${userId}`;
+}
 
 export const projectService = {
   getProjects(): ForgeXProject[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_PROJECTS);
+      const key = getProjectsStorageKey();
+      let stored = localStorage.getItem(key);
+      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
+        const legacy = localStorage.getItem('forgex_projects');
+        if (legacy) {
+          stored = legacy;
+          localStorage.setItem(key, legacy);
+        }
+      }
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -18,18 +34,21 @@ export const projectService = {
   },
 
   saveProjects(projects: ForgeXProject[]): void {
-    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
+    const key = getProjectsStorageKey();
+    localStorage.setItem(key, JSON.stringify(projects));
   },
 
   getActiveProjectId(): string | null {
-    return localStorage.getItem(ACTIVE_PROJECT_KEY);
+    const key = getActiveProjectKey();
+    return localStorage.getItem(key);
   },
 
   setActiveProjectId(id: string | null): void {
+    const key = getActiveProjectKey();
     if (id) {
-      localStorage.setItem(ACTIVE_PROJECT_KEY, id);
+      localStorage.setItem(key, id);
     } else {
-      localStorage.removeItem(ACTIVE_PROJECT_KEY);
+      localStorage.removeItem(key);
     }
   },
 
