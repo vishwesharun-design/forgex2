@@ -2,13 +2,13 @@ import { AIAgent, AgentExecution } from '../types';
 import { authService } from './authService';
 
 function getAgentStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_agents_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_agents_${partition}`;
 }
 
 function getExecutionStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_agent_executions_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_agent_executions_${partition}`;
 }
 
 export const PRESET_AGENTS: AIAgent[] = [

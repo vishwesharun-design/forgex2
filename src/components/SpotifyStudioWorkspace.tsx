@@ -66,7 +66,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
   const [playerState, setPlayerState] = useState(() => spotifyPlayerService.getState());
   const [favorites, setFavorites] = useState<string[]>(() => spotifyPlayerService.getFavorites());
   const [currentSong, setCurrentSong] = useState<SpotifyTrack>(() => SPOTIFY_TRACKS[0]);
-  const [playbackMode, setPlaybackMode] = useState<'full_song' | 'real_audio' | 'spotify_embed'>('full_song');
+  const [playbackMode, setPlaybackMode] = useState<'full_song' | 'real_audio' | 'spotify_embed'>('real_audio');
 
   // Background Audio Streaming Engine (Streams full 3+ min audio with NO video shown in UI)
   const [bgIsPlaying, setBgIsPlaying] = useState(false);
@@ -113,40 +113,49 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
       interval = setInterval(() => {
         setBgCurrentTime((prev) => {
           if (prev >= songDurationSeconds) {
-            handleNextTrack();
-            return 0;
+            if (playerState.isRepeating) {
+              sendBgCommand('seekTo', [0, true]);
+              sendBgCommand('playVideo');
+              return 0;
+            } else {
+              handleNextTrack();
+              return 0;
+            }
           }
           return prev + 1;
         });
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [bgIsPlaying, playbackMode, songDurationSeconds]);
+  }, [bgIsPlaying, playbackMode, songDurationSeconds, playerState.isRepeating]);
 
   const toggleBgPlayPause = () => {
-    if (bgIsPlaying) {
-      sendBgCommand('pauseVideo');
+    if (playerState.isPlaying) {
+      spotifyPlayerService.pause();
       setBgIsPlaying(false);
     } else {
-      sendBgCommand('playVideo');
+      if (playerState.duration > 0 && playerState.currentTime >= playerState.duration - 0.5) {
+        spotifyPlayerService.seek(0);
+      }
+      spotifyPlayerService.playTrack(currentSong, playerState.currentTime);
       setBgIsPlaying(true);
     }
   };
 
   const seekBg = (seconds: number) => {
-    sendBgCommand('seekTo', [seconds, true]);
+    spotifyPlayerService.seek(seconds);
     setBgCurrentTime(seconds);
   };
 
   const setBgVol = (val: number) => {
     setBgVolume(val);
-    sendBgCommand('setVolume', [val * 100]);
+    spotifyPlayerService.setVolume(val);
   };
 
   const toggleBgMute = () => {
     const nextMuted = !bgIsMuted;
     setBgIsMuted(nextMuted);
-    sendBgCommand(nextMuted ? 'mute' : 'unMute');
+    spotifyPlayerService.toggleMute();
   };
 
   // Mobile View Toggle
@@ -201,21 +210,21 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
 
   // Handle Play Real Song
   const handlePlayRealSong = (track: SpotifyTrack, modeOverride?: 'full_song' | 'real_audio' | 'spotify_embed') => {
+    const isSameTrack = currentSong.id === track.id;
     setCurrentSong(track);
     const targetMode = modeOverride || playbackMode;
-    if (targetMode === 'full_song') {
+
+    if (targetMode === 'spotify_embed') {
       spotifyPlayerService.pause();
-      setBgCurrentTime(0);
-      setBgIsPlaying(true);
-    } else if (targetMode === 'real_audio') {
       setBgIsPlaying(false);
-      sendBgCommand('pauseVideo');
-      spotifyPlayerService.togglePlayPause(track);
     } else {
       setBgIsPlaying(false);
-      sendBgCommand('pauseVideo');
-      spotifyPlayerService.pause();
+      if (playerState.duration > 0 && playerState.currentTime >= playerState.duration - 0.5) {
+        spotifyPlayerService.seek(0);
+      }
+      spotifyPlayerService.playTrack(track, isSameTrack ? playerState.currentTime : 0);
     }
+
     if (modeOverride) {
       setPlaybackMode(modeOverride);
     }
@@ -656,22 +665,23 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                         {/* Song Title & CREATOR NAME BELOW THAT SONG */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
-                            <h3 className={`font-bold text-sm tracking-tight truncate ${
+                            <h3 className={`font-bold text-sm tracking-tight truncate leading-snug ${
                               isCurrent ? 'text-[#1DB954]' : isDark ? 'text-white' : 'text-neutral-900'
                             }`}>
                               {track.title}
                             </h3>
-                            <span className="text-[11px] font-mono text-neutral-400 shrink-0">
+                            <span className="text-[11px] font-mono tabular-nums text-neutral-400 shrink-0 leading-none">
                               {track.duration}
                             </span>
                           </div>
 
                           {/* USER REQUIREMENT: "give the creator name belove that song" */}
-                          <div className="mt-1">
-                            <p className="text-xs font-bold text-[#1DB954] truncate flex items-center gap-1">
-                              <span className="text-neutral-400 font-normal">By</span> {track.creator}
+                          <div className="mt-1 space-y-0.5">
+                            <p className="text-xs font-bold text-[#1DB954] truncate flex items-center gap-1 leading-normal">
+                              <span className="text-neutral-400 font-normal">By</span>
+                              <span>{track.creator}</span>
                             </p>
-                            <p className={`text-[11px] truncate mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                            <p className={`text-[11px] truncate leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                               {track.album} • {track.year}
                             </p>
                           </div>
@@ -679,7 +689,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                       </div>
 
                       {/* Song Description */}
-                      <p className={`text-[11px] line-clamp-2 mt-3 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      <p className={`text-[11px] line-clamp-2 mt-2.5 leading-relaxed text-left ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                         {track.description}
                       </p>
 
@@ -809,7 +819,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                           Real Audio
                         </span>
 
-                        <span className="hidden sm:inline-block text-xs font-mono text-neutral-400">
+                        <span className="hidden sm:inline-block text-xs font-mono tabular-nums text-neutral-400">
                           {track.duration}
                         </span>
 
@@ -974,19 +984,19 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
             </div>
 
             {/* Song Title & PROMINENT CREATOR NAME BELOW THAT SONG */}
-            <div className="text-center">
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white truncate px-2">
+            <div className="text-center px-1">
+              <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white truncate leading-tight">
                 {currentSong.title}
               </h2>
 
               {/* USER REQUIREMENT: "give the creator name belove that song" */}
-              <div className="mt-1 flex flex-col items-center justify-center">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/30 text-[#1DB954] font-bold text-xs">
+              <div className="mt-1.5 flex flex-col items-center justify-center">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/30 text-[#1DB954] font-bold text-xs leading-none">
                   <span className="text-neutral-400 font-normal">Creator:</span>
                   <span>{currentSong.creator}</span>
                 </div>
-                <p className={`text-xs mt-1 truncate max-w-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  {currentSong.album}
+                <p className={`text-xs mt-1.5 truncate max-w-xs leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  {currentSong.album} • {currentSong.year}
                 </p>
               </div>
             </div>
@@ -997,12 +1007,12 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                 href={currentSong.spotifyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-2.5 px-4 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#1DB954]/25 transition-all active:scale-98"
+                className="w-full py-2.5 px-4 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#1DB954]/25 transition-all active:scale-98 leading-none"
                 title={`Open "${currentSong.title}" by ${currentSong.creator} in Spotify`}
               >
-                <SpotifyBrandIcon className="w-4 h-4 fill-black" />
-                <span>Listen on Spotify</span>
-                <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
+                <SpotifyBrandIcon className="w-4 h-4 fill-black shrink-0" />
+                <span className="leading-none">Listen on Spotify</span>
+                <ExternalLink className="w-3.5 h-3.5 ml-0.5 shrink-0" />
               </a>
             </div>
 
@@ -1017,7 +1027,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     <Disc3 className={`w-3.5 h-3.5 text-[#1DB954] ${bgIsPlaying ? 'animate-spin' : ''}`} />
                     Full Uncut Audio Track
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 flex items-center gap-1">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 flex items-center gap-1 leading-none">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     Video Hidden • Background Audio
                   </span>
@@ -1033,10 +1043,10 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     className="w-full h-16 rounded-lg bg-neutral-950/60"
                   />
                   <div className="mt-2 text-center">
-                    <p className="text-xs font-bold text-white truncate max-w-[280px]">
+                    <p className="text-xs font-bold text-white truncate max-w-[280px] leading-tight">
                       {currentSong.title}
                     </p>
-                    <p className="text-[11px] text-[#1DB954] font-semibold truncate mt-0.5">
+                    <p className="text-[11px] text-[#1DB954] font-semibold truncate mt-0.5 leading-normal">
                       By {currentSong.creator} • {currentSong.album}
                     </p>
                   </div>
@@ -1044,7 +1054,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
 
                 {/* Scrubber Progress Bar for Full Song */}
                 <div className="mt-3">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 mb-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-neutral-400 mb-1">
                     <span>{formatTime(bgCurrentTime)}</span>
                     <span className="text-[#1DB954] font-semibold">
                       {formatTime(songDurationSeconds)} full length
@@ -1173,7 +1183,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
 
                 {/* Scrubber Progress Bar */}
                 <div className="mt-3">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 mb-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-neutral-400 mb-1">
                     <span>{formatTime(playerState.currentTime)}</span>
                     <span className="text-emerald-400 font-semibold">
                       {playerState.isLoading ? 'Loading master...' : formatTime(playerState.duration)}

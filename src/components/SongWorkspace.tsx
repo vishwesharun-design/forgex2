@@ -242,17 +242,21 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   };
 
   const handlePlaySong = (song: GeneratedSong) => {
+    const isSameSong = activeSongId === song.id;
     setSelectedSongId(song.id);
-    if (activeSongId === song.id) {
+    if (isSameSong) {
       // Toggle pause/stop
       musicService.stopPlayback();
       setActiveSongId(null);
       return;
     }
 
-    setActiveSongId(song.id);
+    const totalDur = song.durationSeconds || playbackDuration || 180;
+    // Always start a new song from 0:00 so it plays immediately from the start
     setPlaybackTime(0);
-    setPlaybackDuration(song.durationSeconds || 180);
+
+    setActiveSongId(song.id);
+    setPlaybackDuration(totalDur);
 
     musicService.playSong(
       song,
@@ -263,7 +267,8 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
       () => {
         setActiveSongId(null);
         setPlaybackTime(0);
-      }
+      },
+      0
     );
   };
 
@@ -883,12 +888,12 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                         <div className="flex-1 min-w-0 flex flex-col justify-start">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1 pr-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="font-bold text-sm sm:text-base leading-snug truncate" title={song.title}>
                                   {song.title}
                                 </h4>
                                 {song.isFavorite ? (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
+                                  <span className="text-[9px] font-bold px-2 h-4 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
                                     ★ Favorite
                                   </span>
                                 ) : null}
@@ -898,23 +903,23 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                                 {song.artist || 'AI Studio Original'}
                               </p>
 
-                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                                 {song.hasVoice !== false && (
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 inline-flex items-center gap-1 leading-none">
-                                    <Mic className="w-2.5 h-2.5 text-cyan-400" />
+                                  <span className="text-[10px] font-semibold px-2 h-5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 inline-flex items-center gap-1 leading-none">
+                                    <Mic className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
                                     <span>{song.voiceProfile || 'Zephyr'}</span>
                                   </span>
                                 )}
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 inline-flex items-center leading-none">
+                                <span className="text-[10px] font-semibold px-2 h-5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 inline-flex items-center leading-none">
                                   {song.genre}
                                 </span>
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800 text-neutral-300 border-neutral-700/50' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
+                                <span className={`text-[10px] px-2 h-5 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800 text-neutral-300 border-neutral-700/50' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
                                   {song.mood}
                                 </span>
-                                <span className="text-[10px] font-mono text-neutral-400 inline-flex items-center leading-none">
+                                <span className="text-[10px] font-mono tabular-nums text-neutral-400 inline-flex items-center leading-none">
                                   {song.tempoBpm} BPM
                                 </span>
-                                <span className="text-[10px] font-mono text-neutral-500 inline-flex items-center leading-none">
+                                <span className="text-[10px] font-mono tabular-nums text-neutral-400 inline-flex items-center leading-none">
                                   • {song.durationSeconds}s
                                 </span>
                               </div>
@@ -948,14 +953,14 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                           </div>
 
                           {/* Prompt description */}
-                          <p className={`text-xs line-clamp-1 mt-2 text-left leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`} title={song.prompt}>
+                          <p className={`text-xs line-clamp-1 mt-2 text-left leading-normal italic pl-2 border-l-2 border-amber-500/30 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`} title={song.prompt}>
                             "{song.prompt}"
                           </p>
 
                           {/* Audio Progress / Visualizer when playing */}
                           {isPlaying && (
                             <div className="mt-3 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-mono text-amber-400">
+                              <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-amber-400">
                                 <span>{formatSeconds(playbackTime)}</span>
                                 <div className="flex items-end gap-1 h-3">
                                   <span className="w-1 bg-amber-400 rounded-full animate-bounce h-2" />

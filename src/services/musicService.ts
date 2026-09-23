@@ -584,10 +584,6 @@ Forever resonant and true...`;
     if (song.audioUrl) {
       try {
         const audio = new Audio();
-        // Only set crossOrigin if it's an external URL to avoid unnecessary CORS restrictions on local routes
-        if (song.audioUrl.startsWith('http')) {
-          audio.crossOrigin = 'anonymous';
-        }
         audio.preload = 'auto';
         audio.src = song.audioUrl;
         audio.volume = Math.max(0, Math.min(1, initialVolume));
@@ -613,8 +609,11 @@ Forever resonant and true...`;
         const totalDuration = song.durationSeconds || 180;
 
         audio.onloadedmetadata = () => {
-          if (startOffset > 0 && startOffset < (audio.duration || totalDuration)) {
+          const maxDur = audio.duration || totalDuration;
+          if (startOffset > 0 && startOffset < maxDur - 1) {
             audio.currentTime = startOffset;
+          } else {
+            audio.currentTime = 0;
           }
         };
 
@@ -630,6 +629,7 @@ Forever resonant and true...`;
 
         audio.onended = () => {
           if (!isStopped) {
+            audio.currentTime = 0;
             stop();
             if (onEnded) onEnded();
           }
@@ -638,22 +638,18 @@ Forever resonant and true...`;
         audio.onerror = (e) => {
           if (!isStopped && !didFallback) {
             didFallback = true;
-            console.warn('Audio streaming failed for track:', song.title, e);
+            console.warn('Audio streaming notice for track:', song.title, e);
             stop();
-            if (!song.isRealLifeHit) {
-              this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
-            }
+            this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
           }
         };
 
         audio.play().catch((playErr) => {
           if (!isStopped && !didFallback) {
             didFallback = true;
-            console.warn('Audio play() failed:', playErr);
+            console.warn('Audio play() notice, falling back to synthesizer:', playErr);
             stop();
-            if (!song.isRealLifeHit) {
-              this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
-            }
+            this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
           }
         });
 

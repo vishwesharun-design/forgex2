@@ -22,13 +22,17 @@ import {
 } from 'lucide-react';
 import { DeepResearchReport, ForgeXModelId } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { authService } from '../services/authService';
 
 interface ResearchWorkspaceProps {
   isDark: boolean;
   selectedModelId: ForgeXModelId;
 }
 
-const STORAGE_KEY = 'forgex_deep_research_history';
+function getResearchStorageKey(): string {
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_deep_research_history_${partition}`;
+}
 
 const SAMPLE_TOPICS = [
   'Latest breakthroughs in humanoid robotics and embodied AI',
@@ -54,22 +58,39 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load history from localStorage
+  // Load history from localStorage for current user
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setHistory(parsed);
-          if (parsed.length > 0 && !currentReport) {
-            setCurrentReport(parsed[0]);
+    const loadUserHistory = () => {
+      try {
+        const key = getResearchStorageKey();
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setHistory(parsed);
+            if (parsed.length > 0) {
+              setCurrentReport(parsed[0]);
+            } else {
+              setCurrentReport(null);
+            }
+            return;
           }
         }
+        setHistory([]);
+        setCurrentReport(null);
+      } catch {
+        // Ignore
       }
-    } catch {
-      // Ignore
-    }
+    };
+
+    loadUserHistory();
+
+    const handleAuth = () => {
+      loadUserHistory();
+    };
+
+    window.addEventListener('forgex:auth_changed', handleAuth);
+    return () => window.removeEventListener('forgex:auth_changed', handleAuth);
   }, []);
 
   // Save history to localStorage
@@ -77,7 +98,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     setHistory((prev) => {
       const updated = [report, ...prev.filter((item) => item.id !== report.id)].slice(0, 30);
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        const key = getResearchStorageKey();
+        localStorage.setItem(key, JSON.stringify(updated));
       } catch {
         // Ignore
       }
@@ -90,7 +112,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
     setHistory((prev) => {
       const updated = prev.filter((item) => item.id !== id);
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        const key = getResearchStorageKey();
+        localStorage.setItem(key, JSON.stringify(updated));
       } catch {
         // Ignore
       }

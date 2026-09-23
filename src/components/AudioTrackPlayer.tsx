@@ -174,32 +174,32 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
         }`}
       >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <div className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold leading-none shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold shrink-0">
             <Music className="w-3.5 h-3.5 shrink-0" />
-            <span>AI Studio Track</span>
-            {song.artist && <span className="opacity-80 font-normal truncate max-w-[180px]">• {song.artist}</span>}
+            <span className="leading-none">AI Studio Track</span>
+            {song.artist && <span className="opacity-80 font-normal truncate max-w-[180px] leading-none">• {song.artist}</span>}
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
             {song.hasVoice !== false && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 leading-none">
-                <Mic className="w-3 h-3 text-cyan-400" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 h-7 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 leading-none">
+                <Mic className="w-3 h-3 text-cyan-400 shrink-0" />
                 <span>Voice: {song.voiceProfile || 'Zephyr'}</span>
               </span>
             )}
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-800/90 text-neutral-200 border border-neutral-700/60 inline-flex items-center leading-none">
+            <span className="text-xs font-semibold px-2.5 h-7 rounded-full bg-neutral-800/90 text-neutral-200 border border-neutral-700/60 inline-flex items-center leading-none">
               {song.genre}
             </span>
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800/60 text-neutral-300 border-neutral-700/40' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
+            <span className={`text-xs font-medium px-2.5 h-7 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800/60 text-neutral-300 border-neutral-700/40' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
               {song.mood}
             </span>
-            <span className="text-xs font-mono text-neutral-400 px-1 inline-flex items-center leading-none">
+            <span className="text-xs font-mono tabular-nums text-neutral-400 px-1 inline-flex items-center leading-none">
               {song.tempoBpm} BPM
             </span>
             <span className="text-xs font-mono text-neutral-400 inline-flex items-center leading-none">
               • {chordData.key}
             </span>
-            <span className="text-xs font-mono text-neutral-500 inline-flex items-center leading-none">
+            <span className="text-xs font-mono tabular-nums text-neutral-500 inline-flex items-center leading-none">
               • {duration}s {duration >= 270 ? '(4:30+)' : duration >= 240 ? '(4:00)' : duration >= 210 ? '(3:30)' : duration >= 180 ? '(3:00)' : duration >= 120 ? '(2:00)' : ''}
             </span>
           </div>
@@ -354,10 +354,10 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                     }`}
                   >
                     {/* Section Header */}
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2 mb-2 min-h-6">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          className={`text-xs px-2.5 py-0.5 rounded-full border transition-all ${getSectionBadgeStyle(
+                          className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-all inline-flex items-center leading-none ${getSectionBadgeStyle(
                             section.type,
                             isSectionActive
                           )}`}
@@ -365,14 +365,14 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                           [{section.tag}]
                         </span>
 
-                        <span className="text-[10px] font-mono text-neutral-500">
+                        <span className="text-[10px] font-mono tabular-nums text-neutral-400 inline-flex items-center leading-none">
                           {formatTime(section.startTimeSec)} – {formatTime(section.endTimeSec)}
                         </span>
 
                         {isSectionActive && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-wider animate-pulse">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                            Live Scene
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-400 uppercase tracking-wider animate-pulse leading-none">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                            <span>Live Scene</span>
                           </span>
                         )}
                       </div>
@@ -553,23 +553,30 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
         {/* ========================================================= */}
         <div className="lg:col-span-6 flex flex-col justify-between p-5 sm:p-6 space-y-5">
           {/* Top Section: Title & Prompt info */}
-          <div>
-            <div className="flex items-center gap-2 flex-wrap mb-1 min-w-0">
-              <h3 className="font-display font-extrabold text-lg sm:text-xl leading-tight truncate max-w-full" title={song.title}>
-                {song.title}
-              </h3>
-              {song.isRealLifeHit && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
-                  ⭐ Real Hit
-                </span>
-              )}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-display font-extrabold text-lg sm:text-xl tracking-tight leading-snug truncate" title={song.title}>
+                    {song.title}
+                  </h3>
+                  {song.isRealLifeHit && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
+                      ⭐ Real Hit
+                    </span>
+                  )}
+                </div>
+
+                {song.artist && (
+                  <p className="text-xs font-semibold text-amber-400 mt-0.5 leading-normal flex items-center gap-1.5">
+                    <span className="text-neutral-400 font-normal">Produced by</span>
+                    <span>{song.artist}</span>
+                  </p>
+                )}
+              </div>
             </div>
-            {song.artist && (
-              <p className="text-xs font-semibold text-amber-400 mb-1 leading-normal flex items-center gap-1">
-                by {song.artist}
-              </p>
-            )}
-            <p className={`text-xs mt-1 line-clamp-2 leading-relaxed italic text-left ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+
+            <p className={`text-xs line-clamp-2 leading-relaxed text-left pl-2.5 border-l-2 border-amber-500/40 italic ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
               "{song.prompt}"
             </p>
           </div>
@@ -620,7 +627,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
 
           {/* Dynamic Audio Visualizer Equalizer Bars */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-mono text-amber-400">
+            <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-amber-400">
               <span className="font-semibold leading-none">{formatTime(playbackTime)}</span>
 
               {/* 16-bar animated audio frequency spectrum */}
@@ -639,7 +646,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                 ))}
               </div>
 
-              <span className="text-neutral-400 leading-none">{formatTime(duration)}</span>
+              <span className="text-neutral-400 font-mono tabular-nums leading-none">{formatTime(duration)}</span>
             </div>
 
             {/* Seekable Audio Progress Scrubber */}
@@ -657,8 +664,8 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
           </div>
 
           {/* Full Master Transport & Volume Controls */}
-          <div className="flex items-center justify-between gap-3 pt-2 border-t border-neutral-800/40 flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-neutral-800/60 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2 shrink-0">
               {/* Rewind 5s */}
               <button
                 onClick={() => handleSkip(-5)}
@@ -676,12 +683,12 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                 {isPlaying ? (
                   <>
                     <Pause className="w-4 h-4 fill-current shrink-0" />
-                    <span>Pause Track</span>
+                    <span className="leading-none">Pause Track</span>
                   </>
                 ) : (
                   <>
                     <Play className="w-4 h-4 fill-current ml-0.5 shrink-0" />
-                    <span>Play Master</span>
+                    <span className="leading-none">Play Master</span>
                   </>
                 )}
               </button>
@@ -697,11 +704,11 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
             </div>
 
             {/* Stems Volume Controls: Beat & Voice & Master */}
-            <div className="flex items-center gap-3 pl-3 border-l border-neutral-800 shrink-0 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-3 pl-3 border-l border-neutral-800/80 shrink-0 flex-wrap sm:flex-nowrap">
               {song.hasVoice !== false && (
                 <div className="flex items-center gap-1.5" title="AI Voice / Vocal Level">
                   <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                  <span className="text-[10px] font-mono text-cyan-300">Vox</span>
+                  <span className="text-[10px] font-mono text-cyan-300 leading-none">Vox</span>
                   <input
                     type="range"
                     min="0"
@@ -720,7 +727,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
 
               <div className="flex items-center gap-1.5" title="Instrumental Beat Level">
                 <Music className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-[10px] font-mono text-amber-300">Beat</span>
+                <span className="text-[10px] font-mono text-amber-300 leading-none">Beat</span>
                 <input
                   type="range"
                   min="0"

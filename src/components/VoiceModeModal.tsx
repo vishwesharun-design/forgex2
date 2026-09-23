@@ -88,7 +88,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      voiceController.stopListening();
+      voiceController.stopSession();
       voiceController.interruptSpeaking();
       setStatus('idle');
       return;

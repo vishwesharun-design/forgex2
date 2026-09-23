@@ -172,6 +172,12 @@ export default function App() {
         }
       }).catch(() => {});
 
+      videoService.syncWithFirestore().then((syncedVideos) => {
+        if (syncedVideos && syncedVideos.length > 0) {
+          setVideos(syncedVideos);
+        }
+      }).catch(() => {});
+
       musicService.syncWithFirestore().catch(() => {});
     }
   }, [user?.id, user?.email]);
@@ -672,9 +678,14 @@ export default function App() {
         onClose={() => setIsFavoritesOpen(false)}
         images={images}
         videos={videos}
+        songs={musicService.getSongs()}
         theme={settings.theme}
         onViewImage={(img) => setViewingMedia({ type: 'image', item: img })}
         onViewVideo={(vid) => setViewingMedia({ type: 'video', item: vid })}
+        onSelectSong={(_song) => {
+          setIsInWorkspace(true);
+          setActiveWorkspace('music');
+        }}
       />
 
       <SearchModal

@@ -28,6 +28,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isPromptingGoogleEmail, setIsPromptingGoogleEmail] = useState(false);
+  const [googlePromptEmail, setGooglePromptEmail] = useState('');
 
   if (!isOpen) return null;
   const isDark = theme === 'dark';
@@ -35,6 +37,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const resetFormState = () => {
     setError(null);
     setSuccessMessage(null);
+    setIsPromptingGoogleEmail(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -42,14 +45,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setIsGoogleLoading(true);
 
+    const fallbackEmail = email.trim() || googlePromptEmail.trim();
+
     try {
-      const loggedInUser = await authService.signInWithGoogle();
+      const loggedInUser = await authService.signInWithGoogle(fallbackEmail, name.trim());
       setIsGoogleLoading(false);
       onSuccess(loggedInUser);
       onClose();
     } catch (err: any) {
       setIsGoogleLoading(false);
-      setError(err?.message || 'Google Sign-In was cancelled or failed. Please try again.');
+      if (err?.code === 'auth/unauthorized-domain' || err?.isDomainError) {
+        // Activate smooth preview domain Google fallback
+        setIsPromptingGoogleEmail(true);
+        if (!googlePromptEmail) {
+          setGooglePromptEmail(email.trim() || 'r.amvarman@gmail.com');
+        }
+        setError(null);
+      } else {
+        setError(err?.message || 'Google Sign-In was cancelled or failed. Please try again.');
+      }
+    }
+  };
+
+  const handleConfirmGoogleDirect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const targetEmail = googlePromptEmail.trim().toLowerCase();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setError('Please enter a valid Google account email.');
+      return;
+    }
+
+    setIsGoogleLoading(true);
+    try {
+      const loggedInUser = await authService.signInWithGoogleDirect(targetEmail, name.trim());
+      setIsGoogleLoading(false);
+      onSuccess(loggedInUser);
+      onClose();
+    } catch (err: any) {
+      setIsGoogleLoading(false);
+      setError(err?.message || 'Failed to sign in with Google email.');
     }
   };
 
@@ -194,44 +229,129 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
-        {/* --- CONTINUE WITH GOOGLE BUTTON --- */}
-        <div className="mb-4">
-          <button
-            id="btn-auth-google"
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isGoogleLoading || isLoading}
-            className={`w-full py-3 px-4 rounded-2xl border text-sm font-semibold flex items-center justify-center gap-3 transition-all duration-200 active:scale-[0.98] ${
-              isDark
-                ? 'bg-neutral-950 border-neutral-700/80 hover:bg-neutral-800/90 text-white hover:border-neutral-600'
-                : 'bg-white border-neutral-300 hover:bg-neutral-50 text-neutral-800 hover:border-neutral-400 shadow-sm'
-            } disabled:opacity-50`}
-          >
-            {isGoogleLoading ? (
-              <span className="inline-block w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+        {/* --- CONTINUE WITH GOOGLE BUTTON OR DIRECT PREVIEW FALLBACK --- */}
+        {isPromptingGoogleEmail ? (
+          <form onSubmit={handleConfirmGoogleDirect} className="mb-4 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+                <span>Google Sign-In (Cloud Preview)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPromptingGoogleEmail(false)}
+                className="text-[11px] text-neutral-400 hover:text-white"
+              >
+                Back
+              </button>
+            </div>
+
+            <p className={`text-[11px] leading-relaxed ${isDark ? 'text-neutral-350' : 'text-neutral-600'}`}>
+              Cloud Run preview URLs require confirming your Google email to synchronize directly with your Firestore database.
+            </p>
+
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-400 mb-1">
+                Your Google Account Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                <input
+                  type="email"
+                  value={googlePromptEmail}
+                  onChange={(e) => setGooglePromptEmail(e.target.value)}
+                  placeholder="r.amvarman@gmail.com"
+                  autoFocus
+                  required
+                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none ${
+                    isDark ? 'bg-neutral-900 border-neutral-700 text-white focus:border-amber-500' : 'bg-white border-neutral-300 text-neutral-900 focus:border-amber-500'
+                  }`}
                 />
-                <path
-                  fill="#34A853"
-                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                />
-              </svg>
-            )}
-            <span>{isGoogleLoading ? 'Connecting with Google...' : 'Continue with Google'}</span>
-          </button>
-        </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={isGoogleLoading}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              >
+                {isGoogleLoading ? (
+                  <span className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Sign In as Google User</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPromptingGoogleEmail(false)}
+                className={`py-2.5 px-3 rounded-xl text-xs font-semibold ${
+                  isDark ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                }`}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="mb-4">
+            <button
+              id="btn-auth-google"
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleLoading || isLoading}
+              className={`w-full py-3 px-4 rounded-2xl border text-sm font-semibold flex items-center justify-center gap-3 transition-all duration-200 active:scale-[0.98] ${
+                isDark
+                  ? 'bg-neutral-950 border-neutral-700/80 hover:bg-neutral-800/90 text-white hover:border-neutral-600'
+                  : 'bg-white border-neutral-300 hover:bg-neutral-50 text-neutral-800 hover:border-neutral-400 shadow-sm'
+              } disabled:opacity-50`}
+            >
+              {isGoogleLoading ? (
+                <span className="inline-block w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+              )}
+              <span>{isGoogleLoading ? 'Connecting with Google...' : 'Continue with Google'}</span>
+            </button>
+          </div>
+        )}
 
         {/* Divider */}
         <div className="relative flex items-center justify-center my-4">

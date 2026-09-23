@@ -1,4 +1,10 @@
 import { SpotifyTrack } from '../types';
+import { authService } from './authService';
+
+function getFavoritesStorageKey(): string {
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_spotify_favorites_${partition}`;
+}
 
 class SpotifyPlayerService {
   private audioElement: HTMLAudioElement | null = null;
@@ -35,7 +41,6 @@ class SpotifyPlayerService {
   private initAudioElement() {
     if (!this.audioElement) {
       this.audioElement = new Audio();
-      this.audioElement.crossOrigin = 'anonymous';
       this.audioElement.preload = 'auto';
       this.audioElement.volume = this.volume;
 
@@ -70,6 +75,11 @@ class SpotifyPlayerService {
           this.audioElement.play().catch(console.error);
         } else {
           this.isPlaying = false;
+          // Automatically rewind to 0 on track completion so clicking Play starts fresh
+          if (this.audioElement) {
+            this.audioElement.currentTime = 0;
+          }
+          this.currentTime = 0;
           this.notify();
         }
       });
@@ -83,35 +93,13 @@ class SpotifyPlayerService {
   }
 
   private attachWebAudioVisualizer() {
-    try {
-      if (!this.audioCtx && typeof window !== 'undefined') {
-        const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        this.audioCtx = new AudioCtxClass();
-        this.analyser = this.audioCtx.createAnalyser();
-        this.analyser.fftSize = 128;
-        this.analyser.smoothingTimeConstant = 0.8;
-
-        if (this.audioElement && !this.sourceNode) {
-          try {
-            this.sourceNode = this.audioCtx.createMediaElementSource(this.audioElement);
-            this.sourceNode.connect(this.analyser);
-            this.analyser.connect(this.audioCtx.destination);
-          } catch (e) {
-            // If already connected or cross-origin restricted, direct audio element handles sound
-          }
-        }
-      }
-      if (this.audioCtx && this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
-      }
-    } catch (e) {
-      console.warn('Web Audio Visualizer initialization skipped:', e);
-    }
+    // Avoid createMediaElementSource on cross-origin audio URLs
+    // The browser's Web Audio specification strictly silences cross-origin media elements that do not provide CORS headers.
+    // AudioElement outputs cleanly and directly to the user's speakers without interference.
   }
 
   public async playTrack(track: SpotifyTrack, startAtSeconds = 0) {
     this.initAudioElement();
-    this.attachWebAudioVisualizer();
 
     if (!this.audioElement) return;
 
@@ -168,24 +156,47 @@ class SpotifyPlayerService {
 
   public resume() {
     if (this.audioElement && this.audioElement.src) {
+      // If audio is at the end or within 0.5s of the end, reset to 0 so clicking play always starts playback
+      const isAtEnd =
+        this.audioElement.ended ||
+        (this.duration > 0 && this.audioElement.currentTime >= this.duration - 0.5) ||
+        (this.audioElement.duration > 0 && this.audioElement.currentTime >= this.audioElement.duration - 0.5);
+
+      if (isAtEnd) {
+        this.audioElement.currentTime = 0;
+        this.currentTime = 0;
+      }
+
       this.attachWebAudioVisualizer();
       this.audioElement.play().catch(console.error);
       this.isPlaying = true;
       this.notify();
     } else if (this.currentTrack) {
-      this.playTrack(this.currentTrack, this.currentTime);
+      const isAtEnd = this.duration > 0 && this.currentTime >= this.duration - 0.5;
+      this.playTrack(this.currentTrack, isAtEnd ? 0 : this.currentTime);
     }
   }
 
   public togglePlayPause(track?: SpotifyTrack) {
     if (track && (!this.currentTrack || track.id !== this.currentTrack.id)) {
-      this.playTrack(track);
+      this.playTrack(track, 0);
       return;
     }
 
     if (this.isPlaying) {
       this.pause();
     } else {
+      // If at or near the end, rewind to zero first
+      if (this.audioElement) {
+        const isAtEnd =
+          this.audioElement.ended ||
+          (this.duration > 0 && this.audioElement.currentTime >= this.duration - 0.5) ||
+          (this.audioElement.duration > 0 && this.audioElement.currentTime >= this.audioElement.duration - 0.5);
+        if (isAtEnd) {
+          this.audioElement.currentTime = 0;
+          this.currentTime = 0;
+        }
+      }
       this.resume();
     }
   }
@@ -247,10 +258,11 @@ class SpotifyPlayerService {
   // Favorites management
   public getFavorites(): string[] {
     try {
-      const saved = localStorage.getItem('forgex_spotify_favorites');
-      return saved ? JSON.parse(saved) : ['feat-1', 'feat-2'];
+      const key = getFavoritesStorageKey();
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return ['feat-1', 'feat-2'];
+      return [];
     }
   }
 
@@ -266,7 +278,8 @@ class SpotifyPlayerService {
       isFav = false;
     }
     try {
-      localStorage.setItem('forgex_spotify_favorites', JSON.stringify(favs));
+      const key = getFavoritesStorageKey();
+      localStorage.setItem(key, JSON.stringify(favs));
     } catch (e) {
       console.error(e);
     }

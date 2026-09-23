@@ -10,6 +10,7 @@ export class VoiceController {
   private audioChunks: Blob[] = [];
   private audioContext: AudioContext | null = null;
   private animFrameId: number | null = null;
+  private restartTimer: any = null;
   private onTranscriptUpdate?: (text: string, isFinal: boolean) => void;
   private onStatusChange?: (
     status: 'idle' | 'listening' | 'thinking' | 'speaking' | 'unsupported',
@@ -51,6 +52,7 @@ export class VoiceController {
     this.selectedVoice = list.find((v) => v.voiceURI === uri) || null;
   }
 
+  // Starts or resumes persistent listening loop with auto-recovery
   public async startListening(
     onTranscript: (text: string, isFinal: boolean) => void,
     onStatus: (
@@ -64,44 +66,69 @@ export class VoiceController {
     this.onLevelUpdate = onLevel;
     this.lastCapturedText = '';
     this.audioChunks = [];
+    this.isListening = true;
+
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
 
     // Interrupt any ongoing AI speech
     this.interruptSpeaking();
 
-    // 1. Request hardware microphone access
-    try {
-      if (this.mediaStream) {
-        this.mediaStream.getTracks().forEach((t) => t.stop());
-        this.mediaStream = null;
-      }
+    // 1. Maintain hardware microphone access (reuse active stream to prevent browser permission drop)
+    const isStreamAlive =
+      this.mediaStream &&
+      this.mediaStream.active &&
+      this.mediaStream.getAudioTracks().some((t) => t.readyState === 'live');
 
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+    if (!isStreamAlive) {
+      try {
+        if (this.mediaStream) {
+          try {
+            this.mediaStream.getTracks().forEach((t) => t.stop());
+          } catch {}
+          this.mediaStream = null;
+        }
+
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch (err: any) {
+        console.warn('Microphone access denied or unavailable:', err);
+        const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+        this.isListening = false;
+        onStatus(
+          'unsupported',
+          isDenied
+            ? 'Microphone permission denied. Please allow microphone permissions in your browser bar.'
+            : 'Could not connect to microphone. Please check your system audio device.'
+        );
+        return false;
+      }
+    } else if (this.mediaStream) {
+      // Re-enable existing audio tracks
+      this.mediaStream.getAudioTracks().forEach((t) => {
+        t.enabled = true;
       });
-    } catch (err: any) {
-      console.warn('Microphone access denied or unavailable:', err);
-      const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
-      onStatus(
-        'unsupported',
-        isDenied
-          ? 'Microphone permission denied. Please allow microphone permissions in your browser bar.'
-          : 'Could not connect to microphone. Please check your system audio device.'
-      );
-      return false;
     }
 
-    // 2. AudioContext Analyzer for real-time waveform pulse
+    // 2. AudioContext Analyzer for real-time waveform pulse with auto-resume
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass && this.mediaStream) {
-        if (this.audioContext && this.audioContext.state !== 'closed') {
-          this.audioContext.close().catch(() => {});
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+          this.audioContext = new AudioContextClass();
         }
-        this.audioContext = new AudioContextClass();
+
+        if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(() => {});
+        }
+
         const source = this.audioContext.createMediaStreamSource(this.mediaStream);
         const analyser = this.audioContext.createAnalyser();
         analyser.fftSize = 64;
@@ -109,8 +136,20 @@ export class VoiceController {
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         let consecutiveVoiceHits = 0;
+
+        if (this.animFrameId) {
+          cancelAnimationFrame(this.animFrameId);
+          this.animFrameId = null;
+        }
+
         const loop = () => {
           if (!this.isListening && !this.isSpeaking) return;
+
+          // Wake up suspended AudioContext if browser paused it during silence
+          if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch(() => {});
+          }
+
           analyser.getByteFrequencyData(dataArray);
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
@@ -141,89 +180,164 @@ export class VoiceController {
 
     // 3. Setup MediaRecorder for universal AI transcription backup
     try {
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : '';
+      if (this.mediaStream) {
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
 
-      this.mediaRecorder = mimeType
-        ? new MediaRecorder(this.mediaStream, { mimeType })
-        : new MediaRecorder(this.mediaStream);
-
-      this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          this.audioChunks.push(e.data);
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+          try {
+            this.mediaRecorder.stop();
+          } catch {}
         }
-      };
 
-      this.mediaRecorder.start(250);
+        this.mediaRecorder = mimeType
+          ? new MediaRecorder(this.mediaStream, { mimeType })
+          : new MediaRecorder(this.mediaStream);
+
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            this.audioChunks.push(e.data);
+          }
+        };
+
+        this.mediaRecorder.start(250);
+      }
     } catch (recErr) {
       console.warn('MediaRecorder error:', recErr);
     }
 
-    // 4. Setup SpeechRecognition (fresh instance every time)
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRec) {
-      try {
-        if (this.recognition) {
-          try {
-            this.recognition.stop();
-          } catch {}
-        }
+    // 4. Setup SpeechRecognition with auto-restart on browser timeouts/silence
+    this.startRecognitionSession();
 
-        const recognition = new SpeechRec();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onresult = (event: any) => {
-          let interim = '';
-          let final = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const item = event.results[i];
-            if (item.isFinal) {
-              final += item[0].transcript;
-            } else {
-              interim += item[0].transcript;
-            }
-          }
-
-          const text = (final || interim).trim();
-          if (text) {
-            this.lastCapturedText = text;
-            if (this.isSpeaking) {
-              this.interruptSpeaking();
-            }
-            this.onTranscriptUpdate?.(text, Boolean(final));
-          }
-        };
-
-        recognition.onerror = (event: any) => {
-          console.warn('Speech recognition warning:', event.error);
-          if (event.error === 'not-allowed') {
-            this.onStatusChange?.('unsupported', 'Microphone access blocked.');
-          }
-        };
-
-        recognition.onend = () => {
-          // If stopped while isListening is still true, don't crash
-        };
-
-        this.recognition = recognition;
-        this.recognition.start();
-      } catch (e) {
-        console.warn('SpeechRecognition failed to start directly:', e);
-      }
-    }
-
-    this.isListening = true;
     onStatus('listening');
     return true;
   }
 
+  // Internal persistent SpeechRecognition session that automatically recovers
+  private startRecognitionSession(): void {
+    if (!this.isListening) return;
+
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+
+    try {
+      if (this.recognition) {
+        try {
+          this.recognition.onresult = null;
+          this.recognition.onerror = null;
+          this.recognition.onend = null;
+          this.recognition.stop();
+        } catch {}
+        this.recognition = null;
+      }
+
+      const recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            final += item[0].transcript;
+          } else {
+            interim += item[0].transcript;
+          }
+        }
+
+        const text = (final || interim).trim();
+        if (text) {
+          this.lastCapturedText = text;
+          if (this.isSpeaking) {
+            this.interruptSpeaking();
+          }
+          this.onTranscriptUpdate?.(text, Boolean(final));
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        const error = event.error;
+        // Non-fatal browser silence or network glitches
+        if (error === 'no-speech' || error === 'aborted') {
+          return;
+        }
+        if (error === 'not-allowed' || error === 'service-not-allowed') {
+          this.onStatusChange?.('unsupported', 'Microphone access blocked. Please re-allow microphone access in your browser.');
+          return;
+        }
+        console.warn('Speech recognition notice:', error);
+      };
+
+      recognition.onend = () => {
+        // Browser SpeechRecognition engine shuts down after silence or 60s continuous session.
+        // If the user is still in listening mode, automatically restart recognition session!
+        if (this.isListening) {
+          if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+          }
+          this.restartTimer = setTimeout(() => {
+            if (this.isListening) {
+              this.startRecognitionSession();
+            }
+          }, 80);
+        }
+      };
+
+      this.recognition = recognition;
+      recognition.start();
+    } catch (e: any) {
+      console.warn('SpeechRecognition start error:', e);
+      if (this.isListening) {
+        if (this.restartTimer) clearTimeout(this.restartTimer);
+        this.restartTimer = setTimeout(() => {
+          if (this.isListening) this.startRecognitionSession();
+        }, 300);
+      }
+    }
+  }
+
+  // Temporarily pauses listening while AI is thinking/speaking, keeping microphone hardware alive
+  public pauseListening(): void {
+    this.isListening = false;
+
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+
+    if (this.recognition) {
+      try {
+        this.recognition.onresult = null;
+        this.recognition.onerror = null;
+        this.recognition.onend = null;
+        this.recognition.stop();
+      } catch {}
+      this.recognition = null;
+    }
+
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try {
+        this.mediaRecorder.stop();
+      } catch {}
+    }
+
+    // Do NOT stop mediaStream tracks here! Keep the warm hardware microphone session alive!
+  }
+
   public async stopListening(): Promise<string> {
     this.isListening = false;
+
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
 
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
@@ -231,13 +345,11 @@ export class VoiceController {
     }
     this.onLevelUpdate?.(0);
 
-    if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
-
     if (this.recognition) {
       try {
+        this.recognition.onresult = null;
+        this.recognition.onerror = null;
+        this.recognition.onend = null;
         this.recognition.stop();
       } catch {}
       this.recognition = null;
@@ -248,11 +360,6 @@ export class VoiceController {
       try {
         this.mediaRecorder.stop();
       } catch {}
-    }
-
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
-      this.mediaStream = null;
     }
 
     // If speech recognition already provided a valid transcript, return it
@@ -304,6 +411,54 @@ export class VoiceController {
 
     this.onStatusChange?.('idle');
     return this.lastCapturedText.trim();
+  }
+
+  // Completely shuts down microphone hardware when closing the call or modal
+  public stopSession(): void {
+    this.isListening = false;
+
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+
+    if (this.animFrameId) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
+    }
+    this.onLevelUpdate?.(0);
+
+    if (this.recognition) {
+      try {
+        this.recognition.onresult = null;
+        this.recognition.onerror = null;
+        this.recognition.onend = null;
+        this.recognition.stop();
+      } catch {}
+      this.recognition = null;
+    }
+
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try {
+        this.mediaRecorder.stop();
+      } catch {}
+      this.mediaRecorder = null;
+    }
+
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      this.audioContext.close().catch(() => {});
+      this.audioContext = null;
+    }
+
+    if (this.mediaStream) {
+      try {
+        this.mediaStream.getTracks().forEach((track) => track.stop());
+      } catch {}
+      this.mediaStream = null;
+    }
+
+    this.interruptSpeaking();
+    this.onStatusChange?.('idle');
   }
 
   public setOnInterrupt(cb?: () => void): void {

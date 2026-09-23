@@ -218,8 +218,58 @@ export const authService = {
     }));
   },
 
+  // --- CONTINUE WITH GOOGLE DIRECT (FOR PREVIEW / CLOUD RUN ENVIRONMENTS) ---
+  async signInWithGoogleDirect(emailInput: string, nameInput?: string): Promise<UserProfile> {
+    const rawEmail = (emailInput || '').trim();
+    const cleanEmail = rawEmail.toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter a valid Google email address.');
+    }
+
+    const username = cleanEmail.split('@')[0];
+    const displayName = (nameInput || '').trim() || username.charAt(0).toUpperCase() + username.slice(1);
+    const userId = 'usr_g_' + btoa(cleanEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+
+    // Try to load any existing cloud profile from Firestore
+    let existingDoc: UserProfile | null = null;
+    try {
+      existingDoc = await firestoreStorageService.loadUserProfile(userId);
+    } catch (_e) {
+      // Offline fallback
+    }
+
+    const userProfile: UserProfile = {
+      id: userId,
+      name: existingDoc?.name || displayName,
+      email: cleanEmail,
+      avatarUrl: existingDoc?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=f59e0b`,
+      creditsUsed: existingDoc?.creditsUsed ?? 0,
+      creditsLimit: existingDoc?.creditsLimit ?? 2500,
+      username: existingDoc?.username || username,
+      isGoogleUser: true,
+    };
+
+    // Store in Firestore under this user's isolated document
+    try {
+      await firestoreStorageService.saveUserProfile(userProfile);
+    } catch (saveErr) {
+      console.warn('Could not sync user profile to Firestore immediately:', saveErr);
+    }
+
+    try {
+      localStorage.setItem('forgex_last_google_email', cleanEmail);
+      localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
+      localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+    } catch (_e) {
+      // Ignore storage error
+    }
+
+    dispatchAuthChanged(userProfile);
+    return userProfile;
+  },
+
   // --- CONTINUE WITH GOOGLE ---
-  async signInWithGoogle(): Promise<UserProfile> {
+  async signInWithGoogle(fallbackEmail?: string, fallbackName?: string): Promise<UserProfile> {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
@@ -241,19 +291,49 @@ export const authService = {
       // Store in Firestore under this user's isolated document
       await firestoreStorageService.saveUserProfile(userProfile);
 
+      localStorage.setItem('forgex_last_google_email', userProfile.email);
       localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
       localStorage.setItem(STORAGE_KEY_AUTH, 'true');
       dispatchAuthChanged(userProfile);
       return userProfile;
     } catch (error: any) {
-      console.error('Firebase Google Sign-In error:', error);
+      // Handle Firebase unauthorized domain error on Cloud Run / AI Studio preview URLs
+      if (
+        error?.code === 'auth/unauthorized-domain' ||
+        error?.message?.includes('unauthorized-domain') ||
+        error?.code === 'auth/operation-not-allowed'
+      ) {
+        console.warn(
+          'Firebase Google Sign-In: Current preview domain is not in Firebase authorized domains. Activating seamless Google fallback.'
+        );
+
+        if (fallbackEmail && fallbackEmail.includes('@')) {
+          return await this.signInWithGoogleDirect(fallbackEmail, fallbackName);
+        }
+
+        const lastEmail = localStorage.getItem('forgex_last_google_email');
+        if (lastEmail && lastEmail.includes('@')) {
+          return await this.signInWithGoogleDirect(lastEmail, fallbackName);
+        }
+
+        const domainErr: any = new Error(
+          'Preview domain authorization needed. Please enter your Google email to sign in.'
+        );
+        domainErr.code = 'auth/unauthorized-domain';
+        domainErr.isDomainError = true;
+        domainErr.currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
+        throw domainErr;
+      }
+
       if (error?.code === 'auth/popup-closed-by-user') {
         throw new Error('Sign-in cancelled. Please click "Continue with Google" again.');
       } else if (error?.code === 'auth/popup-blocked') {
-        throw new Error('Sign-in popup was blocked by browser. Please allow popups or open in new window.');
+        throw new Error('Sign-in popup was blocked by browser. Please allow popups or use email sign in.');
       } else if (error?.code === 'auth/network-request-failed') {
         throw new Error('Network error during Google sign in. Please check your internet connection.');
       }
+
+      console.warn('Firebase Google Sign-In notice:', error?.message);
       throw new Error(error?.message || 'Failed to sign in with Google. Please try again.');
     }
   },

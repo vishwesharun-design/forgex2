@@ -1,15 +1,17 @@
 import React from 'react';
-import { X, Heart, Maximize2, Download, Video as VideoIcon, Image as ImageIcon } from 'lucide-react';
-import { GeneratedImage, GeneratedVideo, ForgeXTheme } from '../types';
+import { X, Heart, Maximize2, Download, Video as VideoIcon, Image as ImageIcon, Music, Play } from 'lucide-react';
+import { GeneratedImage, GeneratedVideo, GeneratedSong, ForgeXTheme } from '../types';
 
 interface FavoritesModalProps {
   isOpen: boolean;
   onClose: () => void;
   images: GeneratedImage[];
   videos: GeneratedVideo[];
+  songs?: GeneratedSong[];
   theme: ForgeXTheme;
   onViewImage: (img: GeneratedImage) => void;
   onViewVideo: (vid: GeneratedVideo) => void;
+  onSelectSong?: (song: GeneratedSong) => void;
 }
 
 export const FavoritesModal: React.FC<FavoritesModalProps> = ({
@@ -17,16 +19,19 @@ export const FavoritesModal: React.FC<FavoritesModalProps> = ({
   onClose,
   images,
   videos,
+  songs = [],
   theme,
   onViewImage,
   onViewVideo,
+  onSelectSong,
 }) => {
   if (!isOpen) return null;
   const isDark = theme === 'dark';
 
   const favoriteImages = images.filter((img) => img.isFavorite);
   const favoriteVideos = videos.filter((vid) => vid.isFavorite);
-  const totalFavorites = favoriteImages.length + favoriteVideos.length;
+  const favoriteSongs = songs.filter((s) => s.isFavorite);
+  const totalFavorites = favoriteImages.length + favoriteVideos.length + favoriteSongs.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md bg-black/65 animate-in fade-in duration-200">
@@ -117,9 +122,63 @@ export const FavoritesModal: React.FC<FavoritesModalProps> = ({
             </div>
           )}
 
+          {/* Favorited Songs */}
+          {favoriteSongs.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-3 flex items-center gap-1.5">
+                <Music className="w-3.5 h-3.5 text-amber-400" />
+                <span>Songs ({favoriteSongs.length})</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {favoriteSongs.map((song) => (
+                  <div
+                    key={song.id}
+                    onClick={() => {
+                      onClose();
+                      if (onSelectSong) onSelectSong(song);
+                    }}
+                    className={`group p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 ${
+                      isDark
+                        ? 'bg-neutral-950/60 border-neutral-800 hover:border-amber-500/50 hover:bg-neutral-900'
+                        : 'bg-neutral-50 border-neutral-200 hover:border-amber-500/50 hover:bg-white'
+                    }`}
+                  >
+                    <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 shadow-md bg-black">
+                      <img src={song.coverUrl} alt={song.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Play className="w-5 h-5 fill-amber-400 text-amber-400 ml-0.5" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <h5 className="font-bold text-sm truncate leading-snug">
+                          {song.title}
+                        </h5>
+                        <span className="text-[10px] font-mono text-amber-400 shrink-0 tabular-nums">
+                          {song.durationSeconds}s
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-400 truncate mt-0.5">
+                        {song.artist || 'AI Studio'} • {song.genre}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          {song.mood}
+                        </span>
+                        <span className="text-[9px] font-mono text-neutral-400">
+                          {song.tempoBpm} BPM
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {totalFavorites === 0 && (
             <div className="py-16 text-center text-neutral-500 text-xs">
-              No favorites saved yet. Click the heart icon on any image or video in your studios to add it here.
+              No favorites saved yet. Click the heart icon on any track, image, or video in your studios to add it here.
             </div>
           )}
         </div>
