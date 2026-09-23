@@ -20,11 +20,14 @@ import {
   Layers,
   Search,
   Cpu,
-  X
+  X,
+  Globe,
+  RotateCcw
 } from 'lucide-react';
 import { AIAgent, AgentExecution, ForgeXTheme, ForgeXModelId, AgentCategory, AgentToolType } from '../types';
 import { agentService, PRESET_AGENTS } from '../services/agentService';
 import { ModelSelector } from './ModelSelector';
+import { AgentBrowser } from './AgentBrowser';
 
 interface AgentWorkspaceProps {
   isDark: boolean;
@@ -43,6 +46,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 }) => {
   const [agents, setAgents] = useState<AIAgent[]>(() => agentService.getAgents());
   const [selectedAgentId, setSelectedAgentId] = useState<string>(() => agents[0]?.id || 'agent-research');
+  const [agentMode, setAgentMode] = useState<'browser' | 'task_console'>('browser');
   const [taskPrompt, setTaskPrompt] = useState<string>('');
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [activeStepText, setActiveStepText] = useState<string>('');
@@ -137,6 +141,12 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     setNewPrompt('');
   };
 
+  const handleClearExecutions = () => {
+    agentService.clearExecutions();
+    setExecutions([]);
+    setCurrentExecution(null);
+  };
+
   const handleDeleteAgent = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = agentService.deleteAgent(id);
@@ -156,18 +166,57 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
-              Autonomous AI Agents
+              Autonomous AI Agents & Browser
               <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
-                Multi-Step Reasoning
+                Web Automation & Actions
               </span>
             </h1>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Deploy goal-oriented autonomous operatives equipped with custom tools, memory, and execution pipelines.
+              Autonomous operatives that can open browser, type anything in browser, open any website, and execute pipelines.
             </p>
           </div>
         </div>
 
+        {/* Mode Switcher & Actions */}
         <div className="flex items-center gap-2">
+          {/* Mode Pill Toggle */}
+          <div className={`p-1 rounded-xl border flex items-center gap-1 ${isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
+            <button
+              type="button"
+              onClick={() => setAgentMode('browser')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                agentMode === 'browser'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Agent Browser</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAgentMode('task_console')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                agentMode === 'task_console'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Task Runner</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleClearExecutions}
+            className="px-3 py-1.5 rounded-xl border border-neutral-800 hover:text-red-400 hover:bg-neutral-850 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Clear all saved agent execution history"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear History</span>
+          </button>
+
           <button
             type="button"
             id="create-custom-agent-btn"
@@ -177,6 +226,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             <Plus className="w-4 h-4" />
             <span>Create Agent</span>
           </button>
+
           <ModelSelector
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
@@ -253,151 +303,163 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* Right Active Agent Console */}
+        {/* Right Active Agent Console or Browser */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Active Agent Banner */}
-          {activeAgent && (
-            <div className={`p-5 border-b flex items-start justify-between gap-4 ${isDark ? 'border-neutral-850 bg-neutral-900/30' : 'border-neutral-200 bg-white'}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  {getAgentIcon(activeAgent.role)}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold">{activeAgent.name}</h2>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-                      ACTIVE OPERATIVE
-                    </span>
-                  </div>
-                  <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                    {activeAgent.description}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                {activeAgent.capabilities.map((cap) => (
-                  <span
-                    key={cap}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium"
-                  >
-                    {cap}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Interactive Task Output / History */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {isExecuting ? (
-              <div className="flex flex-col items-center justify-center h-full space-y-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-full border-4 border-amber-500/20 border-t-amber-500 animate-spin" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Bot className="w-6 h-6 text-amber-400 animate-pulse" />
-                  </div>
-                </div>
-                <div className="text-center space-y-1">
-                  <h3 className="text-sm font-bold text-amber-400">Agent Executing Pipeline</h3>
-                  <p className="text-xs text-neutral-400">{activeStepText || 'Autonomous reasoning in progress...'}</p>
-                </div>
-              </div>
-            ) : currentExecution ? (
-              <div className="space-y-6 max-w-4xl mx-auto">
-                {/* Task Objective Badge */}
-                <div className={`p-4 rounded-2xl border ${isDark ? 'bg-neutral-900/60 border-neutral-850' : 'bg-white border-neutral-200'}`}>
-                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Assigned Task</span>
-                  <p className="text-xs font-semibold mt-1">{currentExecution.taskPrompt}</p>
-                </div>
-
-                {/* Multi-Step Pipeline Tracking */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Execution Pipeline</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {currentExecution.steps.map((step, idx) => (
-                      <div
-                        key={step.id || idx}
-                        className={`p-3 rounded-xl border text-xs space-y-1 ${
-                          step.status === 'completed'
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                            : step.status === 'failed'
-                            ? 'border-red-500/40 bg-red-500/10 text-red-300'
-                            : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>{step.title}</span>
-                        </div>
-                        <p className="text-[11px] text-neutral-400">{step.detail}</p>
+          {agentMode === 'browser' ? (
+            <AgentBrowser
+              isDark={isDark}
+              theme={theme}
+              agentName={activeAgent?.name}
+              initialUrl="https://www.google.com"
+              onSendToChat={onSendToChat}
+            />
+          ) : (
+            <>
+              {/* Active Agent Banner */}
+              {activeAgent && (
+                <div className={`p-5 border-b flex items-start justify-between gap-4 ${isDark ? 'border-neutral-850 bg-neutral-900/30' : 'border-neutral-200 bg-white'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                      {getAgentIcon(activeAgent.role)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold">{activeAgent.name}</h2>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                          ACTIVE OPERATIVE
+                        </span>
                       </div>
+                      <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                        {activeAgent.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {activeAgent.capabilities.map((cap) => (
+                      <span
+                        key={cap}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium"
+                      >
+                        {cap}
+                      </span>
                     ))}
                   </div>
                 </div>
+              )}
 
-                {/* Final Deliverable Content */}
-                <div className={`p-6 rounded-2xl border space-y-3 ${isDark ? 'bg-neutral-900/40 border-neutral-850' : 'bg-white border-neutral-200'}`}>
-                  <div className="flex items-center justify-between pb-3 border-b border-neutral-800/60">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Final Deliverable</span>
-                    {onSendToChat && currentExecution.finalResponse && (
-                      <button
-                        onClick={() => onSendToChat(`[Agent: ${activeAgent.name}]\n${(currentExecution.finalResponse || '').slice(0, 1500)}`)}
-                        className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                      >
-                        <ArrowRight className="w-3.5 h-3.5" />
-                        <span>Send to Chat</span>
-                      </button>
-                    )}
+              {/* Interactive Task Output / History */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {isExecuting ? (
+                  <div className="flex flex-col items-center justify-center h-full space-y-4">
+                    <div className="relative">
+                      <div className="w-14 h-14 rounded-full border-4 border-amber-500/20 border-t-amber-500 animate-spin" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Bot className="w-6 h-6 text-amber-400 animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="text-center space-y-1">
+                      <h3 className="text-sm font-bold text-amber-400">Agent Executing Pipeline</h3>
+                      <p className="text-xs text-neutral-400">{activeStepText || 'Autonomous reasoning in progress...'}</p>
+                    </div>
                   </div>
-                  <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-neutral-200">
-                    {currentExecution.finalResponse}
-                  </pre>
+                ) : currentExecution ? (
+                  <div className="space-y-6 max-w-4xl mx-auto">
+                    {/* Task Objective Badge */}
+                    <div className={`p-4 rounded-2xl border ${isDark ? 'bg-neutral-900/60 border-neutral-850' : 'bg-white border-neutral-200'}`}>
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Assigned Task</span>
+                      <p className="text-xs font-semibold mt-1">{currentExecution.taskPrompt}</p>
+                    </div>
+
+                    {/* Multi-Step Pipeline Tracking */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Execution Pipeline</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {currentExecution.steps.map((step, idx) => (
+                          <div
+                            key={step.id || idx}
+                            className={`p-3 rounded-xl border text-xs space-y-1 ${
+                              step.status === 'completed'
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                                : step.status === 'failed'
+                                ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                                : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>{step.title}</span>
+                            </div>
+                            <p className="text-[11px] text-neutral-400">{step.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Final Deliverable Content */}
+                    <div className={`p-6 rounded-2xl border space-y-3 ${isDark ? 'bg-neutral-900/40 border-neutral-850' : 'bg-white border-neutral-200'}`}>
+                      <div className="flex items-center justify-between pb-3 border-b border-neutral-800/60">
+                        <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Final Deliverable</span>
+                        {onSendToChat && currentExecution.finalResponse && (
+                          <button
+                            onClick={() => onSendToChat(`[Agent: ${activeAgent.name}]\n${(currentExecution.finalResponse || '').slice(0, 1500)}`)}
+                            className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            <span>Send to Chat</span>
+                          </button>
+                        )}
+                      </div>
+                      <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-neutral-200">
+                        {currentExecution.finalResponse}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+                    <Bot className="w-12 h-12 text-neutral-500 opacity-40" />
+                    <h3 className="text-sm font-bold text-neutral-300">Ready for Agent Assignment</h3>
+                    <p className="text-xs text-neutral-500 max-w-md">
+                      Assign a complex goal, coding task, research topic, or data directive to{' '}
+                      <span className="text-amber-400 font-semibold">{activeAgent.name}</span> below.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Task Assignment Input Bar */}
+              <div className={`p-4 border-t ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white'}`}>
+                <div className="max-w-4xl mx-auto flex items-center gap-3">
+                  <input
+                    id="agent-task-input"
+                    type="text"
+                    placeholder={`Instruct ${activeAgent.name} (e.g. "Research and synthesize the top 3 architectural patterns for real-time webapps...")`}
+                    value={taskPrompt}
+                    onChange={(e) => setTaskPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRunTask();
+                    }}
+                    className={`flex-1 px-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 transition-colors ${
+                      isDark
+                        ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-500'
+                        : 'bg-neutral-100 border-neutral-300 text-neutral-900 placeholder-neutral-400'
+                    }`}
+                  />
+
+                  <button
+                    id="agent-dispatch-btn"
+                    type="button"
+                    onClick={handleRunTask}
+                    disabled={isExecuting || !taskPrompt.trim()}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center gap-1.5 transition-all shrink-0 active:scale-95"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Dispatch Agent</span>
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
-                <Bot className="w-12 h-12 text-neutral-500 opacity-40" />
-                <h3 className="text-sm font-bold text-neutral-300">Ready for Agent Assignment</h3>
-                <p className="text-xs text-neutral-500 max-w-md">
-                  Assign a complex goal, coding task, research topic, or data directive to{' '}
-                  <span className="text-amber-400 font-semibold">{activeAgent.name}</span> below.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Bottom Task Assignment Input Bar */}
-          <div className={`p-4 border-t ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white'}`}>
-            <div className="max-w-4xl mx-auto flex items-center gap-3">
-              <input
-                id="agent-task-input"
-                type="text"
-                placeholder={`Instruct ${activeAgent.name} (e.g. "Research and synthesize the top 3 architectural patterns for real-time webapps...")`}
-                value={taskPrompt}
-                onChange={(e) => setTaskPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRunTask();
-                }}
-                className={`flex-1 px-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 transition-colors ${
-                  isDark
-                    ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-500'
-                    : 'bg-neutral-100 border-neutral-300 text-neutral-900 placeholder-neutral-400'
-                }`}
-              />
-
-              <button
-                id="agent-dispatch-btn"
-                type="button"
-                onClick={handleRunTask}
-                disabled={isExecuting || !taskPrompt.trim()}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center gap-1.5 transition-all shrink-0 active:scale-95"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Dispatch Agent</span>
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 

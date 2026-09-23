@@ -18,9 +18,12 @@ import {
   Layers,
   ListMusic,
   Sliders,
+  ShieldCheck,
+  Cloud,
+  Mic,
 } from 'lucide-react';
 import { GeneratedSong } from '../types';
-import { parseLyricsSections, getGenreChordInfo, LyricsSection } from '../services/musicService';
+import { parseLyricsSections, getGenreChordInfo, LyricsSection, musicService } from '../services/musicService';
 
 interface AudioTrackPlayerProps {
   song: GeneratedSong;
@@ -34,6 +37,7 @@ interface AudioTrackPlayerProps {
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onVolumeChange?: (vol: number) => void;
+  onSaveToCloud?: (song: GeneratedSong) => void;
 }
 
 export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
@@ -48,11 +52,14 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
   onToggleFavorite,
   onDelete,
   onVolumeChange,
+  onSaveToCloud,
 }) => {
-  const [activeTab, setActiveTab] = useState<'lyrics' | 'structure' | 'chords'>('lyrics');
+  const [activeTab, setActiveTab] = useState<'lyrics' | 'structure' | 'chords' | 'mixer'>('lyrics');
   const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
-  const [volume, setVolume] = useState(0.8);
+  const [volume, setVolume] = useState(0.85);
+  const [beatVol, setBeatVol] = useState(musicService.getBeatVolume() || 0.85);
+  const [vocalVol, setVocalVol] = useState(musicService.getVocalVolume() || 0.85);
   const [isMuted, setIsMuted] = useState(false);
 
   const duration = playbackDuration || song.durationSeconds || 30;
@@ -162,67 +169,87 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
     >
       {/* Top Banner Header with Track Attributes */}
       <div
-        className={`px-5 py-3.5 border-b flex flex-wrap items-center justify-between gap-3 ${
-          isDark ? 'bg-neutral-950/60 border-neutral-800/80' : 'bg-neutral-50 border-neutral-200'
+        className={`px-5 py-3 border-b flex flex-wrap items-center justify-between gap-3 ${
+          isDark ? 'bg-neutral-950/70 border-neutral-800/80' : 'bg-neutral-50 border-neutral-200'
         }`}
       >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          {song.isRealLifeHit ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold">
-              <span>⭐ Real-Life Hit</span>
-              {song.artist && <span className="opacity-90 font-normal">• {song.artist}</span>}
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold">
-              <Music className="w-3.5 h-3.5" />
-              <span>AI Studio Master</span>
-            </div>
-          )}
+          <div className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold leading-none shrink-0">
+            <Music className="w-3.5 h-3.5 shrink-0" />
+            <span>AI Studio Track</span>
+            {song.artist && <span className="opacity-80 font-normal truncate max-w-[180px]">• {song.artist}</span>}
+          </div>
 
-          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-200 border border-neutral-700">
-            {song.genre}
-          </span>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-neutral-800/80 text-neutral-300">
-            {song.mood}
-          </span>
-          <span className="text-xs font-mono text-neutral-400">
-            {song.tempoBpm} BPM
-          </span>
-          <span className="text-xs font-mono text-neutral-400">
-            • {chordData.key}
-          </span>
-          <span className="text-xs font-mono text-neutral-500">
-            • {duration}s
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {song.hasVoice !== false && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 leading-none">
+                <Mic className="w-3 h-3 text-cyan-400" />
+                <span>Voice: {song.voiceProfile || 'Zephyr'}</span>
+              </span>
+            )}
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-800/90 text-neutral-200 border border-neutral-700/60 inline-flex items-center leading-none">
+              {song.genre}
+            </span>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800/60 text-neutral-300 border-neutral-700/40' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
+              {song.mood}
+            </span>
+            <span className="text-xs font-mono text-neutral-400 px-1 inline-flex items-center leading-none">
+              {song.tempoBpm} BPM
+            </span>
+            <span className="text-xs font-mono text-neutral-400 inline-flex items-center leading-none">
+              • {chordData.key}
+            </span>
+            <span className="text-xs font-mono text-neutral-500 inline-flex items-center leading-none">
+              • {duration}s {duration >= 210 ? '(3:30)' : duration >= 180 ? '(3:00)' : ''}
+            </span>
+          </div>
         </div>
 
         {/* Quick actions top right */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onSaveToCloud && (
+            <button
+              onClick={() => onSaveToCloud(song)}
+              title={song.cloudStorageUrl ? 'Stored in Firebase Storage' : 'Save Track Audio to Firebase Storage'}
+              className={`inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-xl font-medium transition-colors leading-none ${
+                song.cloudStorageUrl
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                  : isDark
+                  ? 'bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700 border border-neutral-700'
+                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 border border-neutral-200'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span>{song.cloudStorageUrl ? 'Cloud Synced' : 'Save to Firebase'}</span>
+            </button>
+          )}
           <button
             onClick={() => onToggleFavorite(song.id)}
             title={song.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            className={`p-2 rounded-xl transition-colors ${
+            className={`w-8 h-8 rounded-xl inline-flex items-center justify-center transition-colors ${
               song.isFavorite
-                ? 'text-red-500 bg-red-500/10'
-                : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+                ? 'text-red-500 bg-red-500/15 border border-red-500/30'
+                : isDark
+                ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/80 border border-neutral-700/60'
+                : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 border border-neutral-200'
             }`}
           >
-            <Heart className={`w-4 h-4 ${song.isFavorite ? 'fill-current' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 ${song.isFavorite ? 'fill-current' : ''}`} />
           </button>
           <button
             onClick={() => onDownload(song)}
-            title="Export High-Res WAV Master"
-            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+            title="Export High-Res Master Audio File"
+            className="inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-xl font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors leading-none"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export WAV</span>
+            <Download className="w-3.5 h-3.5 shrink-0" />
+            <span>Export Audio</span>
           </button>
           <button
             onClick={() => onDelete(song.id)}
             title="Delete Track"
-            className="p-2 rounded-xl text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            className="w-8 h-8 rounded-xl inline-flex items-center justify-center text-neutral-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -527,22 +554,22 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
         <div className="lg:col-span-6 flex flex-col justify-between p-5 sm:p-6 space-y-5">
           {/* Top Section: Title & Prompt info */}
           <div>
-            <div className="flex items-center gap-2 flex-wrap mb-0.5">
-              <h3 className="font-display font-extrabold text-lg sm:text-xl line-clamp-1">
+            <div className="flex items-center gap-2 flex-wrap mb-1 min-w-0">
+              <h3 className="font-display font-extrabold text-lg sm:text-xl leading-tight truncate max-w-full" title={song.title}>
                 {song.title}
               </h3>
               {song.isRealLifeHit && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
                   ⭐ Real Hit
                 </span>
               )}
             </div>
             {song.artist && (
-              <p className="text-xs font-semibold text-amber-400 mb-1">
+              <p className="text-xs font-semibold text-amber-400 mb-1 leading-normal flex items-center gap-1">
                 by {song.artist}
               </p>
             )}
-            <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+            <p className={`text-xs mt-1 line-clamp-2 leading-relaxed italic text-left ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
               "{song.prompt}"
             </p>
           </div>
@@ -594,7 +621,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
           {/* Dynamic Audio Visualizer Equalizer Bars */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] font-mono text-amber-400">
-              <span className="font-semibold">{formatTime(playbackTime)}</span>
+              <span className="font-semibold leading-none">{formatTime(playbackTime)}</span>
 
               {/* 16-bar animated audio frequency spectrum */}
               <div className="flex items-end gap-1 h-5 px-3">
@@ -612,7 +639,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                 ))}
               </div>
 
-              <span className="text-neutral-400">{formatTime(duration)}</span>
+              <span className="text-neutral-400 leading-none">{formatTime(duration)}</span>
             </div>
 
             {/* Seekable Audio Progress Scrubber */}
@@ -630,65 +657,108 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
           </div>
 
           {/* Full Master Transport & Volume Controls */}
-          <div className="flex items-center justify-between gap-4 pt-1">
-            {/* Rewind 5s */}
-            <button
-              onClick={() => handleSkip(-5)}
-              title="Skip back 5 seconds"
-              className="p-2 rounded-xl text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-
-            {/* Central Play/Pause Button */}
-            <button
-              onClick={() => onPlayToggle(song)}
-              className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-neutral-950 font-bold flex items-center gap-2 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all"
-            >
-              {isPlaying ? (
-                <>
-                  <Pause className="w-4 h-4 fill-current" />
-                  <span>Pause Track</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                  <span>Play Master</span>
-                </>
-              )}
-            </button>
-
-            {/* Forward 5s */}
-            <button
-              onClick={() => handleSkip(5)}
-              title="Skip forward 5 seconds"
-              className="p-2 rounded-xl text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 transition-colors"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-
-            {/* Volume Control */}
-            <div className="flex items-center gap-2 pl-2 border-l border-neutral-800">
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-neutral-800/40 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2">
+              {/* Rewind 5s */}
               <button
-                onClick={handleToggleMute}
-                className="text-neutral-400 hover:text-neutral-200 transition-colors"
-                title={isMuted ? 'Unmute' : 'Mute'}
+                onClick={() => handleSkip(-5)}
+                title="Skip back 5 seconds"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 transition-colors"
               >
-                {isMuted ? (
-                  <VolumeX className="w-4 h-4 text-red-400" />
+                <RotateCcw className="w-4 h-4" />
+              </button>
+
+              {/* Central Play/Pause Button */}
+              <button
+                onClick={() => onPlayToggle(song)}
+                className="h-10 px-5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-neutral-950 font-bold inline-flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all text-xs leading-none"
+              >
+                {isPlaying ? (
+                  <>
+                    <Pause className="w-4 h-4 fill-current shrink-0" />
+                    <span>Pause Track</span>
+                  </>
                 ) : (
-                  <Volume2 className="w-4 h-4" />
+                  <>
+                    <Play className="w-4 h-4 fill-current ml-0.5 shrink-0" />
+                    <span>Play Master</span>
+                  </>
                 )}
               </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeSlider}
-                className="w-16 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
-              />
+
+              {/* Forward 5s */}
+              <button
+                onClick={() => handleSkip(5)}
+                title="Skip forward 5 seconds"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 transition-colors"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Stems Volume Controls: Beat & Voice & Master */}
+            <div className="flex items-center gap-3 pl-3 border-l border-neutral-800 shrink-0 flex-wrap sm:flex-nowrap">
+              {song.hasVoice !== false && (
+                <div className="flex items-center gap-1.5" title="AI Voice / Vocal Level">
+                  <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span className="text-[10px] font-mono text-cyan-300">Vox</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={vocalVol}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setVocalVol(v);
+                      musicService.setVocalVolume(v);
+                    }}
+                    className="w-14 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-cyan-400"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5" title="Instrumental Beat Level">
+                <Music className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[10px] font-mono text-amber-300">Beat</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={beatVol}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setBeatVol(v);
+                    musicService.setBeatVolume(v);
+                  }}
+                  className="w-14 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
+                />
+              </div>
+
+              {/* Master Volume */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleToggleMute}
+                  className="text-neutral-400 hover:text-neutral-200 transition-colors"
+                  title={isMuted ? 'Unmute Master' : 'Mute Master'}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeSlider}
+                  className="w-14 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
+                />
+              </div>
             </div>
           </div>
         </div>

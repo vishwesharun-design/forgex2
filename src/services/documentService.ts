@@ -2,13 +2,13 @@ import { DocumentItem, DocumentFileType, DocQAMessage, QuizQuestion } from '../t
 import { authService } from './authService';
 
 function getDocStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_documents_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_documents_${partition}`;
 }
 
 function getDocQAStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_doc_qa_history_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_doc_qa_history_${partition}`;
 }
 
 const DEFAULT_DOCS: DocumentItem[] = [

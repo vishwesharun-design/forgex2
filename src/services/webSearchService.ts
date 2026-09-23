@@ -21,8 +21,8 @@ export interface WebSearchResult {
 }
 
 function getSearchStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_web_searches_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_web_searches_${partition}`;
 }
 
 export const webSearchService = {

@@ -5,8 +5,8 @@ import { firestoreStorageService } from './firestoreStorageService';
 const MOCK_CHAT_IDS = new Set(['chat_1', 'chat_2', 'chat_3', 'chat_4']);
 
 function getChatStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_chat_sessions_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_chat_sessions_${partition}`;
 }
 
 export const chatService = {

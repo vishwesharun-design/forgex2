@@ -2,8 +2,8 @@ import { CanvasBoard, CanvasNode, CanvasEdge } from '../types';
 import { authService } from './authService';
 
 function getBoardStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_canvas_boards_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_canvas_boards_${partition}`;
 }
 
 export const canvasService = {
@@ -50,6 +50,22 @@ export const canvasService = {
     return list;
   },
 
+  clearAllBoards(): CanvasBoard[] {
+    const blank = this.createBlankBoard('New Blank Canvas');
+    this.saveBoards([blank]);
+    return [blank];
+  },
+
+  createBlankBoard(name: string = 'Untitled Canvas'): CanvasBoard {
+    return {
+      id: 'board-' + Date.now(),
+      name,
+      nodes: [],
+      edges: [],
+      lastModified: Date.now(),
+    };
+  },
+
   async generateCanvas(topic: string, canvasType: 'mindmap' | 'flowchart' | 'brainstorm' = 'mindmap'): Promise<CanvasBoard> {
     const storedApiKey = localStorage.getItem('forgex_api_key') || '';
 
@@ -84,76 +100,11 @@ export const canvasService = {
   },
 
   getDefaultBoard(): CanvasBoard {
-    const nodes: CanvasNode[] = [
-      {
-        id: 'node-root',
-        type: 'mindmap',
-        title: 'ForgeX Architecture',
-        content: 'Core multimodal workspace system with high performance',
-        x: 360,
-        y: 200,
-        width: 220,
-        height: 110,
-        color: '#f59e0b',
-      },
-      {
-        id: 'node-1',
-        type: 'idea',
-        title: 'Document AI',
-        content: 'Deep semantic PDF, DOCX, and CSV reasoning',
-        x: 80,
-        y: 80,
-        width: 190,
-        height: 100,
-        color: '#3b82f6',
-      },
-      {
-        id: 'node-2',
-        type: 'process',
-        title: 'Autonomous Agents',
-        content: 'Multi-step autonomous execution loop',
-        x: 640,
-        y: 80,
-        width: 190,
-        height: 100,
-        color: '#10b981',
-      },
-      {
-        id: 'node-3',
-        type: 'decision',
-        title: 'Document & Knowledge AI',
-        content: 'Semantic multi-document summarization & QA',
-        x: 80,
-        y: 350,
-        width: 190,
-        height: 100,
-        color: '#8b5cf6',
-      },
-      {
-        id: 'node-4',
-        type: 'note',
-        title: 'Code Studio Sandbox',
-        content: 'Real-time compilation and AI code alteration',
-        x: 640,
-        y: 350,
-        width: 190,
-        height: 100,
-        color: '#ec4899',
-      },
-    ];
-
-    const edges: CanvasEdge[] = [
-      { id: 'edge-1', fromId: 'node-root', toId: 'node-1', label: 'analyzes' },
-      { id: 'edge-2', fromId: 'node-root', toId: 'node-2', label: 'orchestrates' },
-      { id: 'edge-3', fromId: 'node-root', toId: 'node-3', label: 'visualizes' },
-      { id: 'edge-4', fromId: 'node-root', toId: 'node-4', label: 'executes' },
-    ];
-
     return {
-      id: 'default-board-1',
-      name: 'ForgeX Overview Canvas',
-      nodes,
-      edges,
+      id: 'canvas-' + Date.now(),
+      name: 'New Blank Canvas',
+      nodes: [],
+      edges: [],
       lastModified: Date.now(),
     };
   },

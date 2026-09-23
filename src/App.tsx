@@ -15,6 +15,7 @@ import { authService } from './services/authService';
 import { chatService } from './services/chatService';
 import { imageService } from './services/imageService';
 import { videoService } from './services/videoService';
+import { musicService } from './services/musicService';
 
 import { StarField } from './components/StarField';
 import { LandingNav } from './components/LandingNav';
@@ -136,8 +137,23 @@ export default function App() {
     },
   ]);
 
-  // Auto-sync cloud storage when user profile / account is active
+  // Auto-sync and partition database when user profile/email changes
   useEffect(() => {
+    // Immediately reload data for the active user email / partition
+    const userChats = chatService.getSessions();
+    setChatSessions(userChats);
+    if (userChats.length > 0) {
+      setActiveChatId(userChats[0].id);
+    } else {
+      setActiveChatId(null);
+    }
+
+    const userImages = imageService.getImages();
+    setImages(userImages);
+
+    const userVideos = videoService.getVideos();
+    setVideos(userVideos);
+
     if (user && user.id && user.id !== 'guest') {
       chatService.syncWithFirestore().then((syncedChats) => {
         if (syncedChats && syncedChats.length > 0) {
@@ -153,8 +169,24 @@ export default function App() {
           setImages(syncedImages);
         }
       }).catch(() => {});
+
+      musicService.syncWithFirestore().catch(() => {});
     }
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
+
+  // Listen to auth changes dynamically
+  useEffect(() => {
+    const handleAuthEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<UserProfile | null>;
+      const newUser = customEvent.detail ?? authService.getCurrentUser();
+      setUser(newUser);
+    };
+
+    window.addEventListener('forgex:auth_changed', handleAuthEvent);
+    return () => {
+      window.removeEventListener('forgex:auth_changed', handleAuthEvent);
+    };
+  }, []);
 
   // Persist Workspace State
   useEffect(() => {
@@ -597,11 +629,23 @@ export default function App() {
         chats={chatSessions}
         images={images}
         videos={videos}
+        songs={musicService.getSongs()}
+        currentUserEmail={user?.email || (user ? user.username : 'Guest Session')}
         theme={settings.theme}
         onSelectChat={handleSelectChat}
         onViewImage={(img) => setViewingMedia({ type: 'image', item: img })}
         onViewVideo={(vid) => setViewingMedia({ type: 'video', item: vid })}
-        onDeleteItem={handleDeleteHistoryItem}
+        onSelectSong={(_song) => {
+          setIsInWorkspace(true);
+          setActiveWorkspace('music');
+        }}
+        onDeleteItem={(id, type) => {
+          if (type === 'song') {
+            musicService.deleteSong(id);
+          } else {
+            handleDeleteHistoryItem(id, type);
+          }
+        }}
       />
 
       <FavoritesModal

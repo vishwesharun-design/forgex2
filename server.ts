@@ -1409,6 +1409,25 @@ store.set('counter', 42);`,
     };
   }
 
+  // Resilient multi-model Gemini text generation helper
+  async function generateGeminiText(ai: GoogleGenAI, contents: any, config?: any): Promise<string> {
+    const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+    for (const model of candidateModels) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          ...(config ? { config } : {}),
+        });
+        const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim()) return text;
+      } catch (err: any) {
+        console.warn(`Gemini model ${model} notice:`, err?.message?.slice(0, 120));
+      }
+    }
+    return "";
+  }
+
   // ==========================================
   // 1. FILE / DOCUMENT AI ENDPOINT
   // ==========================================
@@ -2055,12 +2074,10 @@ Explain recent developments, user reception, and best practices.`;
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
-            contents: prompt,
-          });
-
-          return res.json({ content: response.text || "Writing generated." });
+          const text = await generateGeminiText(ai, prompt);
+          if (text && text.trim()) {
+            return res.json({ content: text });
+          }
         } catch (apiErr) {
           console.warn("Writing Studio API error, using algorithmic copywriter:", apiErr);
         }
@@ -2083,6 +2100,129 @@ Explain recent developments, user reception, and best practices.`;
       }
 
       return res.json({ content });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
+    }
+  });
+
+  // ==========================================
+  // 6b. AI SONG VOCAL SYNTHESIS & LYRICS ENDPOINT
+  // ==========================================
+  app.post("/api/song-vocal", async (req: Request, res: Response) => {
+    try {
+      const { text, voiceName = "Zephyr", vocalStyle = "Melodic Singing", bpm = 120 } = req.body;
+      const apiKey = getEffectiveApiKey(req);
+
+      if (!text || !text.trim()) {
+        return res.status(400).json({ error: "Lyric text is required for AI vocal synthesis." });
+      }
+
+      // Voice mapping
+      const validVoices = ["Zephyr", "Puck", "Kore", "Fenrir", "Charon", "Aoede"];
+      const chosenVoice = validVoices.includes(voiceName) ? voiceName : "Zephyr";
+
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          // Format text with singing cadence direction
+          const singingPrompt = `Sing or perform with musical rhythm at ${bpm} BPM in a ${vocalStyle} style:\n"${text.trim().slice(0, 800)}"`;
+          
+          const response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-tts-preview",
+            contents: [{ parts: [{ text: singingPrompt }] }],
+            config: {
+              // @ts-ignore
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: chosenVoice }
+                }
+              }
+            }
+          });
+
+          const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          if (base64Audio) {
+            return res.json({
+              success: true,
+              audioBase64: base64Audio,
+              mimeType: "audio/pcm;rate=24000",
+              voiceName: chosenVoice,
+              vocalStyle
+            });
+          }
+        } catch (ttsErr: any) {
+          console.warn("Gemini TTS vocal synthesis notice, using client-side vocal engine fallback:", ttsErr?.message?.slice(0, 100));
+        }
+      }
+
+      // Fallback response allowing client-side formant synthesis
+      return res.json({
+        success: false,
+        fallback: true,
+        voiceName: chosenVoice,
+        vocalStyle,
+        message: "Using browser neural vocal engine"
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
+    }
+  });
+
+  app.post("/api/song-lyrics", async (req: Request, res: Response) => {
+    try {
+      const { prompt, genre = "Synthwave", mood = "Energetic", durationSeconds = 210 } = req.body;
+      const apiKey = getEffectiveApiKey(req);
+
+      const targetDurationStr = durationSeconds >= 180 ? "3:00 to 3:30 minutes" : durationSeconds >= 120 ? "2:00 to 2:30 minutes" : "1:00 to 1:30 minutes";
+      const systemInstruction = `You are a platinum award-winning songwriter. Write compelling, rhythmic lyrics for a song titled/inspired by: "${prompt}".
+Genre: ${genre}
+Mood: ${mood}
+Target Song Length: ${targetDurationStr} (${durationSeconds} seconds)
+
+Format the lyrics with section headers in brackets:
+[Intro]
+(Atmospheric hook line)
+
+[Verse 1]
+(4-6 vivid narrative lines)
+
+[Chorus]
+(High-energy catchy anthem chorus)
+
+[Verse 2]
+(4-6 escalating lines)
+
+[Chorus]
+(Anthem chorus)
+
+[Bridge]
+(Emotional / rhythm shift)
+
+[Chorus]
+(Climactic chorus with vocal power)
+
+[Outro]
+(Memorable fading lines)
+
+Return only the clean lyrics with section headers.`;
+
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          const text = await generateGeminiText(ai, systemInstruction);
+          if (text && text.trim()) {
+            return res.json({ lyrics: text.trim() });
+          }
+        } catch (err: any) {
+          console.warn("Song lyrics generation notice:", err?.message?.slice(0, 100));
+        }
+      }
+
+      // Algorithmic lyrics fallback customized for the full duration
+      return res.json({ lyrics: null, fallback: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ error: msg });
@@ -2200,6 +2340,15 @@ Explain recent developments, user reception, and best practices.`;
       return res.status(500).json({ error: msg });
     }
   });
+
+  // Serve real original audio files directly with proper range and mime headers
+  const audioDir = path.join(process.cwd(), "public", "audio");
+  app.use("/audio", express.static(audioDir, {
+    setHeaders: (res) => {
+      res.set("Accept-Ranges", "bytes");
+      res.set("Access-Control-Allow-Origin", "*");
+    }
+  }));
 
   // Vite middleware setup
   if (process.env.NODE_ENV !== "production") {

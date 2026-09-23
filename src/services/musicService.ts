@@ -1,20 +1,28 @@
-import { GeneratedSong, SongGenre, SongMood, ForgeXModelId } from '../types';
+import { GeneratedSong, SongGenre, SongMood, SongVoiceProfile, SongVocalStyle, ForgeXModelId } from '../types';
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
-import { REAL_LIFE_SONGS } from '../data/realLifeSongs';
+import { storageService } from './storageService';
 
 function getSongStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_generated_songs_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_generated_songs_${partition}`;
 }
 
-interface SynthesizedAudioPlayback {
-  audioContext: AudioContext;
-  gainNode: GainNode;
+interface AudioPlaybackHandle {
+  audioElement?: HTMLAudioElement;
+  audioContext?: AudioContext;
+  gainNode?: GainNode;
+  beatGainNode?: GainNode;
+  vocalGainNode?: GainNode;
   stop: () => void;
+  setVolume: (vol: number) => void;
+  setVocalVolume?: (vol: number) => void;
+  setBeatVolume?: (vol: number) => void;
 }
 
-let activePlayback: SynthesizedAudioPlayback | null = null;
+let activePlayback: AudioPlaybackHandle | null = null;
+let currentVocalVolume = 0.85;
+let currentBeatVolume = 0.85;
 
 // Preset seeds and sample covers
 const COVER_IMAGES: Record<SongGenre, string> = {
@@ -26,6 +34,7 @@ const COVER_IMAGES: Record<SongGenre, string> = {
   Acoustic: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?q=80&w=800&auto=format&fit=crop',
   Ambient: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop',
   'Hip-Hop': 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=800&auto=format&fit=crop',
+  Classical: 'https://images.unsplash.com/photo-1520523839898-50712825e3a7?q=80&w=800&auto=format&fit=crop',
 };
 
 export interface LyricsSection {
@@ -113,7 +122,6 @@ export function getGenreChordInfo(genre: SongGenre): GenreChordData {
         description: 'Weightless floating sound bath with timeless meditative envelopes.',
       };
     case 'Hip-Hop':
-    default:
       return {
         progression: ['Am', 'Bm7', 'C', 'G'],
         chordsText: 'Am → Bm7 → C → G (Boom-Bap Motif)',
@@ -121,6 +129,16 @@ export function getGenreChordInfo(genre: SongGenre): GenreChordData {
         scale: 'Minor Pentatonic',
         instrumentStems: ['Heavy 808 Sub-Bass', 'Crisp Sampled Snare', 'Layered Vocal Chops', 'Vinyl Warmth'],
         description: 'Urban rhythm pocket with heavy sub-bass foundation and soulful chops.',
+      };
+    case 'Classical':
+    default:
+      return {
+        progression: ['C#m', 'A', 'F#m', 'G#'],
+        chordsText: 'C#m → A → F#m → G# (i – VI – iv – V)',
+        key: 'C# Minor',
+        scale: 'Harmonic Minor',
+        instrumentStems: ['Concert Grand Piano', 'Pedal Resonance', 'Lyrical Arpeggios', 'Dynamic Articulation'],
+        description: 'Expressive classical acoustic piano masterwork with poetic dynamics.',
       };
   }
 }
@@ -235,37 +253,40 @@ export const musicService = {
         }
       }
 
-      // Merge real-life hits so they are always available in the library
-      const existingIds = new Set(list.map((s) => s.id));
-      let modified = false;
-      for (const realSong of REAL_LIFE_SONGS) {
-        if (!existingIds.has(realSong.id)) {
-          list.push(realSong);
-          modified = true;
-        }
+      // Purge any pre-seeded real life hits / preset demo songs
+      const cleaned = list.filter((s) => !s.isRealLifeHit && !s.isNoCopyright && !s.id.startsWith('real_'));
+      if (cleaned.length !== list.length) {
+        localStorage.setItem(key, JSON.stringify(cleaned));
       }
 
-      if (modified || !stored) {
-        localStorage.setItem(key, JSON.stringify(list));
-      }
-
-      return list;
+      return cleaned;
     } catch (e) {
       console.error('Failed to load songs', e);
-      return REAL_LIFE_SONGS;
+      return [];
     }
   },
 
   getRealLifeSongs(): GeneratedSong[] {
-    return REAL_LIFE_SONGS;
+    return [];
   },
 
   reloadRealLifeHits(): GeneratedSong[] {
-    const current = this.getSongs();
-    const userGenerated = current.filter((s) => !s.isRealLifeHit);
-    const combined = [...REAL_LIFE_SONGS, ...userGenerated];
-    this.saveSongs(combined);
-    return combined;
+    return this.getSongs();
+  },
+
+  clearAllSongs(): void {
+    if (activePlayback) {
+      this.stopPlayback();
+    }
+    const key = getSongStorageKey();
+    const existing = this.getSongs();
+    localStorage.removeItem(key);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      existing.forEach((s) => {
+        firestoreStorageService.deleteUserSong(userId, s.id).catch(() => {});
+      });
+    }
   },
 
   async syncWithFirestore(): Promise<GeneratedSong[]> {
@@ -273,11 +294,13 @@ export const musicService = {
       const userId = authService.getCurrentUserId();
       if (userId && userId !== 'guest') {
         const cloudSongs = await firestoreStorageService.loadUserSongs(userId);
-        if (cloudSongs.length > 0) {
-          this.saveSongs(cloudSongs);
-          return cloudSongs;
+        // Purge any real songs from cloud
+        const cleanCloudSongs = cloudSongs.filter((s) => !s.isRealLifeHit && !s.isNoCopyright && !s.id.startsWith('real_'));
+        if (cleanCloudSongs.length > 0) {
+          this.saveSongs(cleanCloudSongs);
+          return cleanCloudSongs;
         } else {
-          // Push existing local songs to cloud for this user
+          // Push existing local clean songs to cloud for this user
           const localSongs = this.getSongs();
           for (const s of localSongs) {
             await firestoreStorageService.saveUserSong(userId, s);
@@ -293,10 +316,12 @@ export const musicService = {
   saveSongs(songs: GeneratedSong[]): void {
     try {
       const key = getSongStorageKey();
-      localStorage.setItem(key, JSON.stringify(songs));
+      // Ensure only genuine user songs are stored
+      const cleaned = songs.filter((s) => !s.isRealLifeHit && !s.isNoCopyright && !s.id.startsWith('real_'));
+      localStorage.setItem(key, JSON.stringify(cleaned));
       const userId = authService.getCurrentUserId();
       if (userId && userId !== 'guest') {
-        songs.slice(0, 15).forEach((s) => {
+        cleaned.slice(0, 15).forEach((s) => {
           firestoreStorageService.saveUserSong(userId, s).catch(() => {});
         });
       }
@@ -327,15 +352,44 @@ export const musicService = {
     modelId: ForgeXModelId;
     includeLyrics?: boolean;
     customLyrics?: string;
+    hasVoice?: boolean;
+    voiceProfile?: SongVoiceProfile;
+    vocalStyle?: SongVocalStyle;
   }): Promise<GeneratedSong> {
-    // Generate intelligent title and lyrics
     const cleanPrompt = params.prompt.trim() || 'Cosmic Odyssey';
     const words = cleanPrompt.split(' ');
     const title = words.length > 4 ? words.slice(0, 4).join(' ') : cleanPrompt;
+    const duration = Math.max(30, Math.min(210, params.durationSeconds || 180));
+    const hasVoice = params.hasVoice !== undefined ? params.hasVoice : Boolean(params.includeLyrics || params.customLyrics);
+    const voiceProfile = params.voiceProfile || 'Zephyr';
+    const vocalStyle = params.vocalStyle || 'Melodic Singing';
 
     let lyrics = params.customLyrics;
-    if (params.includeLyrics && !lyrics) {
-      lyrics = this.generateProceduralLyrics(cleanPrompt, params.genre, params.mood);
+    if ((params.includeLyrics || hasVoice) && !lyrics) {
+      try {
+        const resp = await fetch('/api/song-lyrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: cleanPrompt,
+            genre: params.genre,
+            mood: params.mood,
+            durationSeconds: duration,
+          }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.lyrics) {
+            lyrics = data.lyrics;
+          }
+        }
+      } catch (err) {
+        console.warn('AI lyrics fetch fallback:', err);
+      }
+
+      if (!lyrics) {
+        lyrics = this.generateProceduralLyrics(cleanPrompt, params.genre, params.mood, duration);
+      }
     }
 
     const seed = Math.floor(Math.random() * 999999);
@@ -349,13 +403,16 @@ export const musicService = {
       genre: params.genre,
       mood: params.mood,
       tempoBpm: params.tempoBpm,
-      durationSeconds: params.durationSeconds,
+      durationSeconds: duration,
       lyrics,
       coverUrl: cover || COVER_IMAGES[params.genre],
       modelId: params.modelId,
       createdAt: Date.now(),
       isFavorite: false,
       audioSeed: seed,
+      hasVoice,
+      voiceProfile,
+      vocalStyle,
     };
 
     const current = this.getSongs();
@@ -364,28 +421,67 @@ export const musicService = {
     return newSong;
   },
 
-  generateProceduralLyrics(prompt: string, genre: SongGenre, mood: SongMood): string {
-    return `[Verse 1]
+  generateProceduralLyrics(prompt: string, genre: SongGenre, mood: SongMood, durationSeconds: number = 180): string {
+    const isLongTrack = durationSeconds >= 120;
+    const isMaxTrack = durationSeconds >= 180;
+
+    return `[Intro]
+Analog pulses rising through the mist
+Lost in a feeling that cannot resist
+${genre} frequency taking control
+Igniting the rhythm inside the soul
+
+[Verse 1]
 Neon shadows across the floor
 Chasing the sound we were looking for
 Echoes of light in a silent sky
 Every new path is opening wide
+Walking through streets that never sleep
+Secrets the midnight whispers to keep
 
 [Chorus]
 And the rhythm moves in time
 With the heartbeat on the line
 Feel the electricity soar
 We don't have to wait no more
+Turn the dial, ignite the flame
+Nothing here will stay the same!
 
 [Verse 2]
 Signals align through the midnight air
 A melody floating everywhere
 Lost in the frequencies of the night
 Everything turning to golden light
+Footsteps matching the sub-bass drive
+This is the moment we feel alive
+${isLongTrack ? `
+[Chorus]
+And the rhythm moves in time
+With the heartbeat on the line
+Feel the electricity soar
+We don't have to wait no more
+Turn the dial, ignite the flame
+Nothing here will stay the same!
 
+[Bridge]
+Time slows down as the filters sweep
+A promise that this frequency will keep
+Let the harmonics wash through the mind
+Leaving all the static far behind...
+` : ''}${isMaxTrack ? `
+[Chorus]
+And the rhythm moves in time
+With the heartbeat on the line
+Feel the electricity soar
+We don't have to wait no more!
+Maximum sound, maximum light
+We own the dawn, we own the night!
+` : ''}
 [Outro]
-Fading into the sound
-Rising above the ground...`;
+Fading into the pure sound
+Rising above the solid ground
+Echoes dissolving into the blue
+Forever resonant and true...`;
   },
 
   toggleFavorite(songId: string): GeneratedSong[] {
@@ -397,6 +493,11 @@ Rising above the ground...`;
   },
 
   stopPlayback(): void {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
     if (activePlayback) {
       try {
         activePlayback.stop();
@@ -413,24 +514,147 @@ Rising above the ground...`;
 
   setVolume(vol: number): void {
     if (activePlayback) {
-      try {
-        activePlayback.gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), activePlayback.audioContext.currentTime);
-      } catch (e) {
-        console.warn('Volume set failed', e);
-      }
+      activePlayback.setVolume(vol);
     }
   },
 
+  setVocalVolume(vol: number): void {
+    currentVocalVolume = Math.max(0, Math.min(1, vol));
+    if (activePlayback?.setVocalVolume) {
+      activePlayback.setVocalVolume(currentVocalVolume);
+    }
+  },
+
+  getVocalVolume(): number {
+    return currentVocalVolume;
+  },
+
+  setBeatVolume(vol: number): void {
+    currentBeatVolume = Math.max(0, Math.min(1, vol));
+    if (activePlayback?.setBeatVolume) {
+      activePlayback.setBeatVolume(currentBeatVolume);
+    }
+  },
+
+  getBeatVolume(): number {
+    return currentBeatVolume;
+  },
+
   /**
-   * Synthesizes audio in real-time through Web Audio API
+   * Plays a song track. If the song has an audioUrl (e.g. 3-minute public domain recording
+   * or Firebase cloud-stored audio), plays via HTML5 Audio with full progress and volume tracking.
+   * If audioUrl is absent or fails to load, gracefully falls back to the real-time Web Audio synthesizer!
    */
   playSong(
     song: GeneratedSong,
     onTick?: (currentTime: number, duration: number) => void,
     onEnded?: () => void,
     startOffset: number = 0,
-    initialVolume: number = 0.3
+    initialVolume: number = 0.5
   ): { stop: () => void; setVolume: (vol: number) => void } {
+    this.stopPlayback();
+
+    if (song.audioUrl) {
+      try {
+        const audio = new Audio();
+        // Only set crossOrigin if it's an external URL to avoid unnecessary CORS restrictions on local routes
+        if (song.audioUrl.startsWith('http')) {
+          audio.crossOrigin = 'anonymous';
+        }
+        audio.preload = 'auto';
+        audio.src = song.audioUrl;
+        audio.volume = Math.max(0, Math.min(1, initialVolume));
+
+        let isStopped = false;
+        let didFallback = false;
+
+        const stop = () => {
+          if (isStopped) return;
+          isStopped = true;
+          try {
+            audio.pause();
+            audio.src = '';
+          } catch {}
+        };
+
+        const setVolume = (vol: number) => {
+          try {
+            audio.volume = Math.max(0, Math.min(1, vol));
+          } catch {}
+        };
+
+        const totalDuration = song.durationSeconds || 180;
+
+        audio.onloadedmetadata = () => {
+          if (startOffset > 0 && startOffset < (audio.duration || totalDuration)) {
+            audio.currentTime = startOffset;
+          }
+        };
+
+        audio.ontimeupdate = () => {
+          if (!isStopped && onTick) {
+            const current = audio.currentTime;
+            const dur = audio.duration && !isNaN(audio.duration) && audio.duration > 0
+              ? audio.duration
+              : totalDuration;
+            onTick(current, dur);
+          }
+        };
+
+        audio.onended = () => {
+          if (!isStopped) {
+            stop();
+            if (onEnded) onEnded();
+          }
+        };
+
+        audio.onerror = (e) => {
+          if (!isStopped && !didFallback) {
+            didFallback = true;
+            console.warn('Audio streaming failed for track:', song.title, e);
+            stop();
+            if (!song.isRealLifeHit) {
+              this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
+            }
+          }
+        };
+
+        audio.play().catch((playErr) => {
+          if (!isStopped && !didFallback) {
+            didFallback = true;
+            console.warn('Audio play() failed:', playErr);
+            stop();
+            if (!song.isRealLifeHit) {
+              this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
+            }
+          }
+        });
+
+        activePlayback = {
+          audioElement: audio,
+          stop,
+          setVolume,
+        };
+
+        return { stop, setVolume };
+      } catch (err) {
+        console.warn('Audio playback initialization failed, synthesizing instead:', err);
+      }
+    }
+
+    return this.playSynthesized(song, onTick, onEnded, startOffset, initialVolume);
+  },
+
+  /**
+   * Procedural Web Audio synthesizer capable of full 3:30-minute (210s) beat & voice synthesis
+   */
+  playSynthesized(
+    song: GeneratedSong,
+    onTick?: (currentTime: number, duration: number) => void,
+    onEnded?: () => void,
+    startOffset: number = 0,
+    initialVolume: number = 0.5
+  ): { stop: () => void; setVolume: (vol: number) => void; setVocalVolume: (vol: number) => void; setBeatVolume: (vol: number) => void } {
     this.stopPlayback();
 
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -438,6 +662,14 @@ Rising above the ground...`;
     const masterGain = ctx.createGain();
     masterGain.gain.setValueAtTime(Math.max(0, Math.min(1, initialVolume)), ctx.currentTime);
     masterGain.connect(ctx.destination);
+
+    const beatGain = ctx.createGain();
+    beatGain.gain.setValueAtTime(currentBeatVolume, ctx.currentTime);
+    beatGain.connect(masterGain);
+
+    const vocalGain = ctx.createGain();
+    vocalGain.gain.setValueAtTime(currentVocalVolume, ctx.currentTime);
+    vocalGain.connect(masterGain);
 
     // Chords depending on genre (frequencies in Hz)
     const chordProgressions: Record<SongGenre, number[][]> = {
@@ -489,15 +721,23 @@ Rising above the ground...`;
         [130.81, 164.81, 196],
         [98, 123.47, 146.83],
       ],
+      Classical: [
+        [138.59, 164.81, 207.65, 277.18], // C#m
+        [110, 138.59, 164.81, 220],       // A
+        [92.5, 110, 138.59, 185],         // F#m
+        [103.83, 130.81, 155.56, 207.65], // G#
+      ],
     };
 
     const chords = chordProgressions[song.genre] || chordProgressions.Synthwave;
     const bpm = song.tempoBpm || 120;
     const beatDuration = 60 / bpm;
-    const totalDuration = song.durationSeconds || 30;
+    const totalDuration = Math.min(210, song.durationSeconds || 180);
 
     let isStopped = false;
     const oscillators: OscillatorNode[] = [];
+    const lyricsSections = song.lyrics ? parseLyricsSections(song.lyrics, totalDuration) : [];
+    const triggeredSpeechSections = new Set<string>();
 
     // Schedule musical loops across duration with startOffset
     const safeOffset = Math.max(0, Math.min(totalDuration - 0.5, startOffset));
@@ -517,21 +757,21 @@ Rising above the ground...`;
 
       const noteTrigger = Math.max(ctx.currentTime, barTime);
 
-      // 1. Bass note
+      // 1. Bassline (Beat)
       const bassOsc = ctx.createOscillator();
       const bassGain = ctx.createGain();
-      bassOsc.type = song.genre === 'Synthwave' || song.genre === 'EDM' ? 'sawtooth' : 'triangle';
+      bassOsc.type = song.genre === 'Synthwave' || song.genre === 'EDM' || song.genre === 'Hip-Hop' ? 'sawtooth' : 'triangle';
       bassOsc.frequency.setValueAtTime(chord[0] / 2, noteTrigger);
-      bassGain.gain.setValueAtTime(0.2, noteTrigger);
+      bassGain.gain.setValueAtTime(0.24, noteTrigger);
       bassGain.gain.exponentialRampToValueAtTime(0.01, barTime + beatDuration * 3.8);
 
       bassOsc.connect(bassGain);
-      bassGain.connect(masterGain);
+      bassGain.connect(beatGain);
       bassOsc.start(noteTrigger);
       bassOsc.stop(barTime + beatDuration * 4);
       oscillators.push(bassOsc);
 
-      // 2. Chords / Pad voices
+      // 2. Chords & Harmonic Pads (Beat)
       chord.forEach((freq, noteIdx) => {
         const osc = ctx.createOscillator();
         const noteGain = ctx.createGain();
@@ -544,17 +784,17 @@ Rising above the ground...`;
         const actualStart = Math.max(ctx.currentTime, scheduledStart);
         
         noteGain.gain.setValueAtTime(0.001, actualStart);
-        noteGain.gain.exponentialRampToValueAtTime(0.08, actualStart + 0.1);
+        noteGain.gain.exponentialRampToValueAtTime(0.07, actualStart + 0.1);
         noteGain.gain.exponentialRampToValueAtTime(0.001, barTime + beatDuration * 3.8);
 
         osc.connect(noteGain);
-        noteGain.connect(masterGain);
+        noteGain.connect(beatGain);
         osc.start(actualStart);
         osc.stop(barTime + beatDuration * 4);
         oscillators.push(osc);
       });
 
-      // 3. Rhythmic Kick & Snare Percussion
+      // 3. Drums: Kick, Snare & Hi-Hats (Beat)
       if (song.genre !== 'Ambient') {
         for (let beat = 0; beat < 4; beat++) {
           const beatTime = barTime + beat * beatDuration;
@@ -564,34 +804,134 @@ Rising above the ground...`;
           // Kick on beats 0 and 2
           if (beat === 0 || beat === 2) {
             const kickOsc = ctx.createOscillator();
-            const kickGain = ctx.createGain();
-            kickOsc.frequency.setValueAtTime(150, beatTime);
-            kickOsc.frequency.exponentialRampToValueAtTime(30, beatTime + 0.12);
-            kickGain.gain.setValueAtTime(0.35, beatTime);
-            kickGain.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.15);
+            const kickG = ctx.createGain();
+            kickOsc.frequency.setValueAtTime(160, beatTime);
+            kickOsc.frequency.exponentialRampToValueAtTime(32, beatTime + 0.12);
+            kickG.gain.setValueAtTime(0.38, beatTime);
+            kickG.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.16);
 
-            kickOsc.connect(kickGain);
-            kickGain.connect(masterGain);
+            kickOsc.connect(kickG);
+            kickG.connect(beatGain);
             kickOsc.start(beatTime);
             kickOsc.stop(beatTime + 0.2);
             oscillators.push(kickOsc);
           }
 
-          // Snare on beat 2 (or 1 and 3)
+          // Snare on beats 1 and 3
           if (beat === 1 || beat === 3) {
             const snareNoise = ctx.createOscillator();
-            const snareGain = ctx.createGain();
+            const snareG = ctx.createGain();
             snareNoise.type = 'triangle';
-            snareNoise.frequency.setValueAtTime(220, beatTime);
-            snareNoise.frequency.exponentialRampToValueAtTime(60, beatTime + 0.1);
-            snareGain.gain.setValueAtTime(0.18, beatTime);
-            snareGain.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.12);
+            snareNoise.frequency.setValueAtTime(240, beatTime);
+            snareNoise.frequency.exponentialRampToValueAtTime(65, beatTime + 0.1);
+            snareG.gain.setValueAtTime(0.2, beatTime);
+            snareG.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.12);
 
-            snareNoise.connect(snareGain);
-            snareGain.connect(masterGain);
+            snareNoise.connect(snareG);
+            snareG.connect(beatGain);
             snareNoise.start(beatTime);
             snareNoise.stop(beatTime + 0.15);
             oscillators.push(snareNoise);
+          }
+
+          // Hi-Hats on 8th notes (driving groove)
+          const hatTime = beatTime + beatDuration / 2;
+          if (hatTime < startTime + totalDuration && hatTime >= ctx.currentTime) {
+            const hatOsc = ctx.createOscillator();
+            const hatG = ctx.createGain();
+            hatOsc.type = 'highpass' as any; // or triangle frequency
+            hatOsc.type = 'triangle';
+            hatOsc.frequency.setValueAtTime(8000, hatTime);
+            hatG.gain.setValueAtTime(0.06, hatTime);
+            hatG.gain.exponentialRampToValueAtTime(0.001, hatTime + 0.04);
+            hatOsc.connect(hatG);
+            hatG.connect(beatGain);
+            hatOsc.start(hatTime);
+            hatOsc.stop(hatTime + 0.05);
+            oscillators.push(hatOsc);
+          }
+        }
+      }
+
+      // 4. AI Vocal Formant Singing Synthesizer (True Melodic Singing, Not Spoken Reading)
+      if (song.hasVoice !== false && song.lyrics) {
+        // Melodic notes derived from the chord progression scale for true musical singing
+        const scaleNotes = [
+          chord[0] * 1.5,                      // Root singing pitch (e.g. A3 / C4)
+          (chord[1] || chord[0] * 1.25) * 1.5, // 3rd degree
+          (chord[2] || chord[0] * 1.5) * 1.5,  // 5th degree
+          chord[0] * 2.0,                      // Octave vocal belt
+        ];
+
+        // Sing 2 distinct melodic phrases per bar with glissando and vibrato
+        for (let phraseIdx = 0; phraseIdx < 2; phraseIdx++) {
+          const phraseStart = noteTrigger + phraseIdx * (beatDuration * 2);
+          const phraseDuration = beatDuration * 1.85;
+          const targetPitch = scaleNotes[(barIndex * 2 + phraseIdx) % scaleNotes.length];
+
+          // Lead Singing Oscillator (Vocal Cord Vibration)
+          const leadOsc = ctx.createOscillator();
+          leadOsc.type = 'sawtooth';
+          leadOsc.frequency.setValueAtTime(targetPitch, phraseStart);
+          // Glissando / Portamento pitch bend into the singing note
+          leadOsc.frequency.exponentialRampToValueAtTime(targetPitch * 1.01, phraseStart + 0.1);
+
+          // Vocal Tract Formant Filter (F1 Throat Vowel Resonance ~750Hz)
+          const formant1 = ctx.createBiquadFilter();
+          formant1.type = 'bandpass';
+          formant1.frequency.setValueAtTime((barIndex + phraseIdx) % 2 === 0 ? 800 : 1150, phraseStart);
+          formant1.Q.setValueAtTime(4.2, phraseStart);
+
+          // Vocal Tract Formant Filter 2 (F2 Singer's Ring Formant ~2400Hz)
+          const formant2 = ctx.createBiquadFilter();
+          formant2.type = 'peaking';
+          formant2.frequency.setValueAtTime(2400, phraseStart);
+          formant2.gain.setValueAtTime(6.0, phraseStart);
+          formant2.Q.setValueAtTime(3.0, phraseStart);
+
+          // Singing Vibrato LFO (5.4 Hz with onset delay)
+          const vibratoLfo = ctx.createOscillator();
+          const vibratoGain = ctx.createGain();
+          vibratoLfo.frequency.setValueAtTime(5.4, phraseStart);
+          vibratoGain.gain.setValueAtTime(0, phraseStart);
+          // Swell vibrato after note attack for authentic human singing technique
+          vibratoGain.gain.linearRampToValueAtTime(targetPitch * 0.022, phraseStart + 0.35);
+          vibratoLfo.connect(vibratoGain);
+          vibratoGain.connect(leadOsc.frequency);
+
+          // Vocal Amplitude Envelope
+          const vocalAmp = ctx.createGain();
+          vocalAmp.gain.setValueAtTime(0.0001, phraseStart);
+          vocalAmp.gain.exponentialRampToValueAtTime(0.18, phraseStart + 0.08); // Gentle singing attack
+          vocalAmp.gain.exponentialRampToValueAtTime(0.14, phraseStart + phraseDuration * 0.7);
+          vocalAmp.gain.exponentialRampToValueAtTime(0.0001, phraseStart + phraseDuration);
+
+          // Routing
+          leadOsc.connect(formant1);
+          formant1.connect(formant2);
+          formant2.connect(vocalAmp);
+          vocalAmp.connect(vocalGain);
+
+          leadOsc.start(phraseStart);
+          vibratoLfo.start(phraseStart);
+          leadOsc.stop(phraseStart + phraseDuration);
+          vibratoLfo.stop(phraseStart + phraseDuration);
+          oscillators.push(leadOsc, vibratoLfo);
+
+          // 5. Harmonized Backing Vocalist Layer (at a musical third above)
+          if (song.vocalStyle === 'Harmonized Vocals' || barIndex % 2 === 1) {
+            const harmOsc = ctx.createOscillator();
+            harmOsc.type = 'triangle';
+            harmOsc.frequency.setValueAtTime(targetPitch * 1.25, phraseStart);
+            const harmGain = ctx.createGain();
+            harmGain.gain.setValueAtTime(0.0001, phraseStart);
+            harmGain.gain.exponentialRampToValueAtTime(0.06, phraseStart + 0.12);
+            harmGain.gain.exponentialRampToValueAtTime(0.0001, phraseStart + phraseDuration);
+
+            harmOsc.connect(formant1);
+            harmOsc.start(phraseStart);
+            harmOsc.stop(phraseStart + phraseDuration);
+            oscillators.push(harmOsc);
           }
         }
       }
@@ -602,13 +942,62 @@ Rising above the ground...`;
       playChordBar(bar);
     }
 
-    // Interval ticker for progress bar
+    // Interval ticker for progress bar and synchronized musical singing cadence
     const interval = window.setInterval(() => {
       if (isStopped) {
         clearInterval(interval);
         return;
       }
       const elapsed = ctx.currentTime - startTime;
+
+      // Synchronize Singing Lyrics Voice with Melodic Musical Intonation (Not Flat Reading)
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && song.hasVoice !== false && lyricsSections.length > 0) {
+        const activeSec = lyricsSections.find(
+          (s) => elapsed >= s.startTimeSec && elapsed < s.endTimeSec && !triggeredSpeechSections.has(s.id)
+        );
+        if (activeSec) {
+          triggeredSpeechSections.add(activeSec.id);
+          try {
+            window.speechSynthesis.cancel();
+            // Format lyrics as musical singing phrasing rather than continuous prose
+            const firstLyricLine = activeSec.lines[0] || '';
+            const secondLyricLine = activeSec.lines[1] || '';
+            // Sung lyric phrasing with musical cadence
+            const musicalLyric = [firstLyricLine, secondLyricLine].filter(Boolean).join(' ~ ');
+            
+            const utterance = new SpeechSynthesisUtterance(musicalLyric);
+
+            // Singing pitch registers (higher musical singing pitch range)
+            let singingPitch = 1.35;
+            if (song.voiceProfile === 'Puck') singingPitch = 1.45;
+            else if (song.voiceProfile === 'Kore') singingPitch = 1.6;
+            else if (song.voiceProfile === 'Fenrir') singingPitch = 0.88;
+            else if (song.voiceProfile === 'Aoede') singingPitch = 1.75;
+            else if (song.voiceProfile === 'Charon') singingPitch = 0.82;
+            else singingPitch = 1.35; // Zephyr (melodic tenor singing)
+
+            utterance.pitch = singingPitch;
+            // Rhythmic singing cadence matched to tempo
+            utterance.rate = Math.max(0.9, Math.min(1.25, (bpm / 120) * 1.05));
+            utterance.volume = Math.min(1.0, currentVocalVolume * masterGain.gain.value * 0.9);
+
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+              const pref = voices.find((v) =>
+                song.voiceProfile === 'Kore' || song.voiceProfile === 'Aoede'
+                  ? v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('victoria')
+                  : v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('george') || v.name.toLowerCase().includes('daniel')
+              );
+              if (pref) utterance.voice = pref;
+            }
+
+            window.speechSynthesis.speak(utterance);
+          } catch (e) {
+            console.warn('AI voice singing synthesis notice:', e);
+          }
+        }
+      }
+
       if (elapsed >= totalDuration) {
         clearInterval(interval);
         musicService.stopPlayback();
@@ -622,6 +1011,9 @@ Rising above the ground...`;
       if (isStopped) return;
       isStopped = true;
       clearInterval(interval);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch {}
+      }
       try {
         masterGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
         setTimeout(() => {
@@ -641,31 +1033,56 @@ Rising above the ground...`;
       } catch {}
     };
 
+    const setVocalVolume = (vol: number) => {
+      try {
+        vocalGain.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), ctx.currentTime);
+      } catch {}
+    };
+
+    const setBeatVolume = (vol: number) => {
+      try {
+        beatGain.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), ctx.currentTime);
+      } catch {}
+    };
+
     activePlayback = {
       audioContext: ctx,
       gainNode: masterGain,
+      beatGainNode: beatGain,
+      vocalGainNode: vocalGain,
       stop,
+      setVolume,
+      setVocalVolume,
+      setBeatVolume,
     };
 
-    return { stop, setVolume };
+    return { stop, setVolume, setVocalVolume, setBeatVolume };
   },
 
   /**
-   * Export synthesized audio to a downloadable WAV file
+   * Export synthesized audio to a downloadable WAV Blob (supports up to 3:30 min = 210s)
+   * Encodes both the procedural beat and the singing vocal formant melody tracks!
    */
-  async exportSongWav(song: GeneratedSong): Promise<string> {
+  async exportSongWavBlob(song: GeneratedSong): Promise<Blob> {
     const sampleRate = 44100;
-    const duration = song.durationSeconds || 30;
+    const duration = Math.min(210, song.durationSeconds || 180);
     const OfflineCtxClass = window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
-    const offlineCtx = new OfflineCtxClass(2, sampleRate * duration, sampleRate);
+    const offlineCtx = new OfflineCtxClass(2, Math.floor(sampleRate * duration), sampleRate);
 
     // Chords
-    const chords = [
-      [220, 261.63, 329.63],
-      [174.61, 220, 261.63],
-      [130.81, 164.81, 196],
-      [196, 246.94, 293.66],
-    ];
+    const chordProgressions: Record<SongGenre, number[][]> = {
+      Synthwave: [[220, 261.63, 329.63], [174.61, 220, 261.63], [130.81, 164.81, 196], [196, 246.94, 293.66]],
+      'Lo-Fi': [[261.63, 329.63, 392], [220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66]],
+      Cinematic: [[110, 164.81, 220], [130.81, 196, 261.63], [146.83, 220, 293.66], [174.61, 261.63, 349.23]],
+      EDM: [[220, 277.18, 329.63], [174.61, 220, 261.63], [130.81, 164.81, 196], [196, 246.94, 293.66]],
+      Rock: [[110, 164.81], [146.83, 220], [130.81, 196], [196, 293.66]],
+      Acoustic: [[261.63, 329.63, 392], [196, 246.94, 293.66], [220, 261.63, 329.63], [174.61, 220, 261.63]],
+      Ambient: [[174.61, 261.63, 329.63, 440], [130.81, 196, 261.63, 392], [146.83, 220, 293.66, 440], [110, 164.81, 220, 329.63]],
+      'Hip-Hop': [[110, 130.81, 164.81], [123.47, 146.83, 174.61], [130.81, 164.81, 196], [98, 123.47, 146.83]],
+      Classical: [[138.59, 164.81, 207.65], [110, 138.59, 164.81], [92.5, 110, 138.59], [103.83, 130.81, 155.56]],
+    };
+
+    const chords = chordProgressions[song.genre] || chordProgressions.Synthwave;
     const bpm = song.tempoBpm || 120;
     const beatDuration = 60 / bpm;
     const numBars = Math.ceil(duration / (beatDuration * 4));
@@ -675,19 +1092,19 @@ Rising above the ground...`;
       if (barTime >= duration) break;
       const chord = chords[bar % chords.length];
 
-      // Bass
+      // 1. Bass (Beat)
       const bass = offlineCtx.createOscillator();
       const bassGain = offlineCtx.createGain();
       bass.type = 'sawtooth';
       bass.frequency.setValueAtTime(chord[0] / 2, barTime);
-      bassGain.gain.setValueAtTime(0.2, barTime);
+      bassGain.gain.setValueAtTime(0.22, barTime);
       bassGain.gain.exponentialRampToValueAtTime(0.01, barTime + beatDuration * 3.5);
       bass.connect(bassGain);
       bassGain.connect(offlineCtx.destination);
       bass.start(barTime);
       bass.stop(barTime + beatDuration * 4);
 
-      // Chords
+      // 2. Chords (Beat)
       chord.forEach((freq) => {
         const osc = offlineCtx.createOscillator();
         const noteGain = offlineCtx.createGain();
@@ -700,11 +1117,136 @@ Rising above the ground...`;
         osc.start(barTime);
         osc.stop(barTime + beatDuration * 4);
       });
+
+      // 3. Drums: Kick & Snare (Beat)
+      if (song.genre !== 'Ambient') {
+        for (let b = 0; b < 4; b++) {
+          const bt = barTime + b * beatDuration;
+          if (bt >= duration) break;
+          if (b === 0 || b === 2) {
+            const k = offlineCtx.createOscillator();
+            const kg = offlineCtx.createGain();
+            k.frequency.setValueAtTime(150, bt);
+            k.frequency.exponentialRampToValueAtTime(32, bt + 0.12);
+            kg.gain.setValueAtTime(0.35, bt);
+            kg.gain.exponentialRampToValueAtTime(0.001, bt + 0.15);
+            k.connect(kg);
+            kg.connect(offlineCtx.destination);
+            k.start(bt);
+            k.stop(bt + 0.18);
+          }
+          if (b === 1 || b === 3) {
+            const sn = offlineCtx.createOscillator();
+            const sng = offlineCtx.createGain();
+            sn.type = 'triangle';
+            sn.frequency.setValueAtTime(230, bt);
+            sn.frequency.exponentialRampToValueAtTime(60, bt + 0.1);
+            sng.gain.setValueAtTime(0.18, bt);
+            sng.gain.exponentialRampToValueAtTime(0.001, bt + 0.12);
+            sn.connect(sng);
+            sng.connect(offlineCtx.destination);
+            sn.start(bt);
+            sn.stop(bt + 0.15);
+          }
+        }
+      }
+
+      // 4. Vocal Formant Singing Melody Track (AI Singing Voice in WAV Export)
+      if (song.hasVoice !== false && song.lyrics) {
+        const scaleNotes = [
+          chord[0] * 1.5,
+          (chord[1] || chord[0] * 1.25) * 1.5,
+          (chord[2] || chord[0] * 1.5) * 1.5,
+          chord[0] * 2.0,
+        ];
+
+        for (let phraseIdx = 0; phraseIdx < 2; phraseIdx++) {
+          const phraseStart = barTime + phraseIdx * (beatDuration * 2);
+          const phraseDuration = beatDuration * 1.85;
+          const targetPitch = scaleNotes[(bar * 2 + phraseIdx) % scaleNotes.length];
+
+          const voc = offlineCtx.createOscillator();
+          const vocFilt1 = offlineCtx.createBiquadFilter();
+          const vocFilt2 = offlineCtx.createBiquadFilter();
+          const vocG = offlineCtx.createGain();
+
+          vocFilt1.type = 'bandpass';
+          vocFilt1.frequency.setValueAtTime((bar + phraseIdx) % 2 === 0 ? 800 : 1150, phraseStart);
+          vocFilt1.Q.setValueAtTime(4.2, phraseStart);
+
+          vocFilt2.type = 'peaking';
+          vocFilt2.frequency.setValueAtTime(2400, phraseStart);
+          vocFilt2.gain.setValueAtTime(6.0, phraseStart);
+          vocFilt2.Q.setValueAtTime(3.0, phraseStart);
+
+          voc.type = 'sawtooth';
+          voc.frequency.setValueAtTime(targetPitch, phraseStart);
+          voc.frequency.exponentialRampToValueAtTime(targetPitch * 1.01, phraseStart + 0.1);
+
+          vocG.gain.setValueAtTime(0.0001, phraseStart);
+          vocG.gain.exponentialRampToValueAtTime(0.16, phraseStart + 0.08);
+          vocG.gain.exponentialRampToValueAtTime(0.12, phraseStart + phraseDuration * 0.7);
+          vocG.gain.exponentialRampToValueAtTime(0.0001, phraseStart + phraseDuration);
+
+          voc.connect(vocFilt1);
+          vocFilt1.connect(vocFilt2);
+          vocFilt2.connect(vocG);
+          vocG.connect(offlineCtx.destination);
+
+          voc.start(phraseStart);
+          voc.stop(phraseStart + phraseDuration);
+
+          // Vocal harmony layer
+          if (song.vocalStyle === 'Harmonized Vocals' || bar % 2 === 1) {
+            const harm = offlineCtx.createOscillator();
+            const harmG = offlineCtx.createGain();
+            harm.type = 'triangle';
+            harm.frequency.setValueAtTime(targetPitch * 1.25, phraseStart);
+            harmG.gain.setValueAtTime(0.0001, phraseStart);
+            harmG.gain.exponentialRampToValueAtTime(0.05, phraseStart + 0.1);
+            harmG.gain.exponentialRampToValueAtTime(0.0001, phraseStart + phraseDuration);
+            harm.connect(vocFilt1);
+            harm.start(phraseStart);
+            harm.stop(phraseStart + phraseDuration);
+          }
+        }
+      }
     }
 
     const renderedBuffer = await offlineCtx.startRendering();
-    const wavBlob = audioBufferToWav(renderedBuffer);
-    return URL.createObjectURL(wavBlob);
+    return audioBufferToWav(renderedBuffer);
+  },
+
+  /**
+   * Export synthesized audio to a downloadable WAV URL
+   */
+  async exportSongWav(song: GeneratedSong): Promise<string> {
+    const blob = await this.exportSongWavBlob(song);
+    return URL.createObjectURL(blob);
+  },
+
+  /**
+   * Uploads the song to Firebase Storage and saves download URL to Firestore
+   */
+  async saveSongToCloud(song: GeneratedSong): Promise<{ success: boolean; cloudUrl: string }> {
+    try {
+      let blob: Blob;
+      if (song.audioUrl && !song.audioUrl.startsWith('blob:')) {
+        try {
+          const resp = await fetch(song.audioUrl);
+          blob = await resp.blob();
+        } catch {
+          blob = await this.exportSongWavBlob(song);
+        }
+      } else {
+        blob = await this.exportSongWavBlob(song);
+      }
+      return await storageService.saveSongAudioToStorage(song, blob);
+    } catch (err: any) {
+      console.warn('saveSongToCloud failed:', err);
+      const fallbackUrl = song.audioUrl || '';
+      return { success: false, cloudUrl: fallbackUrl };
+    }
   },
 };
 

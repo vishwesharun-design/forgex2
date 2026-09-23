@@ -147,6 +147,31 @@ export const authService = {
     return null;
   },
 
+  /**
+   * Returns a canonical storage partition key for the current user.
+   * Prioritizes the person's email address so that each email has a strictly
+   * separate database, history, and asset vault.
+   * Example: "email_tradewithpanda_gmail_com" or "usr_vishwesh_at_forgex_local"
+   */
+  getCurrentUserPartitionKey(): string {
+    const user = this.getCurrentUser();
+    if (!user) return 'guest';
+    const email = (user.email || '').trim().toLowerCase();
+    if (email && email.includes('@')) {
+      const safeEmail = email.replace(/@/g, '_at_').replace(/[^a-z0-9_]/g, '_');
+      return `email_${safeEmail}`;
+    }
+    if (user.id) {
+      return `usr_${user.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    }
+    return 'guest';
+  },
+
+  getCurrentUserEmail(): string {
+    const user = this.getCurrentUser();
+    return (user?.email || '').trim().toLowerCase();
+  },
+
   getCurrentUserId(): string {
     const user = this.getCurrentUser();
     return user && user.id ? user.id : 'guest';

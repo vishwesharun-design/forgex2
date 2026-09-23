@@ -3,8 +3,8 @@ import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 
 function getVideoStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_generated_videos_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_generated_videos_${partition}`;
 }
 
 const MOCK_VIDEO_IDS = new Set(['vid_1', 'vid_2', 'vid_3']);

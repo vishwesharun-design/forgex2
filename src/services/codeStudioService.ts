@@ -2,8 +2,8 @@ import { CodeLanguage, CodeSnippet, CodeAlterMode, ForgeXModelId } from '../type
 import { authService } from './authService';
 
 function getCodeStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_code_snippets_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_code_snippets_${partition}`;
 }
 
 export interface CodeStudioResponse {

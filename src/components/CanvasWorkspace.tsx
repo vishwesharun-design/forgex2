@@ -125,6 +125,47 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
     setActiveBoard(updated);
   };
 
+  const handleClearActiveBoard = () => {
+    const updated = {
+      ...activeBoard,
+      nodes: [],
+      edges: [],
+      lastModified: Date.now(),
+    };
+    canvasService.saveBoard(updated);
+    setActiveBoard(updated);
+  };
+
+  const handleNewBoard = () => {
+    const newBoard = canvasService.createBlankBoard('New Visual Canvas');
+    canvasService.saveBoard(newBoard);
+    const updated = canvasService.getBoards();
+    setBoards(updated);
+    setActiveBoard(newBoard);
+  };
+
+  const handleDeleteBoard = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const remaining = canvasService.deleteBoard(id);
+    if (remaining.length === 0) {
+      const fresh = canvasService.createBlankBoard('New Blank Canvas');
+      canvasService.saveBoard(fresh);
+      setBoards([fresh]);
+      setActiveBoard(fresh);
+    } else {
+      setBoards(remaining);
+      if (activeBoard.id === id) {
+        setActiveBoard(remaining[0]);
+      }
+    }
+  };
+
+  const handleClearAllCanvasHistory = () => {
+    const fresh = canvasService.clearAllBoards();
+    setBoards(fresh);
+    setActiveBoard(fresh[0]);
+  };
+
   const handleUpdateNode = (id: string, field: 'title' | 'content', val: string) => {
     const updated = {
       ...activeBoard,
@@ -156,6 +197,23 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleNewBoard}
+            className="px-3 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Canvas</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleClearActiveBoard}
+            title="Clear all nodes and connections on this board"
+            className="px-3 py-1.5 rounded-xl border border-neutral-800 hover:text-red-400 hover:bg-neutral-850 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear Board</span>
+          </button>
           <button
             type="button"
             onClick={handleAddNode}
@@ -251,15 +309,25 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
 
           {/* Boards List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-1 ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-              Boards ({boards.length})
-            </span>
+            <div className="flex items-center justify-between px-1">
+              <span className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                Boards ({boards.length})
+              </span>
+              <button
+                type="button"
+                onClick={handleClearAllCanvasHistory}
+                className="text-[10px] text-neutral-400 hover:text-red-400 transition-colors font-medium cursor-pointer"
+                title="Wipe canvas boards history"
+              >
+                Clear History
+              </button>
+            </div>
 
             {boards.map((b) => (
               <div
                 key={b.id}
                 onClick={() => setActiveBoard(b)}
-                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`p-3 rounded-xl border cursor-pointer transition-all relative group ${
                   activeBoard.id === b.id
                     ? 'border-amber-500 bg-amber-500/10'
                     : isDark
@@ -267,7 +335,17 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
                     : 'border-neutral-200 hover:border-neutral-300 bg-white'
                 }`}
               >
-                <p className="text-xs font-bold truncate">{b.name}</p>
+                <div className="flex items-start justify-between gap-1.5">
+                  <p className="text-xs font-bold truncate flex-1">{b.name}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteBoard(b.id, e)}
+                    className="opacity-60 group-hover:opacity-100 hover:text-red-400 p-1 rounded transition-all text-neutral-400"
+                    title="Delete this board"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 <div className="flex items-center justify-between mt-2 pt-1 border-t border-neutral-800/30 text-[10px] text-neutral-400">
                   <span>{b.nodes.length} nodes</span>
                   <span>{b.edges.length} edges</span>

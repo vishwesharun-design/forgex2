@@ -2,8 +2,8 @@ import { PresentationDeck } from '../types';
 import { authService } from './authService';
 
 function getDeckStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_presentation_decks_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_presentation_decks_${partition}`;
 }
 
 export const presentationService = {

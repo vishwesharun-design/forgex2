@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PenTool,
   Sparkles,
@@ -13,7 +13,9 @@ import {
   CheckCheck,
   SlidersHorizontal,
   ArrowRight,
-  Download
+  Download,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 import { WritingDoc, WritingCategory, WritingTone, WritingAction, ForgeXTheme, ForgeXModelId } from '../types';
 import { writingStudioService } from '../services/writingStudioService';
@@ -66,7 +68,52 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const activeDoc = documents.find((d) => d.id === activeDocId) || documents[0];
+  // History stacks for Undo & Redo
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+
+  // Synchronize documents with auth state changes and initialize if empty
+  useEffect(() => {
+    const loadDocs = () => {
+      let docs = writingStudioService.getDocuments();
+      if (docs.length === 0) {
+        const welcomeDoc: WritingDoc = {
+          id: 'doc-' + Date.now(),
+          title: 'Blank Document',
+          category: 'Article',
+          tone: 'Professional',
+          content: '',
+          wordCount: 0,
+          charCount: 0,
+          lastModified: Date.now(),
+        };
+        writingStudioService.saveDocument(welcomeDoc);
+        docs = [welcomeDoc];
+      }
+
+      setDocuments(docs);
+      setActiveDocId((prev) => {
+        const found = docs.find((d) => d.id === prev);
+        if (found) {
+          setDocTitle(found.title);
+          setCurrentText(found.content);
+          setCategory(found.category);
+          setTone(found.tone);
+          return found.id;
+        }
+        const first = docs[0];
+        setDocTitle(first.title);
+        setCurrentText(first.content);
+        setCategory(first.category);
+        setTone(first.tone);
+        return first.id;
+      });
+    };
+
+    loadDocs();
+    window.addEventListener('forgex:auth_changed', loadDocs);
+    return () => window.removeEventListener('forgex:auth_changed', loadDocs);
+  }, []);
 
   const handleSelectDoc = (doc: WritingDoc) => {
     setActiveDocId(doc.id);
@@ -74,6 +121,8 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
     setCurrentText(doc.content);
     setCategory(doc.category);
     setTone(doc.tone);
+    setUndoStack([]);
+    setRedoStack([]);
   };
 
   const handleNewDoc = () => {
@@ -93,14 +142,100 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
     setActiveDocId(newDoc.id);
     setDocTitle(newDoc.title);
     setCurrentText('');
+    setUndoStack([]);
+    setRedoStack([]);
+  };
+
+  const handleClearAllDocs = () => {
+    writingStudioService.saveDocuments([]);
+    const fresh: WritingDoc = {
+      id: 'doc-' + Date.now(),
+      title: 'Blank Writing',
+      category,
+      tone,
+      content: '',
+      wordCount: 0,
+      charCount: 0,
+      lastModified: Date.now(),
+    };
+    writingStudioService.saveDocument(fresh);
+    setDocuments([fresh]);
+    handleSelectDoc(fresh);
   };
 
   const handleDeleteDoc = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = writingStudioService.deleteDocument(id);
     setDocuments(updated);
-    if (activeDocId === id && updated.length > 0) {
-      handleSelectDoc(updated[0]);
+    if (activeDocId === id) {
+      if (updated.length > 0) {
+        handleSelectDoc(updated[0]);
+      } else {
+        const fresh: WritingDoc = {
+          id: 'doc-' + Date.now(),
+          title: 'Untitled Writing',
+          category,
+          tone,
+          content: '',
+          wordCount: 0,
+          charCount: 0,
+          lastModified: Date.now(),
+        };
+        writingStudioService.saveDocument(fresh);
+        setDocuments([fresh]);
+        handleSelectDoc(fresh);
+      }
+    }
+  };
+
+  const pushUndoState = (prevText: string) => {
+    setUndoStack((prev) => [...prev.slice(-40), prevText]);
+    setRedoStack([]);
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack[undoStack.length - 1];
+    setRedoStack((r) => [currentText, ...r.slice(0, 40)]);
+    setUndoStack((u) => u.slice(0, -1));
+    setCurrentText(prev);
+
+    if (activeDocId) {
+      const updatedDoc: WritingDoc = {
+        id: activeDocId,
+        title: docTitle,
+        category,
+        tone,
+        content: prev,
+        wordCount: prev.trim() ? prev.trim().split(/\s+/).length : 0,
+        charCount: prev.length,
+        lastModified: Date.now(),
+      };
+      writingStudioService.saveDocument(updatedDoc);
+      setDocuments(writingStudioService.getDocuments());
+    }
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    setUndoStack((u) => [...u.slice(-40), currentText]);
+    setRedoStack((r) => r.slice(1));
+    setCurrentText(next);
+
+    if (activeDocId) {
+      const updatedDoc: WritingDoc = {
+        id: activeDocId,
+        title: docTitle,
+        category,
+        tone,
+        content: next,
+        wordCount: next.trim() ? next.trim().split(/\s+/).length : 0,
+        charCount: next.length,
+        lastModified: Date.now(),
+      };
+      writingStudioService.saveDocument(updatedDoc);
+      setDocuments(writingStudioService.getDocuments());
     }
   };
 
@@ -109,6 +244,8 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
     if (!promptToUse.trim() || isProcessing) return;
     setIsProcessing(true);
     setErrorMessage(null);
+    pushUndoState(currentText);
+
     try {
       const generated = await writingStudioService.generateWriting({
         category,
@@ -116,8 +253,10 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
         topic: promptToUse.trim(),
       });
       setCurrentText(generated);
+
+      const targetId = (!currentText.trim() && activeDocId) ? activeDocId : 'doc-' + Date.now();
       const updatedDoc: WritingDoc = {
-        id: activeDocId || 'doc-' + Date.now(),
+        id: targetId,
         title: promptToUse.trim().slice(0, 40) || 'Untitled',
         category,
         tone,
@@ -142,6 +281,8 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
     if (!currentText.trim() || isProcessing) return;
     setIsProcessing(true);
     setErrorMessage(null);
+    pushUndoState(currentText);
+
     try {
       const altered = await writingStudioService.alterWriting({
         category,
@@ -150,20 +291,20 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
         alterAction,
       });
       setCurrentText(altered);
-      if (activeDocId) {
-        const updatedDoc: WritingDoc = {
-          id: activeDocId,
-          title: docTitle,
-          category,
-          tone,
-          content: altered,
-          wordCount: altered.trim().split(/\s+/).length,
-          charCount: altered.length,
-          lastModified: Date.now(),
-        };
-        writingStudioService.saveDocument(updatedDoc);
-        setDocuments(writingStudioService.getDocuments());
-      }
+      const targetId = activeDocId || 'doc-' + Date.now();
+      const updatedDoc: WritingDoc = {
+        id: targetId,
+        title: docTitle,
+        category,
+        tone,
+        content: altered,
+        wordCount: altered.trim().split(/\s+/).length,
+        charCount: altered.length,
+        lastModified: Date.now(),
+      };
+      writingStudioService.saveDocument(updatedDoc);
+      setDocuments(writingStudioService.getDocuments());
+      setActiveDocId(targetId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Text alteration notice: ${msg}`);
@@ -282,13 +423,19 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
                 placeholder="e.g. Write an essay examining quantum computing applications in medicine..."
                 value={topicInput}
                 onChange={(e) => setTopicInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+                    e.preventDefault();
+                    handleGenerate(topicInput.trim() || docTitle || 'Modern Strategic Innovation');
+                  }
+                }}
                 className={`w-full p-2.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 resize-none ${
                   isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300'
                 }`}
               />
               {/* Quick suggestions */}
               <div className="flex flex-wrap gap-1 mt-1.5">
-                {['AI Ethics Essay', 'Press Release', 'Executive Brief'].map((sug) => (
+                {['AI Ethics Essay', 'Press Release', 'Executive Brief', 'Story Prologue'].map((sug) => (
                   <button
                     key={sug}
                     type="button"
@@ -318,9 +465,9 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
             <button
               id="generate-writing-btn"
               type="button"
-              onClick={() => handleGenerate()}
-              disabled={isProcessing || !topicInput.trim()}
-              className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              onClick={() => handleGenerate(topicInput.trim() || docTitle || 'Modern Strategic Innovation')}
+              disabled={isProcessing}
+              className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>{isProcessing ? 'Generating Prose...' : 'Generate Writing'}</span>
@@ -329,9 +476,21 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
 
           {/* Documents Vault */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-1 ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-              Saved Writings ({documents.length})
-            </span>
+            <div className="flex items-center justify-between px-1">
+              <span className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                Saved Writings ({documents.length})
+              </span>
+              {documents.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllDocs}
+                  className="text-[10px] text-neutral-400 hover:text-red-400 transition-colors font-medium cursor-pointer"
+                  title="Remove all saved writings"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
 
             {documents.length === 0 ? (
               <div className="text-center py-6 text-neutral-400 text-xs">No saved writings yet.</div>
@@ -375,6 +534,39 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
           {/* Alteration Action Bar */}
           <div className={`px-6 py-2.5 border-b flex items-center justify-between gap-2 overflow-x-auto ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
             <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Undo and Redo Action Group */}
+              <div className="flex items-center gap-1 border-r border-neutral-800/50 pr-2 mr-1">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  disabled={undoStack.length === 0}
+                  title="Undo (Ctrl+Z or Cmd+Z)"
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                    isDark
+                      ? 'border-neutral-800 hover:bg-neutral-850 text-neutral-200'
+                      : 'border-neutral-200 hover:bg-neutral-100 text-neutral-800'
+                  }`}
+                >
+                  <Undo2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Undo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={redoStack.length === 0}
+                  title="Redo (Ctrl+Y or Cmd+Shift+Z)"
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                    isDark
+                      ? 'border-neutral-800 hover:bg-neutral-850 text-neutral-200'
+                      : 'border-neutral-200 hover:bg-neutral-100 text-neutral-800'
+                  }`}
+                >
+                  <Redo2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Redo</span>
+                </button>
+              </div>
+
               {[
                 { id: 'improve', label: 'Improve Flow', icon: Sparkles },
                 { id: 'rewrite', label: 'Rewrite', icon: RefreshCw },
@@ -439,7 +631,24 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
             <input
               type="text"
               value={docTitle}
-              onChange={(e) => setDocTitle(e.target.value)}
+              onChange={(e) => {
+                const newTitle = e.target.value;
+                setDocTitle(newTitle);
+                const targetId = activeDocId || 'doc-' + Date.now();
+                if (!activeDocId) setActiveDocId(targetId);
+                const updated: WritingDoc = {
+                  id: targetId,
+                  title: newTitle || 'Untitled Writing',
+                  category,
+                  tone,
+                  content: currentText,
+                  wordCount: currentText.trim() ? currentText.trim().split(/\s+/).length : 0,
+                  charCount: currentText.length,
+                  lastModified: Date.now(),
+                };
+                writingStudioService.saveDocument(updated);
+                setDocuments(writingStudioService.getDocuments());
+              }}
               placeholder="Document Title..."
               className="text-base font-bold bg-transparent border-none focus:outline-none flex-1"
             />
@@ -461,20 +670,39 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               <textarea
                 id="writing-studio-editor"
                 value={currentText}
-                onChange={(e) => {
-                  setCurrentText(e.target.value);
-                  if (activeDocId) {
-                    writingStudioService.saveDocument({
-                      id: activeDocId,
-                      title: docTitle,
-                      category,
-                      tone,
-                      content: e.target.value,
-                      wordCount: e.target.value.trim().split(/\s+/).length,
-                      charCount: e.target.value.length,
-                      lastModified: Date.now(),
-                    });
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+                    e.preventDefault();
+                    handleUndo();
+                  } else if (
+                    ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') ||
+                    ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+                  ) {
+                    e.preventDefault();
+                    handleRedo();
                   }
+                }}
+                onChange={(e) => {
+                  const newContent = e.target.value;
+                  // Store previous state for undo if starting a substantial change
+                  if (Math.abs(newContent.length - currentText.length) > 3 || newContent.endsWith('\n')) {
+                    pushUndoState(currentText);
+                  }
+                  setCurrentText(newContent);
+                  const targetId = activeDocId || 'doc-' + Date.now();
+                  if (!activeDocId) setActiveDocId(targetId);
+                  const updated: WritingDoc = {
+                    id: targetId,
+                    title: docTitle || 'Untitled Writing',
+                    category,
+                    tone,
+                    content: newContent,
+                    wordCount: newContent.trim() ? newContent.trim().split(/\s+/).length : 0,
+                    charCount: newContent.length,
+                    lastModified: Date.now(),
+                  };
+                  writingStudioService.saveDocument(updated);
+                  setDocuments(writingStudioService.getDocuments());
                 }}
                 placeholder="Start typing or generate content from the left panel..."
                 className={`w-full flex-1 p-4 rounded-2xl border text-sm leading-relaxed font-sans resize-none focus:outline-none focus:border-amber-500 transition-colors ${

@@ -213,8 +213,10 @@ export interface GeneratedVideo {
   slideCount?: number;
 }
 
-export type SongGenre = 'Synthwave' | 'Lo-Fi' | 'Cinematic' | 'EDM' | 'Rock' | 'Acoustic' | 'Ambient' | 'Hip-Hop';
+export type SongGenre = 'Synthwave' | 'Lo-Fi' | 'Cinematic' | 'EDM' | 'Rock' | 'Acoustic' | 'Ambient' | 'Hip-Hop' | 'Classical';
 export type SongMood = 'Energetic' | 'Chill' | 'Dark' | 'Dreamy' | 'Uplifting' | 'Melancholic';
+export type SongVoiceProfile = 'Zephyr' | 'Puck' | 'Kore' | 'Fenrir' | 'Aoede' | 'Charon';
+export type SongVocalStyle = 'Melodic Singing' | 'Rhythm Flow' | 'Harmonized Vocals' | 'Ambient Chant';
 
 export interface GeneratedSong {
   id: string;
@@ -223,7 +225,7 @@ export interface GeneratedSong {
   genre: SongGenre;
   mood: SongMood;
   tempoBpm: number;
-  durationSeconds: number;
+  durationSeconds: number; // up to 210 seconds (3:30 min)
   lyrics?: string;
   coverUrl: string;
   modelId: ForgeXModelId;
@@ -231,7 +233,16 @@ export interface GeneratedSong {
   isFavorite?: boolean;
   audioSeed?: number;
   isRealLifeHit?: boolean;
+  isNoCopyright?: boolean;
+  copyrightStatus?: string;
   artist?: string;
+  audioUrl?: string;
+  cloudStorageUrl?: string;
+  // AI Voice Synthesis fields
+  hasVoice?: boolean;
+  voiceProfile?: SongVoiceProfile;
+  vocalStyle?: SongVocalStyle;
+  vocalAudioUrl?: string;
 }
 
 export type ThemeEffectType = 

@@ -2,13 +2,13 @@ import { ForgeXProject } from '../types';
 import { authService } from './authService';
 
 function getProjectsStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_projects_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_projects_${partition}`;
 }
 
 function getActiveProjectKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_active_project_id_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_active_project_id_${partition}`;
 }
 
 export const projectService = {

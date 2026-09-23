@@ -159,6 +159,12 @@ export const agentService = {
     localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
   },
 
+  clearExecutions(): void {
+    const key = getExecutionStorageKey();
+    localStorage.removeItem(key);
+    localStorage.removeItem('forgex_agent_executions');
+  },
+
   async runAgentTask(
     agent: AIAgent,
     taskPrompt: string,

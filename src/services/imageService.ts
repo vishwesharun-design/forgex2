@@ -3,8 +3,8 @@ import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 
 function getImageStorageKey(): string {
-  const userId = authService.getCurrentUserId();
-  return `forgex_generated_images_${userId}`;
+  const partition = authService.getCurrentUserPartitionKey();
+  return `forgex_generated_images_${partition}`;
 }
 
 const MOCK_IMAGE_IDS = new Set(['img_1', 'img_2', 'img_3', 'img_4', 'img_5', 'img_6']);

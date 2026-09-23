@@ -9,7 +9,7 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { ChatSession, GeneratedImage, GeneratedSong, GeneratedVideo, UserProfile, UserSettings } from '../types';
 
 export interface UserWebSearchItem {
@@ -31,10 +31,23 @@ export interface UserWebSearchItem {
   timestamp: number;
 }
 
+/**
+ * Checks if the current Firebase Auth user is authorized to read/write this user ID.
+ * Prevents unauthenticated permission errors in the console when operating in guest/demo mode.
+ */
+function isAuthorizedForUser(userId: string): boolean {
+  if (!userId || userId === 'guest') return false;
+  const current = auth.currentUser;
+  if (!current) return false;
+  return current.uid === userId;
+}
+
 export const firestoreStorageService = {
   // --- USER PROFILE STORAGE ---
   async saveUserProfile(profile: UserProfile): Promise<void> {
     if (!profile || !profile.id) return;
+    if (!isAuthorizedForUser(profile.id)) return;
+
     try {
       const userRef = doc(db, 'users', profile.id);
       await setDoc(userRef, {
@@ -43,18 +56,18 @@ export const firestoreStorageService = {
         email: profile.email,
         avatarUrl: profile.avatarUrl || '',
         creditsUsed: profile.creditsUsed ?? 0,
-        creditsLimit: profile.creditsLimit ?? 1000,
+        creditsLimit: profile.creditsLimit ?? 2500,
         username: profile.username || '',
         isGoogleUser: Boolean(profile.isGoogleUser),
         updatedAt: Date.now(),
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserProfile skipped/offline:', err);
+      console.warn('Firestore saveUserProfile notice:', err);
     }
   },
 
   async loadUserProfile(userId: string): Promise<UserProfile | null> {
-    if (!userId) return null;
+    if (!userId || !isAuthorizedForUser(userId)) return null;
     try {
       const userRef = doc(db, 'users', userId);
       const snap = await getDoc(userRef);
@@ -66,13 +79,13 @@ export const firestoreStorageService = {
           email: d.email || '',
           avatarUrl: d.avatarUrl || '',
           creditsUsed: d.creditsUsed ?? 0,
-          creditsLimit: d.creditsLimit ?? 1000,
+          creditsLimit: d.creditsLimit ?? 2500,
           username: d.username,
           isGoogleUser: d.isGoogleUser,
         };
       }
     } catch (err) {
-      console.warn('Firestore loadUserProfile skipped/offline:', err);
+      console.warn('Firestore loadUserProfile notice:', err);
     }
     return null;
   },
@@ -80,6 +93,8 @@ export const firestoreStorageService = {
   // --- SEPARATE USER CHATS STORAGE ---
   async saveUserChat(userId: string, session: ChatSession): Promise<void> {
     if (!userId || !session || !session.id) return;
+    if (!isAuthorizedForUser(userId)) return;
+
     try {
       const chatRef = doc(db, 'users', userId, 'chats', session.id);
       await setDoc(chatRef, {
@@ -88,12 +103,12 @@ export const firestoreStorageService = {
         updatedAt: Date.now(),
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserChat skipped/offline:', err);
+      console.warn('Firestore saveUserChat notice:', err);
     }
   },
 
   async loadUserChats(userId: string): Promise<ChatSession[]> {
-    if (!userId) return [];
+    if (!userId || !isAuthorizedForUser(userId)) return [];
     try {
       const chatsRef = collection(db, 'users', userId, 'chats');
       const q = query(chatsRef, orderBy('updatedAt', 'desc'), limit(100));
@@ -112,24 +127,26 @@ export const firestoreStorageService = {
       });
       return list;
     } catch (err) {
-      console.warn('Firestore loadUserChats skipped/offline:', err);
+      console.warn('Firestore loadUserChats notice:', err);
       return [];
     }
   },
 
   async deleteUserChat(userId: string, chatId: string): Promise<void> {
-    if (!userId || !chatId) return;
+    if (!userId || !chatId || !isAuthorizedForUser(userId)) return;
     try {
       const chatRef = doc(db, 'users', userId, 'chats', chatId);
       await deleteDoc(chatRef);
     } catch (err) {
-      console.warn('Firestore deleteUserChat skipped/offline:', err);
+      console.warn('Firestore deleteUserChat notice:', err);
     }
   },
 
   // --- SEPARATE USER IMAGES STORAGE ---
   async saveUserImage(userId: string, image: GeneratedImage): Promise<void> {
     if (!userId || !image || !image.id) return;
+    if (!isAuthorizedForUser(userId)) return;
+
     try {
       const imgRef = doc(db, 'users', userId, 'images', image.id);
       await setDoc(imgRef, {
@@ -137,12 +154,12 @@ export const firestoreStorageService = {
         userId,
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserImage skipped/offline:', err);
+      console.warn('Firestore saveUserImage notice:', err);
     }
   },
 
   async loadUserImages(userId: string): Promise<GeneratedImage[]> {
-    if (!userId) return [];
+    if (!userId || !isAuthorizedForUser(userId)) return [];
     try {
       const imgsRef = collection(db, 'users', userId, 'images');
       const q = query(imgsRef, orderBy('timestamp', 'desc'), limit(150));
@@ -153,24 +170,26 @@ export const firestoreStorageService = {
       });
       return list;
     } catch (err) {
-      console.warn('Firestore loadUserImages skipped/offline:', err);
+      console.warn('Firestore loadUserImages notice:', err);
       return [];
     }
   },
 
   async deleteUserImage(userId: string, imageId: string): Promise<void> {
-    if (!userId || !imageId) return;
+    if (!userId || !imageId || !isAuthorizedForUser(userId)) return;
     try {
       const imgRef = doc(db, 'users', userId, 'images', imageId);
       await deleteDoc(imgRef);
     } catch (err) {
-      console.warn('Firestore deleteUserImage skipped/offline:', err);
+      console.warn('Firestore deleteUserImage notice:', err);
     }
   },
 
   // --- SEPARATE USER SONGS STORAGE ---
   async saveUserSong(userId: string, song: GeneratedSong): Promise<void> {
     if (!userId || !song || !song.id) return;
+    if (!isAuthorizedForUser(userId)) return;
+
     try {
       const songRef = doc(db, 'users', userId, 'songs', song.id);
       await setDoc(songRef, {
@@ -178,12 +197,12 @@ export const firestoreStorageService = {
         userId,
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserSong skipped/offline:', err);
+      console.warn('Firestore saveUserSong notice:', err);
     }
   },
 
   async loadUserSongs(userId: string): Promise<GeneratedSong[]> {
-    if (!userId) return [];
+    if (!userId || !isAuthorizedForUser(userId)) return [];
     try {
       const songsRef = collection(db, 'users', userId, 'songs');
       const q = query(songsRef, orderBy('createdAt', 'desc'), limit(150));
@@ -194,24 +213,26 @@ export const firestoreStorageService = {
       });
       return list;
     } catch (err) {
-      console.warn('Firestore loadUserSongs skipped/offline:', err);
+      console.warn('Firestore loadUserSongs notice:', err);
       return [];
     }
   },
 
   async deleteUserSong(userId: string, songId: string): Promise<void> {
-    if (!userId || !songId) return;
+    if (!userId || !songId || !isAuthorizedForUser(userId)) return;
     try {
       const songRef = doc(db, 'users', userId, 'songs', songId);
       await deleteDoc(songRef);
     } catch (err) {
-      console.warn('Firestore deleteUserSong skipped/offline:', err);
+      console.warn('Firestore deleteUserSong notice:', err);
     }
   },
 
   // --- SEPARATE USER VIDEOS STORAGE ---
   async saveUserVideo(userId: string, video: GeneratedVideo): Promise<void> {
     if (!userId || !video || !video.id) return;
+    if (!isAuthorizedForUser(userId)) return;
+
     try {
       const vidRef = doc(db, 'users', userId, 'videos', video.id);
       await setDoc(vidRef, {
@@ -219,12 +240,12 @@ export const firestoreStorageService = {
         userId,
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserVideo skipped/offline:', err);
+      console.warn('Firestore saveUserVideo notice:', err);
     }
   },
 
   async loadUserVideos(userId: string): Promise<GeneratedVideo[]> {
-    if (!userId) return [];
+    if (!userId || !isAuthorizedForUser(userId)) return [];
     try {
       const vidsRef = collection(db, 'users', userId, 'videos');
       const q = query(vidsRef, orderBy('createdAt', 'desc'), limit(150));
@@ -235,24 +256,24 @@ export const firestoreStorageService = {
       });
       return list;
     } catch (err) {
-      console.warn('Firestore loadUserVideos skipped/offline:', err);
+      console.warn('Firestore loadUserVideos notice:', err);
       return [];
     }
   },
 
   async deleteUserVideo(userId: string, videoId: string): Promise<void> {
-    if (!userId || !videoId) return;
+    if (!userId || !videoId || !isAuthorizedForUser(userId)) return;
     try {
       const vidRef = doc(db, 'users', userId, 'videos', videoId);
       await deleteDoc(vidRef);
     } catch (err) {
-      console.warn('Firestore deleteUserVideo skipped/offline:', err);
+      console.warn('Firestore deleteUserVideo notice:', err);
     }
   },
 
   // --- SEPARATE USER WEB SEARCHES STORAGE ---
   async saveUserWebSearch(userId: string, search: UserWebSearchItem): Promise<void> {
-    if (!userId || !search) return;
+    if (!userId || !search || !isAuthorizedForUser(userId)) return;
     try {
       const searchId = search.id || `search_${search.timestamp}`;
       const searchRef = doc(db, 'users', userId, 'webSearches', searchId);
@@ -262,12 +283,12 @@ export const firestoreStorageService = {
         userId,
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserWebSearch skipped/offline:', err);
+      console.warn('Firestore saveUserWebSearch notice:', err);
     }
   },
 
   async loadUserWebSearches(userId: string): Promise<UserWebSearchItem[]> {
-    if (!userId) return [];
+    if (!userId || !isAuthorizedForUser(userId)) return [];
     try {
       const searchesRef = collection(db, 'users', userId, 'webSearches');
       const q = query(searchesRef, orderBy('timestamp', 'desc'), limit(60));
@@ -282,36 +303,36 @@ export const firestoreStorageService = {
       });
       return list;
     } catch (err) {
-      console.warn('Firestore loadUserWebSearches skipped/offline:', err);
+      console.warn('Firestore loadUserWebSearches notice:', err);
       return [];
     }
   },
 
   async deleteUserWebSearch(userId: string, searchId: string): Promise<void> {
-    if (!userId || !searchId) return;
+    if (!userId || !searchId || !isAuthorizedForUser(userId)) return;
     try {
       const searchRef = doc(db, 'users', userId, 'webSearches', searchId);
       await deleteDoc(searchRef);
     } catch (err) {
-      console.warn('Firestore deleteUserWebSearch skipped/offline:', err);
+      console.warn('Firestore deleteUserWebSearch notice:', err);
     }
   },
 
   async clearUserWebSearches(userId: string): Promise<void> {
-    if (!userId) return;
+    if (!userId || !isAuthorizedForUser(userId)) return;
     try {
       const searchesRef = collection(db, 'users', userId, 'webSearches');
       const snap = await getDocs(searchesRef);
       const promises = snap.docs.map((d) => deleteDoc(d.ref));
       await Promise.all(promises);
     } catch (err) {
-      console.warn('Firestore clearUserWebSearches skipped/offline:', err);
+      console.warn('Firestore clearUserWebSearches notice:', err);
     }
   },
 
   // --- SEPARATE USER SETTINGS STORAGE ---
   async saveUserSettings(userId: string, settings: UserSettings): Promise<void> {
-    if (!userId || !settings) return;
+    if (!userId || !settings || !isAuthorizedForUser(userId)) return;
     try {
       const setRef = doc(db, 'users', userId, 'settings', 'preferences');
       await setDoc(setRef, {
@@ -320,12 +341,12 @@ export const firestoreStorageService = {
         updatedAt: Date.now(),
       }, { merge: true });
     } catch (err) {
-      console.warn('Firestore saveUserSettings skipped/offline:', err);
+      console.warn('Firestore saveUserSettings notice:', err);
     }
   },
 
   async loadUserSettings(userId: string): Promise<UserSettings | null> {
-    if (!userId) return null;
+    if (!userId || !isAuthorizedForUser(userId)) return null;
     try {
       const setRef = doc(db, 'users', userId, 'settings', 'preferences');
       const snap = await getDoc(setRef);
@@ -333,7 +354,7 @@ export const firestoreStorageService = {
         return snap.data() as UserSettings;
       }
     } catch (err) {
-      console.warn('Firestore loadUserSettings skipped/offline:', err);
+      console.warn('Firestore loadUserSettings notice:', err);
     }
     return null;
   }
