@@ -215,7 +215,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] relative overflow-hidden">
+    <div className="flex-1 flex flex-col h-full min-h-0 relative overflow-hidden">
       {/* Hidden file inputs */}
       <input
         type="file"
@@ -232,26 +232,26 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
         {!hasMessages ? (
-          /* Empty Initial State as specified in Section 10 */
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-12 select-none animate-in fade-in duration-300">
+          /* Empty Initial State */
+          <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-8 sm:py-12 select-none animate-in fade-in duration-300">
             {/* How can ForgeX help you today? */}
-            <h2 id="chat-empty-title" className="font-display font-bold text-3xl sm:text-4xl tracking-tight mb-2">
+            <h2 id="chat-empty-title" className="font-display font-bold text-2xl sm:text-4xl tracking-tight mb-2">
               How can ForgeX help you today?
             </h2>
 
-            {/* Chat, create images, or generate videos. */}
-            <p className={`text-base sm:text-lg mb-8 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Chat, create images, or generate videos.
+            {/* Clean subtitle without video reference */}
+            <p className={`text-sm sm:text-lg mb-6 sm:mb-8 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+              Chat, create images, or explore ideas.
             </p>
 
             {/* Suggested Prompts */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full text-left">
               <button
                 id="prompt-btn-explain"
-                onClick={() => handleSendMessage('Explain how neural diffusion models synthesize temporal video frames.')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                onClick={() => handleSendMessage('Explain how transformer neural networks process attention mechanisms.')}
+                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
                     : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
@@ -267,7 +267,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <button
                 id="prompt-btn-image"
                 onClick={() => handleSendMessage('Create a prompt for a photorealistic cybernetic sanctuary in 8k.')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
                     : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
@@ -281,25 +281,25 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </button>
 
               <button
-                id="prompt-btn-video"
-                onClick={() => handleSendMessage('Plan a 10-second cinematic video teaser sequence.')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                id="prompt-btn-music"
+                onClick={() => handleSendMessage('Compose lyrics and chord progression for an atmospheric synth track.')}
+                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
                     : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
                 }`}
               >
-                <span className="text-amber-400 text-xs font-semibold block mb-1">Motion</span>
-                <p className="font-medium text-sm">Create a video</p>
+                <span className="text-amber-400 text-xs font-semibold block mb-1">Audio & Song</span>
+                <p className="font-medium text-sm">Compose a song</p>
                 <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  Choreograph camera dolly and lighting shifts
+                  Structure rhythm, BPM, vocal style, and lyrics
                 </p>
               </button>
 
               <button
                 id="prompt-btn-brainstorm"
                 onClick={() => handleSendMessage('Brainstorm 4 innovative features for an AI creative suite.')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
                     : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
@@ -505,7 +505,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
 
       {/* Bottom Area: Quick Actions & Large Rounded Chat Input */}
-      <div className="p-4 sm:p-6 pt-0 max-w-3xl w-full mx-auto">
+      <div className="px-3 sm:px-6 pt-0 pb-2 sm:pb-4 max-w-3xl w-full mx-auto shrink-0">
         {/* Quick Actions (Section 12) */}
         <div className="flex items-center gap-2 mb-2.5 overflow-x-auto pb-1 no-scrollbar">
           <button

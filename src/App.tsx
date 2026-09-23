@@ -29,6 +29,7 @@ import { Header } from './components/Header';
 import { ChatWorkspace } from './components/ChatWorkspace';
 import { ImageWorkspace } from './components/ImageWorkspace';
 import { SongWorkspace } from './components/SongWorkspace';
+import { SpotifyStudioWorkspace } from './components/SpotifyStudioWorkspace';
 import { ResearchWorkspace } from './components/ResearchWorkspace';
 import { CodeStudioWorkspace } from './components/CodeStudioWorkspace';
 import { DocumentWorkspace } from './components/DocumentWorkspace';
@@ -468,6 +469,12 @@ export default function App() {
                   theme={settings.theme}
                   selectedModelId={selectedModelId}
                   onSelectModel={setSelectedModelId}
+                />
+              )}
+
+              {activeWorkspace === 'spotify' && (
+                <SpotifyStudioWorkspace
+                  theme={settings.theme}
                 />
               )}
 

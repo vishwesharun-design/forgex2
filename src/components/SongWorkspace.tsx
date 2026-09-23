@@ -335,7 +335,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const activeSong = songs.find((s) => s.id === activeSongId);
 
   return (
-    <div className="relative flex-1 w-full h-full overflow-y-auto p-4 sm:p-8">
+    <div className="relative flex-1 w-full h-full min-h-0 overflow-y-auto p-3 sm:p-8">
       {/* Studio Ambient Visualizer */}
       <StudioVisualizer
         isPlaying={Boolean(activeSongId)}
@@ -344,7 +344,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
         isVocalActive={Boolean(activeSong?.hasVoice)}
       />
 
-      <div className="relative z-10 max-w-6xl mx-auto space-y-8 pb-32">
+      <div className="relative z-10 max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-28 sm:pb-32">
         {/* Studio Header & Generator Card */}
         <div
           className={`p-4 sm:p-8 rounded-3xl border shadow-xl transition-colors ${

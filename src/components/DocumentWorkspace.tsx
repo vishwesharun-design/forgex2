@@ -52,6 +52,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
   const [showQuizScore, setShowQuizScore] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'vault' | 'analysis'>('vault');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -158,25 +159,25 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Top Header */}
-      <div className={`px-6 py-3.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <FileText className="w-5 h-5" />
+      <div className={`px-4 sm:px-6 py-3 sm:py-3.5 border-b flex flex-wrap items-center justify-between gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2 truncate">
               File & Document AI
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+              <span className="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold shrink-0">
                 Multimodal Neural OCR
               </span>
             </h1>
-            <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Upload PDF, DOCX, PPTX, TXT, CSV & images for Q&A, synthesis, quizzes, and comparative intelligence.
+            <p className={`text-[11px] sm:text-xs truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Upload PDF, DOCX, PPTX, TXT, CSV & images for Q&A and analysis
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <ModelSelector
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
@@ -185,10 +186,44 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className={`flex md:hidden items-center border-b px-3 py-1.5 gap-2 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-100'}`}>
+        <button
+          type="button"
+          onClick={() => setMobileTab('vault')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'vault'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Upload className="w-3.5 h-3.5" />
+          <span>Files Vault ({documents.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('analysis')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'analysis'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Analysis & Results</span>
+        </button>
+      </div>
+
       {/* Main Dual-Pane Workspace */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: File Vault & Selection */}
-        <div className={`w-80 border-r flex flex-col shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
+        <div className={`w-full md:w-80 border-r flex flex-col shrink-0 ${
+          mobileTab === 'vault' ? 'flex' : 'hidden md:flex'
+        } ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
           {/* Upload Zone */}
           <div className="p-4 border-b border-neutral-800/40">
             <div
@@ -285,9 +320,11 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
         </div>
 
         {/* Right Panel: Analysis & Interactions */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-1 flex flex-col overflow-hidden ${
+          mobileTab === 'analysis' ? 'flex' : 'hidden md:flex'
+        }`}>
           {/* Action Tabs Bar */}
-          <div className={`px-6 py-3 border-b flex items-center justify-between gap-2 overflow-x-auto ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
+          <div className={`px-3 sm:px-6 py-2.5 sm:py-3 border-b flex items-center justify-between gap-2 overflow-x-auto ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
             <div className="flex items-center gap-1.5 flex-wrap">
               {[
                 { id: 'summarize', label: 'Summarize', icon: FileText },

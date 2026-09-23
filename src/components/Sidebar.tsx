@@ -31,7 +31,8 @@ import {
   Palette,
   Cpu,
   Wrench,
-  Sparkles as SparklesIcon
+  Sparkles as SparklesIcon,
+  Headphones
 } from 'lucide-react';
 import { ActiveWorkspace, ChatSession, ForgeXTheme, UserProfile } from '../types';
 
@@ -88,6 +89,15 @@ const STUDIOS: StudioDefinition[] = [
     accentColor: 'text-yellow-400',
     badge: 'Audio Synth',
     description: 'Web Audio polyphonic synthesizer & song lyrics generator',
+  },
+  {
+    id: 'spotify',
+    title: 'Music Player',
+    category: 'creative',
+    icon: Headphones,
+    accentColor: 'text-emerald-400',
+    badge: 'Real Audio',
+    description: 'Listen to real songs: Interstellar, Levitating, categories, Spotify links & player',
   },
 
   // 2. Intelligence Studios

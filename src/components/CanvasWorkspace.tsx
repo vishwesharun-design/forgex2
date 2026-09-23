@@ -41,6 +41,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [zoomScale, setZoomScale] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<'generator' | 'canvas'>('canvas');
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -54,6 +55,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
       const updated = canvasService.getBoards();
       setBoards(updated);
       setActiveBoard(newBoard);
+      setMobileTab('canvas');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Canvas generation notice: ${msg}`);
@@ -178,49 +180,40 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Top Header */}
-      <div className={`px-6 py-3.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <LayoutDashboard className="w-5 h-5" />
+      <div className={`px-4 sm:px-6 py-3 sm:py-3.5 border-b flex flex-wrap items-center justify-between gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <LayoutDashboard className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2 truncate">
               AI Infinite Canvas & Mindmap
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+              <span className="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold shrink-0">
                 Visual Whiteboard
               </span>
             </h1>
-            <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Map concepts, brainstorm architecture, create process flowcharts, and connect ideas visually with AI.
+            <p className={`text-[11px] sm:text-xs truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Map concepts, brainstorm architecture & create process flowcharts
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={handleNewBoard}
-            className="px-3 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="hidden sm:flex px-3 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-semibold items-center gap-1.5 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>New Canvas</span>
           </button>
           <button
             type="button"
-            onClick={handleClearActiveBoard}
-            title="Clear all nodes and connections on this board"
-            className="px-3 py-1.5 rounded-xl border border-neutral-800 hover:text-red-400 hover:bg-neutral-850 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear Board</span>
-          </button>
-          <button
-            type="button"
             onClick={handleAddNode}
-            className="px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs font-bold flex items-center gap-1.5 transition-colors"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Node</span>
+            <span>Node</span>
           </button>
           <ModelSelector
             selectedModelId={selectedModelId}
@@ -230,10 +223,44 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className={`flex md:hidden items-center border-b px-3 py-1.5 gap-2 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-100'}`}>
+        <button
+          type="button"
+          onClick={() => setMobileTab('generator')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'generator'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Generator & Boards ({boards.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('canvas')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'canvas'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          <span>Whiteboard Stage</span>
+        </button>
+      </div>
+
       {/* Main Dual Workspace */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left AI Generator Panel */}
-        <div className={`w-80 border-r flex flex-col shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
+        <div className={`w-full md:w-80 border-r flex flex-col shrink-0 ${
+          mobileTab === 'generator' ? 'flex' : 'hidden md:flex'
+        } ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
           <div className="p-4 border-b border-neutral-800/40 space-y-3">
             <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
               Canvas Architect
@@ -326,7 +353,10 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
             {boards.map((b) => (
               <div
                 key={b.id}
-                onClick={() => setActiveBoard(b)}
+                onClick={() => {
+                  setActiveBoard(b);
+                  setMobileTab('canvas');
+                }}
                 className={`p-3 rounded-xl border cursor-pointer transition-all relative group ${
                   activeBoard.id === b.id
                     ? 'border-amber-500 bg-amber-500/10'
@@ -361,6 +391,8 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
           onMouseMove={handleMouseMoveContainer}
           onMouseUp={handleMouseUpContainer}
           className={`flex-1 relative overflow-auto select-none ${
+            mobileTab === 'canvas' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
+          } ${
             isDark ? 'bg-[#09090b]' : 'bg-[#f4f4f5]'
           }`}
           style={{

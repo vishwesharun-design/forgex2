@@ -58,6 +58,7 @@ export type ActiveWorkspace =
   | 'image' 
   | 'video' 
   | 'music' 
+  | 'spotify'
   | 'research' 
   | 'code'
   | 'search'
@@ -597,4 +598,48 @@ export interface DataAnalysisReport {
     yAxis: string;
     data?: Array<{ label: string; value: number }>;
   }>;
+}
+
+// ==========================================
+// 11. SPOTIFY LOUNGE & MUSIC STUDIO TYPES
+// ==========================================
+export type SpotifyCategoryType = 
+  | 'featured'
+  | 'cinematic'
+  | 'pop'
+  | 'electronic'
+  | 'lofi'
+  | 'rock';
+
+export interface SpotifyTrack {
+  id: string;
+  title: string;
+  creator: string; // Creator name displayed below song
+  album: string;
+  year: number;
+  duration: string; // e.g. "2:06"
+  durationSeconds: number;
+  spotifyTrackId: string;
+  spotifyUrl: string;
+  embedUrl: string;
+  coverUrl: string;
+  category: SpotifyCategoryType;
+  categoryLabel: string;
+  genre: string;
+  mood: string;
+  description: string;
+  bpm?: number;
+  tags?: string[];
+  audioUrl?: string; // High-fidelity authentic real master recording audio stream
+  youtubeId?: string; // Full-length 3-5 minute complete track streaming ID
+  audioFrequencyProfile?: number[]; // for built-in reactive audio synthesis
+}
+
+export interface SpotifyCategory {
+  id: SpotifyCategoryType;
+  name: string;
+  description: string;
+  iconName: string;
+  color: string;
+  badge: string;
 }

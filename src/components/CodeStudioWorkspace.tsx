@@ -1090,10 +1090,10 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
 
           {/* Tab Content 1: Live Preview (iFrame sandbox with Device Viewport support) */}
           {rightPanelTab === 'preview' && (
-            <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-950 items-center justify-center p-2 sm:p-4 min-h-0">
+            <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-950 items-center justify-center p-0 md:p-4 min-h-0">
               {viewportMode === 'mobile' ? (
                 /* Interactive Mobile Device Frame */
-                <div className="w-full max-w-[375px] h-full max-h-[667px] my-auto mx-auto rounded-[24px] sm:rounded-[36px] border-[3px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all box-border">
+                <div className="w-full md:max-w-[375px] h-full md:max-h-[667px] my-auto mx-auto rounded-none md:rounded-[36px] border-0 md:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all box-border">
                   {/* Top status bar & dynamic island */}
                   <div className="h-7 bg-neutral-950 flex items-center justify-between px-3 sm:px-5 text-[10px] text-neutral-400 select-none shrink-0 border-b border-neutral-900">
                     <span className="font-semibold text-neutral-300">9:41</span>

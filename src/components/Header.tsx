@@ -48,6 +48,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Image Studio', category: 'Creative' };
       case 'music':
         return { title: 'AI Song Studio', category: 'Creative' };
+      case 'spotify':
+        return { title: 'Music Player', category: 'Creative' };
       case 'research':
         return { title: 'Deep Research', category: 'Intelligence' };
       case 'code':

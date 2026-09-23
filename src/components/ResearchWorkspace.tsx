@@ -167,29 +167,29 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
   };
 
   return (
-    <div className={`flex-1 h-full overflow-y-auto flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
+    <div className={`flex-1 h-full min-h-0 overflow-y-auto flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Workspace Header */}
-      <div className={`border-b px-6 py-4 flex items-center justify-between sticky top-0 z-20 backdrop-blur-md ${
+      <div className={`border-b px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20 backdrop-blur-md ${
         isDark ? 'bg-neutral-950/90 border-neutral-800/80' : 'bg-white/90 border-neutral-200'
       }`}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-neutral-950 shadow-md shadow-amber-500/20">
-            <Compass className="w-5 h-5" />
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-neutral-950 shadow-md shadow-amber-500/20 shrink-0">
+            <Compass className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold tracking-tight">Deep Research Engine</h1>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight truncate">Deep Research Engine</h1>
+              <span className="hidden sm:inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono shrink-0">
                 LIVE WEB GROUNDING
               </span>
             </div>
-            <p className="text-xs text-neutral-500">
-              Autonomous multi-vector web investigation, evidence analysis, and citation synthesis
+            <p className="text-[11px] sm:text-xs text-neutral-500 truncate">
+              Autonomous multi-vector web investigation & citation synthesis
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {history.length > 0 && (
             <button
               type="button"

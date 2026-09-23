@@ -75,12 +75,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               ? 'text-neutral-400 hover:text-white active:scale-95'
               : 'text-neutral-500 hover:text-neutral-900 active:scale-95'
           }`}
-          title="All 12 Studios & Settings"
+          title="All 13 Studios & Settings"
         >
           <div className="p-1 rounded-lg">
             <LayoutGrid className="w-4 h-4 text-amber-400" />
           </div>
-          <span className="text-[10px] mt-0.5 tracking-tight font-medium text-amber-400">12 Studios</span>
+          <span className="text-[10px] mt-0.5 tracking-tight font-medium text-amber-400">13 Studios</span>
         </button>
       </div>
     </nav>

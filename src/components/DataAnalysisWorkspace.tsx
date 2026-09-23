@@ -68,6 +68,7 @@ export const DataAnalysisWorkspace: React.FC<DataAnalysisWorkspaceProps> = ({
   const [rawTextInput, setRawTextInput] = useState('');
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<'datasets' | 'analysis'>('datasets');
 
   // Initialize with sample dataset if empty
   useEffect(() => {
@@ -255,25 +256,25 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
   return (
     <div className={`flex flex-col h-full overflow-hidden ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Top Header Bar */}
-      <div className={`px-6 py-3.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/60' : 'border-neutral-200 bg-white'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
-            <BarChart3 className="w-5 h-5" />
+      <div className={`px-4 sm:px-6 py-3 sm:py-3.5 border-b flex flex-wrap items-center justify-between gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/60' : 'border-neutral-200 bg-white'}`}>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold tracking-tight">Data Analysis Studio</h1>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-bold border border-amber-500/25">
+              <h1 className="text-sm font-bold tracking-tight truncate">Data Analysis Studio</h1>
+              <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-bold border border-amber-500/25 shrink-0">
                 AUTOMATED BI
               </span>
             </div>
-            <p className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Upload CSV, JSON, or TSV data for statistical insights, anomaly detection, and automated reporting.
+            <p className={`text-[11px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Statistical insights, anomaly detection, and automated reporting
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <input
             type="file"
             ref={fileInputRef}
@@ -285,7 +286,7 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 rounded-xl bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm shadow-amber-500/20"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm shadow-amber-500/20"
           >
             <Upload className="w-3.5 h-3.5" />
             <span>Upload Data</span>
@@ -294,14 +295,14 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
           <button
             type="button"
             onClick={() => setIsPasteModalOpen(true)}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
               isDark
                 ? 'border-neutral-800 hover:bg-neutral-850 text-neutral-200'
                 : 'border-neutral-200 hover:bg-neutral-100 text-neutral-800'
             }`}
           >
             <Plus className="w-3.5 h-3.5 text-amber-400" />
-            <span>Paste Raw</span>
+            <span>Paste</span>
           </button>
 
           <ModelSelector
@@ -312,10 +313,44 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className={`flex md:hidden items-center border-b px-3 py-1.5 gap-2 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-100'}`}>
+        <button
+          type="button"
+          onClick={() => setMobileTab('datasets')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'datasets'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5" />
+          <span>Datasets ({datasets.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('analysis')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'analysis'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>Analysis & Charts</span>
+        </button>
+      </div>
+
       {/* Main Dual Workspace Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Side: Datasets Directory & Presets */}
-        <div className={`w-80 border-r flex flex-col shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
+        <div className={`w-full md:w-80 border-r flex flex-col shrink-0 ${
+          mobileTab === 'datasets' ? 'flex' : 'hidden md:flex'
+        } ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
           <div className="p-3 border-b border-neutral-800/40 flex items-center justify-between">
             <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
               Active Datasets ({datasets.length})
@@ -399,9 +434,11 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
         </div>
 
         {/* Right Side: Tabbed Analysis, Table Explorer & AI Question Interface */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-1 flex flex-col overflow-hidden ${
+          mobileTab === 'analysis' ? 'flex' : 'hidden md:flex'
+        }`}>
           {/* Action & Tab Navigation Bar */}
-          <div className={`px-6 py-2.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
+          <div className={`px-3 sm:px-6 py-2 sm:py-2.5 border-b flex items-center justify-between gap-2 overflow-x-auto ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"

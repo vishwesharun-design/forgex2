@@ -170,7 +170,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto px-4 sm:px-8 py-6">
+    <div className="flex-1 flex flex-col h-full min-h-0 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
       <input
         type="file"
         ref={fileInputRef}
@@ -179,11 +179,11 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
         onChange={handleUploadReference}
       />
 
-      <div className="max-w-6xl w-full mx-auto space-y-8">
+      <div className="max-w-6xl w-full mx-auto space-y-6 sm:space-y-8 pb-16 md:pb-8">
         {/* Top Control Panel */}
         <div
           id="image-studio-controls"
-          className={`p-5 sm:p-7 rounded-3xl border shadow-xl transition-all ${
+          className={`p-4 sm:p-7 rounded-2xl sm:rounded-3xl border shadow-xl transition-all ${
             isDark
               ? 'bg-neutral-900/90 border-neutral-800 shadow-black/40'
               : 'bg-white border-neutral-200 shadow-neutral-200'

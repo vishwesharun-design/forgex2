@@ -11,7 +11,8 @@ import {
   Layout, 
   Palette,
   Layers,
-  AlertCircle
+  AlertCircle,
+  SlidersHorizontal
 } from 'lucide-react';
 import { PresentationDeck, SlideItem, ForgeXModelId, ForgeXTheme } from '../types';
 import { presentationService } from '../services/presentationService';
@@ -37,6 +38,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
   const [slideCount, setSlideCount] = useState(5);
   const [themeStyle, setThemeStyle] = useState<'dark-amber' | 'obsidian' | 'cyber-blue' | 'light-minimal'>('dark-amber');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<'config' | 'slides'>('slides');
 
   const isDark = theme === 'dark';
 
@@ -59,6 +61,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
       setDecks(updated);
       setActiveDeck(newDeck);
       setActiveSlideIdx(0);
+      setMobileTab('slides');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Presentation generation notice: ${msg}`);
@@ -155,33 +158,33 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Header */}
-      <div className={`px-6 py-3.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Presentation className="w-5 h-5" />
+      <div className={`px-4 sm:px-6 py-3 sm:py-3.5 border-b flex flex-wrap items-center justify-between gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <Presentation className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2 truncate">
               Presentation Deck Studio
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+              <span className="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold shrink-0">
                 Slide Architect
               </span>
             </h1>
-            <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Generate structured slide outlines and presentation decks with visual direction and HTML export.
+            <p className={`text-[11px] sm:text-xs truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Generate structured slide outlines and presentation decks with HTML export
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {activeDeck && activeDeck.slides.length > 0 && (
             <button
               type="button"
               onClick={handleExport}
-              className="px-3 py-1.5 rounded-xl border border-neutral-700 hover:border-neutral-500 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-neutral-700 hover:border-neutral-500 text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
-              <Download className="w-4 h-4 text-amber-400" />
-              <span>Export HTML Deck</span>
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Export HTML</span>
             </button>
           )}
           <ModelSelector
@@ -192,10 +195,44 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className={`flex md:hidden items-center border-b px-3 py-1.5 gap-2 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-100'}`}>
+        <button
+          type="button"
+          onClick={() => setMobileTab('config')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'config'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>Config & Decks ({decks.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('slides')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'slides'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Presentation className="w-3.5 h-3.5" />
+          <span>Slide Canvas</span>
+        </button>
+      </div>
+
       {/* Main Dual Workspace */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Side: Generation Config & Deck Selector */}
-        <div className={`w-80 border-r flex flex-col shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
+        <div className={`w-full md:w-80 border-r flex flex-col shrink-0 ${
+          mobileTab === 'config' ? 'flex' : 'hidden md:flex'
+        } ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
           <div className="p-4 border-b border-neutral-800/40 space-y-3">
             <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
               Deck Generator
@@ -309,6 +346,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                   onClick={() => {
                     setActiveDeck(deck);
                     setActiveSlideIdx(0);
+                    setMobileTab('slides');
                   }}
                   className={`group p-3 rounded-xl border cursor-pointer transition-all relative ${
                     isSelected
@@ -340,7 +378,9 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
         </div>
 
         {/* Right Slide Canvas & Editor */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-1 flex flex-col overflow-hidden ${
+          mobileTab === 'slides' ? 'flex' : 'hidden md:flex'
+        }`}>
           {!activeDeck ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-3 p-6">
               <Presentation className="w-12 h-12 text-neutral-500 opacity-40" />

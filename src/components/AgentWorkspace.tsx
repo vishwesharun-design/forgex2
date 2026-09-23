@@ -53,6 +53,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   const [activeStepText, setActiveStepText] = useState<string>('');
   const [currentExecution, setCurrentExecution] = useState<AgentExecution | null>(null);
   const [executions, setExecutions] = useState<AgentExecution[]>(() => agentService.getExecutions());
+  const [mobileTab, setMobileTab] = useState<'roster' | 'console'>('console');
 
   // Custom Agent Creation Modal
   const [isCreatingModalOpen, setIsCreatingModalOpen] = useState(false);
@@ -160,58 +161,58 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Header */}
-      <div className={`px-6 py-3.5 border-b flex items-center justify-between gap-4 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Bot className="w-5 h-5" />
+      <div className={`px-4 sm:px-6 py-3 sm:py-3.5 border-b flex flex-wrap items-center justify-between gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <Bot className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2 truncate">
               Autonomous AI Agents & Browser
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+              <span className="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold shrink-0">
                 Web Automation & Actions
               </span>
             </h1>
-            <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-              Autonomous operatives that can open browser, type anything in browser, open any website, and execute pipelines.
+            <p className={`text-[11px] sm:text-xs truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+              Browser navigation, website interaction & autonomous pipelines
             </p>
           </div>
         </div>
 
         {/* Mode Switcher & Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {/* Mode Pill Toggle */}
           <div className={`p-1 rounded-xl border flex items-center gap-1 ${isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
             <button
               type="button"
               onClick={() => setAgentMode('browser')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                 agentMode === 'browser'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
               <Globe className="w-3.5 h-3.5" />
-              <span>Agent Browser</span>
+              <span>Browser</span>
             </button>
             <button
               type="button"
               onClick={() => setAgentMode('task_console')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                 agentMode === 'task_console'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span>Task Runner</span>
+              <span>Runner</span>
             </button>
           </div>
 
           <button
             type="button"
             onClick={handleClearExecutions}
-            className="px-3 py-1.5 rounded-xl border border-neutral-800 hover:text-red-400 hover:bg-neutral-850 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="hidden sm:flex px-3 py-1.5 rounded-xl border border-neutral-800 hover:text-red-400 hover:bg-neutral-850 text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer"
             title="Clear all saved agent execution history"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -222,10 +223,10 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             type="button"
             id="create-custom-agent-btn"
             onClick={() => setIsCreatingModalOpen(true)}
-            className="px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs font-bold flex items-center gap-1.5 transition-colors"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Agent</span>
+            <span>New Agent</span>
           </button>
 
           <ModelSelector
@@ -236,10 +237,44 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className={`flex md:hidden items-center border-b px-3 py-1.5 gap-2 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-100'}`}>
+        <button
+          type="button"
+          onClick={() => setMobileTab('roster')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'roster'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" />
+          <span>Agents ({agents.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('console')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === 'console'
+              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+              : isDark
+              ? 'text-neutral-400 hover:text-white'
+              : 'text-neutral-600 hover:text-black'
+          }`}
+        >
+          {agentMode === 'browser' ? <Globe className="w-3.5 h-3.5" /> : <Terminal className="w-3.5 h-3.5" />}
+          <span>{agentMode === 'browser' ? 'Live Browser' : 'Task Runner'}</span>
+        </button>
+      </div>
+
       {/* Main Dual Workspace */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Agent Directory */}
-        <div className={`w-80 border-r flex flex-col shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
+        <div className={`w-full md:w-80 border-r flex flex-col shrink-0 ${
+          mobileTab === 'roster' ? 'flex' : 'hidden md:flex'
+        } ${isDark ? 'border-neutral-850 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/50'}`}>
           <div className="p-3 border-b border-neutral-800/40 flex items-center justify-between">
             <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
               Agent Roster ({agents.length})
@@ -254,7 +289,10 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                 <div
                   key={agent.id}
                   id={`agent-card-${agent.id}`}
-                  onClick={() => setSelectedAgentId(agent.id)}
+                  onClick={() => {
+                    setSelectedAgentId(agent.id);
+                    setMobileTab('console');
+                  }}
                   className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
                     isSelected
                       ? 'border-amber-500 bg-amber-500/10 shadow-sm'
@@ -305,7 +343,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         </div>
 
         {/* Right Active Agent Console or Browser */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-1 flex flex-col overflow-hidden ${
+          mobileTab === 'console' ? 'flex' : 'hidden md:flex'
+        }`}>
           {agentMode === 'browser' ? (
             <AgentBrowser
               isDark={isDark}
