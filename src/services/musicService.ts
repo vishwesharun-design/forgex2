@@ -143,9 +143,25 @@ export function getGenreChordInfo(genre: SongGenre): GenreChordData {
   }
 }
 
-export function parseLyricsSections(lyrics?: string, totalDuration: number = 30): LyricsSection[] {
+export function extractDurationFromPrompt(prompt: string, fallback: number = 180): number {
+  if (!prompt) return fallback;
+  const minMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:min|minute|minutes)\b/i);
+  if (minMatch) {
+    const mins = parseFloat(minMatch[1]);
+    if (!isNaN(mins) && mins > 0) return Math.round(Math.min(300, Math.max(30, mins * 60)));
+  }
+  const secMatch = prompt.match(/(\d+)\s*(?:sec|second|seconds|s)\b/i);
+  if (secMatch) {
+    const secs = parseInt(secMatch[1], 10);
+    if (!isNaN(secs) && secs >= 30) return Math.min(300, secs);
+  }
+  return fallback;
+}
+
+export function parseLyricsSections(lyrics?: string, totalDuration: number = 180): LyricsSection[] {
+  const effectiveDuration = totalDuration && totalDuration > 0 ? totalDuration : 180;
   if (!lyrics || !lyrics.trim()) {
-    const secDur = totalDuration / 4;
+    const secDur = effectiveDuration / 4;
     return [
       {
         id: 'sec_intro',
@@ -181,7 +197,7 @@ export function parseLyricsSections(lyrics?: string, totalDuration: number = 30)
         type: 'outro',
         lines: ['Reverb decay across higher harmonics', 'Gentle melodic taper', 'Peaceful stereo fadeout'],
         startTimeSec: secDur * 3,
-        endTimeSec: totalDuration,
+        endTimeSec: effectiveDuration,
       },
     ];
   }
@@ -223,7 +239,7 @@ export function parseLyricsSections(lyrics?: string, totalDuration: number = 30)
   });
 
   const count = Math.max(1, parsed.length);
-  const secDuration = totalDuration / count;
+  const secDuration = effectiveDuration / count;
   return parsed.map((sec, i) => ({
     ...sec,
     startTimeSec: Math.round(i * secDuration * 10) / 10,
@@ -235,14 +251,7 @@ export const musicService = {
   getSongs(): GeneratedSong[] {
     try {
       const key = getSongStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_generated_songs');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
 
       let list: GeneratedSong[] = [];
       if (stored) {
@@ -359,7 +368,9 @@ export const musicService = {
     const cleanPrompt = params.prompt.trim() || 'Cosmic Odyssey';
     const words = cleanPrompt.split(' ');
     const title = words.length > 4 ? words.slice(0, 4).join(' ') : cleanPrompt;
-    const duration = Math.max(30, Math.min(210, params.durationSeconds || 180));
+    // Auto-detect if user requested a duration in their prompt (e.g. "make a 4 minute song" or "2 min track")
+    const requestedDuration = extractDurationFromPrompt(cleanPrompt, params.durationSeconds || 180);
+    const duration = Math.max(30, Math.min(300, requestedDuration));
     const hasVoice = params.hasVoice !== undefined ? params.hasVoice : Boolean(params.includeLyrics || params.customLyrics);
     const voiceProfile = params.voiceProfile || 'Zephyr';
     const vocalStyle = params.vocalStyle || 'Melodic Singing';
@@ -424,6 +435,7 @@ export const musicService = {
   generateProceduralLyrics(prompt: string, genre: SongGenre, mood: SongMood, durationSeconds: number = 180): string {
     const isLongTrack = durationSeconds >= 120;
     const isMaxTrack = durationSeconds >= 180;
+    const isEpicTrack = durationSeconds >= 240;
 
     return `[Intro]
 Analog pulses rising through the mist
@@ -476,6 +488,21 @@ Feel the electricity soar
 We don't have to wait no more!
 Maximum sound, maximum light
 We own the dawn, we own the night!
+` : ''}${isEpicTrack ? `
+[Instrumental Solo & Climax]
+(Synthesizer arpeggios soaring above driving percussion)
+
+[Verse 3]
+The night gives way to electric stars
+Guiding us beyond where we thought we are
+Feel the resonance in every breath
+A timeless melody conquering depth!
+
+[Final Chorus]
+And the rhythm moves in time
+With the heartbeat on the line
+Feel the electricity soar
+We don't have to wait no more!
 ` : ''}
 [Outro]
 Fading into the pure sound
@@ -732,7 +759,7 @@ Forever resonant and true...`;
     const chords = chordProgressions[song.genre] || chordProgressions.Synthwave;
     const bpm = song.tempoBpm || 120;
     const beatDuration = 60 / bpm;
-    const totalDuration = Math.min(210, song.durationSeconds || 180);
+    const totalDuration = Math.min(300, Math.max(30, song.durationSeconds || 180));
 
     let isStopped = false;
     const oscillators: OscillatorNode[] = [];
@@ -960,9 +987,28 @@ Forever resonant and true...`;
     };
 
     const numBars = Math.ceil(totalDuration / (beatDuration * 4));
-    for (let bar = 0; bar < numBars; bar++) {
-      playChordBar(bar);
-    }
+    let nextBarIndex = Math.max(0, Math.floor(safeOffset / (beatDuration * 4)));
+
+    // Lookahead scheduler: Chris Wilson's Web Audio timing pattern
+    // Only schedule bars in a moving 3.5s window ahead of currentTime.
+    // This allows seamless playback of full 5:00 min (300s) compositions without memory exhaustion or browser AudioNode limits!
+    const scheduleUpcomingBars = () => {
+      if (isStopped) return;
+      const currentSongTime = ctx.currentTime - startTime;
+      const lookaheadWindow = currentSongTime + 3.5;
+
+      while (nextBarIndex < numBars) {
+        const barSongTime = nextBarIndex * (beatDuration * 4);
+        if (barSongTime > lookaheadWindow) {
+          break; // Next bar is beyond lookahead window
+        }
+        playChordBar(nextBarIndex);
+        nextBarIndex++;
+      }
+    };
+
+    // Schedule initial window immediately
+    scheduleUpcomingBars();
 
     // Interval ticker for playback tracking without monotone robotic speech reading
     const interval = window.setInterval(() => {
@@ -977,6 +1023,7 @@ Forever resonant and true...`;
         musicService.stopPlayback();
         if (onEnded) onEnded();
       } else {
+        scheduleUpcomingBars();
         if (onTick) onTick(elapsed, totalDuration);
       }
     }, 100);
@@ -994,6 +1041,7 @@ Forever resonant and true...`;
           oscillators.forEach((osc) => {
             try { osc.stop(); } catch {}
           });
+          oscillators.length = 0;
           ctx.close();
         }, 120);
       } catch (e) {
@@ -1034,12 +1082,12 @@ Forever resonant and true...`;
   },
 
   /**
-   * Export synthesized audio to a downloadable WAV Blob (supports up to 3:30 min = 210s)
+   * Export synthesized audio to a downloadable WAV Blob (supports up to 5:00 min = 300s)
    * Encodes both the procedural beat and the singing vocal formant melody tracks!
    */
   async exportSongWavBlob(song: GeneratedSong): Promise<Blob> {
     const sampleRate = 44100;
-    const duration = Math.min(210, song.durationSeconds || 180);
+    const duration = Math.min(300, Math.max(30, song.durationSeconds || 180));
     const OfflineCtxClass = window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
     const offlineCtx = new OfflineCtxClass(2, Math.floor(sampleRate * duration), sampleRate);
 

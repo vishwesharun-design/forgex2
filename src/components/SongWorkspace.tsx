@@ -37,7 +37,7 @@ import {
   ForgeXTheme, 
   FORGEX_MODELS 
 } from '../types';
-import { musicService, parseLyricsSections } from '../services/musicService';
+import { musicService, parseLyricsSections, extractDurationFromPrompt } from '../services/musicService';
 import { ModelSelector } from './ModelSelector';
 import { AudioTrackPlayer } from './AudioTrackPlayer';
 import { StudioVisualizer } from './StudioVisualizer';
@@ -67,13 +67,16 @@ const TEMPOS = [
   { label: 'High-Energy (145 BPM)', val: 145 },
 ];
 const DURATIONS = [
-  { label: '3.3 Min (200s Full Master)', val: 200 },
+  { label: '5:00 Min (300s Epic Track)', val: 300 },
+  { label: '4:00 Min (240s Long Track)', val: 240 },
+  { label: '3:30 Min (210s Full Master)', val: 210 },
   { label: '3:00 Min (180s Full Track)', val: 180 },
-  { label: '2:30 Min (150s Extended)', val: 150 },
+  { label: '2:30 Min (150s Radio Extended)', val: 150 },
   { label: '2:00 Min (120s Radio Edit)', val: 120 },
   { label: '1:30 Min (90s Mid Track)', val: 90 },
   { label: '1:00 Min (60s Short Track)', val: 60 },
-  { label: '30s Hook (Intro Snippet)', val: 30 },
+  { label: '45s Hook (Teaser)', val: 45 },
+  { label: '30s Snippet (Short)', val: 30 },
 ];
 
 const VOICE_PROFILES: { id: SongVoiceProfile; name: string; desc: string; tag: string }[] = [
@@ -103,7 +106,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const [selectedGenre, setSelectedGenre] = useState<SongGenre>('Synthwave');
   const [selectedMood, setSelectedMood] = useState<SongMood>('Energetic');
   const [selectedTempo, setSelectedTempo] = useState<number>(110);
-  const [selectedDuration, setSelectedDuration] = useState<number>(200);
+  const [selectedDuration, setSelectedDuration] = useState<number>(180);
   const [hasVoice, setHasVoice] = useState(true);
   const [selectedVoiceProfile, setSelectedVoiceProfile] = useState<SongVoiceProfile>('Zephyr');
   const [selectedVocalStyle, setSelectedVocalStyle] = useState<SongVocalStyle>('Melodic Singing');
@@ -116,7 +119,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const [activeSongId, setActiveSongId] = useState<string | null>(null);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
   const [playbackTime, setPlaybackTime] = useState(0);
-  const [playbackDuration, setPlaybackDuration] = useState(200);
+  const [playbackDuration, setPlaybackDuration] = useState(180);
   const [isMuted, setIsMuted] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeLyricsTab, setActiveLyricsTab] = useState(false);
@@ -205,12 +208,18 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
     await new Promise((r) => setTimeout(r, 800));
 
     try {
+      const promptDetectedDuration = extractDurationFromPrompt(cleanPrompt, selectedDuration);
+      const effectiveDuration = promptDetectedDuration || selectedDuration || 180;
+      if (promptDetectedDuration && promptDetectedDuration !== selectedDuration) {
+        setSelectedDuration(promptDetectedDuration);
+      }
+
       const newSong = await musicService.generateSong({
         prompt: cleanPrompt,
         genre: selectedGenre,
         mood: selectedMood,
         tempoBpm: selectedTempo,
-        durationSeconds: selectedDuration,
+        durationSeconds: effectiveDuration,
         modelId: selectedModelId,
         includeLyrics,
         customLyrics: customLyrics.trim() || undefined,
@@ -243,7 +252,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
 
     setActiveSongId(song.id);
     setPlaybackTime(0);
-    setPlaybackDuration(song.durationSeconds || 30);
+    setPlaybackDuration(song.durationSeconds || 180);
 
     musicService.playSong(
       song,
@@ -500,9 +509,14 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
 
             {/* Duration */}
             <div>
-              <label className={`block text-xs font-semibold mb-1.5 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                Duration (Up to 3:30)
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={`block text-xs font-semibold ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                  Duration (30s to 5:00 Min)
+                </label>
+                <span className="text-[11px] font-mono text-cyan-400 font-medium">
+                  {Math.floor(selectedDuration / 60)}:{(selectedDuration % 60).toString().padStart(2, '0')} ({selectedDuration}s)
+                </span>
+              </div>
               <select
                 value={selectedDuration}
                 onChange={(e) => setSelectedDuration(Number(e.target.value))}
@@ -544,7 +558,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
               </label>
 
               <span className="text-[11px] text-neutral-400 font-mono">
-                Supports full tracks up to 3:30 min (210s)
+                Supports full tracks up to 5:00 min (300s)
               </span>
             </div>
 

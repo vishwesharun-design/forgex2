@@ -60,6 +60,121 @@ const LANGUAGES: { id: CodeLanguage; label: string; ext: string }[] = [
   { id: 'go', label: 'Go', ext: '.go' },
 ];
 
+function generatePreviewDocument(sourceCode: string, lang: CodeLanguage): string {
+  if (lang === 'html') {
+    let html = sourceCode || '<div style="padding: 24px; color: #888; font-family: sans-serif;">Blank HTML document</div>';
+    // Ensure viewport meta tag exists so mobile previews render responsively
+    if (!html.toLowerCase().includes('name="viewport"') && !html.toLowerCase().includes("name='viewport'")) {
+      const metaTag = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
+      if (html.includes('<head>')) {
+        html = html.replace('<head>', `<head>\n  ${metaTag}`);
+      } else if (html.includes('<html>')) {
+        html = html.replace('<html>', `<html>\n<head>\n  ${metaTag}\n</head>`);
+      } else {
+        html = `<!DOCTYPE html>\n<html>\n<head>\n  ${metaTag}\n</head>\n<body>\n${html}\n</body>\n</html>`;
+      }
+    }
+    return html;
+  }
+
+  if (lang === 'javascript' || lang === 'typescript') {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 14px; background: #0a0a0c; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; line-height: 1.5; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .badge { color: #f59e0b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; }
+    .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
+    #console-out { background: rgba(0,0,0,0.5); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; max-height: 220px; overflow-y: auto; color: #34d399; margin-top: 10px; }
+    .log-line { border-bottom: 1px solid rgba(255,255,255,0.04); padding: 3px 0; word-break: break-all; }
+    .log-err { color: #f87171; }
+    .log-warn { color: #fbbf24; }
+    #root-mount { margin-top: 10px; padding: 10px; min-height: 60px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="badge">Live ${lang.toUpperCase()} Mobile Sandbox</div>
+    <span style="font-size: 10px; color: #9ca3af;">Auto-Executes</span>
+  </div>
+  <div id="root-mount"></div>
+  <div id="console-out"><div class="log-line" style="color: #6b7280;">// Console output stream</div></div>
+  <script>
+    const out = document.getElementById('console-out');
+    function logMsg(msg, cls) {
+      const el = document.createElement('div');
+      el.className = 'log-line ' + (cls || '');
+      el.textContent = typeof msg === 'object' ? JSON.stringify(msg, null, 2) : String(msg);
+      out.appendChild(el);
+      out.scrollTop = out.scrollHeight;
+    }
+    console.log = function(...args) { logMsg(args.join(' ')); };
+    console.warn = function(...args) { logMsg('[WARN] ' + args.join(' '), 'log-warn'); };
+    console.error = function(...args) { logMsg('[ERR] ' + args.join(' '), 'log-err'); };
+    window.onerror = function(msg, url, line) {
+      logMsg('Line ' + line + ': ' + msg, 'log-err');
+    };
+    try {
+      const mount = document.getElementById('root-mount');
+      ${sourceCode}
+    } catch(e) {
+      logMsg('Exception: ' + e.message, 'log-err');
+    }
+  </script>
+</body>
+</html>`;
+  }
+
+  if (lang === 'css') {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: #0a0a0c; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
+    .badge { color: #f59e0b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  </style>
+  <style>
+    ${sourceCode}
+  </style>
+</head>
+<body>
+  <div class="badge">CSS Stylesheet Mobile Preview</div>
+  <div class="card" style="padding: 16px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; margin-bottom: 12px;">
+    <h2>Sample Component</h2>
+    <p>Demonstrating font, layout, and colors with active rules.</p>
+    <button style="padding: 8px 16px; border-radius: 8px; cursor: pointer;">Action Button</button>
+  </div>
+</body>
+</html>`;
+  }
+
+  const escaped = (sourceCode || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: #0a0a0c; color: #f3f4f6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .badge { color: #f59e0b; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+    pre { background: rgba(255,255,255,0.05); padding: 14px; border-radius: 10px; overflow: auto; border: 1px solid rgba(245,158,11,0.25); color: #e5e7eb; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="badge">${lang.toUpperCase()} Code Preview</div>
+  <pre>${escaped}</pre>
+</body>
+</html>`;
+}
+
 export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   isDark,
   selectedModel,
@@ -946,6 +1061,24 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               )}
 
               <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const doc = generatePreviewDocument(code, language);
+                    const blob = new Blob([doc], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                  } catch (e) {
+                    console.error('Failed to open preview tab', e);
+                  }
+                }}
+                className="p-1 rounded text-neutral-400 hover:text-white transition-colors"
+                title="Open live preview in new window"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+
+              <button
                 onClick={() => setPreviewKey((k) => k + 1)}
                 className="p-1 rounded text-neutral-400 hover:text-amber-400 transition-colors"
                 title="Refresh Preview & State"
@@ -957,109 +1090,58 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
 
           {/* Tab Content 1: Live Preview (iFrame sandbox with Device Viewport support) */}
           {rightPanelTab === 'preview' && (
-            <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-950 items-center justify-center p-2 sm:p-4">
+            <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-950 items-center justify-center p-2 sm:p-4 min-h-0">
               {viewportMode === 'mobile' ? (
                 /* Interactive Mobile Device Frame */
-                <div className="w-[375px] max-w-full h-full max-h-[667px] my-auto mx-auto rounded-[36px] border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all">
+                <div className="w-full max-w-[375px] h-full max-h-[667px] my-auto mx-auto rounded-[24px] sm:rounded-[36px] border-[3px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all box-border">
                   {/* Top status bar & dynamic island */}
-                  <div className="h-7 bg-neutral-950 flex items-center justify-between px-5 text-[10px] text-neutral-400 select-none shrink-0 border-b border-neutral-900">
+                  <div className="h-7 bg-neutral-950 flex items-center justify-between px-3 sm:px-5 text-[10px] text-neutral-400 select-none shrink-0 border-b border-neutral-900">
                     <span className="font-semibold text-neutral-300">9:41</span>
-                    <div className="w-16 h-3 bg-neutral-800 rounded-full" />
+                    <div className="w-14 sm:w-16 h-2.5 sm:h-3 bg-neutral-800 rounded-full" />
                     <div className="flex items-center gap-1 text-[9px] text-neutral-400">
                       <span>5G</span>
                       <span>100%</span>
                     </div>
                   </div>
                   {/* Phone Screen Viewport */}
-                  <div className="flex-1 relative overflow-hidden bg-black">
+                  <div className="flex-1 relative overflow-hidden bg-black min-h-0">
                     <iframe
                       key={previewKey}
                       title="ForgeX Live Code Mobile Preview"
-                      srcDoc={
-                        language === 'html'
-                          ? code
-                          : `<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; padding: 16px; background: #0a0a0c; color: #fff; font-family: monospace; }
-    .badge { color: #f59e0b; font-size: 13px; font-weight: bold; margin-bottom: 12px; }
-    pre { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; overflow: auto; border: 1px solid rgba(245,158,11,0.2); font-size: 11px; }
-  </style>
-</head>
-<body>
-  <div class="badge">Mobile Output</div>
-  <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
-</body>
-</html>`
-                      }
-                      sandbox="allow-scripts allow-modals"
+                      srcDoc={generatePreviewDocument(code, language)}
+                      sandbox="allow-scripts allow-modals allow-forms"
                       className="w-full h-full border-none bg-black"
                     />
                   </div>
                   {/* Bottom Home Indicator Bar */}
-                  <div className="h-4 bg-neutral-950 flex items-center justify-center select-none shrink-0">
-                    <div className="w-24 h-1 bg-neutral-600 rounded-full" />
+                  <div className="h-3 sm:h-4 bg-neutral-950 flex items-center justify-center select-none shrink-0">
+                    <div className="w-20 sm:w-24 h-1 bg-neutral-600 rounded-full" />
                   </div>
                 </div>
               ) : viewportMode === 'tablet' ? (
                 /* Interactive Tablet Frame */
-                <div className="w-[768px] max-w-full h-full my-auto mx-auto rounded-[24px] border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all">
-                  <div className="flex-1 relative overflow-hidden bg-black">
+                <div className="w-full max-w-[768px] h-full max-h-[820px] my-auto mx-auto rounded-[18px] sm:rounded-[24px] border-[3px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all box-border">
+                  <div className="flex-1 relative overflow-hidden bg-black min-h-0">
                     <iframe
                       key={previewKey}
                       title="ForgeX Live Code Tablet Preview"
-                      srcDoc={
-                        language === 'html'
-                          ? code
-                          : `<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; padding: 24px; background: #0a0a0c; color: #fff; font-family: monospace; }
-    .badge { color: #f59e0b; font-size: 14px; font-weight: bold; margin-bottom: 12px; }
-    pre { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; overflow: auto; border: 1px solid rgba(245,158,11,0.2); }
-  </style>
-</head>
-<body>
-  <div class="badge">Tablet Output</div>
-  <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
-</body>
-</html>`
-                      }
-                      sandbox="allow-scripts allow-modals"
+                      srcDoc={generatePreviewDocument(code, language)}
+                      sandbox="allow-scripts allow-modals allow-forms"
                       className="w-full h-full border-none bg-black"
                     />
                   </div>
                 </div>
               ) : (
                 /* Desktop Full Frame */
-                <iframe
-                  key={previewKey}
-                  title="ForgeX Live Code Preview"
-                  srcDoc={
-                    language === 'html'
-                      ? code
-                      : `<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { margin: 0; padding: 24px; background: #0a0a0c; color: #fff; font-family: monospace; }
-    .badge { color: #f59e0b; font-size: 14px; font-weight: bold; margin-bottom: 12px; }
-    pre { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; overflow: auto; border: 1px solid rgba(245,158,11,0.2); }
-  </style>
-</head>
-<body>
-  <div class="badge">ForgeX Code Studio — Active Source Output</div>
-  <pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
-</body>
-</html>`
-                  }
-                  sandbox="allow-scripts allow-modals"
-                  className="w-full h-full border-none bg-black"
-                />
+                <div className="w-full h-full relative overflow-hidden bg-black rounded-xl border border-neutral-850">
+                  <iframe
+                    key={previewKey}
+                    title="ForgeX Live Code Preview"
+                    srcDoc={generatePreviewDocument(code, language)}
+                    sandbox="allow-scripts allow-modals allow-forms"
+                    className="w-full h-full border-none bg-black"
+                  />
+                </div>
               )}
             </div>
           )}

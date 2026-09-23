@@ -390,32 +390,22 @@ export const codeStudioService = {
   getSnippets(): CodeSnippet[] {
     try {
       const key = getCodeStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_code_snippets');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed: CodeSnippet[] = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // Remove any legacy sample snippets
+          const realSnippets = parsed.filter((s) => s.id !== 'snip_default');
+          if (realSnippets.length !== parsed.length) {
+            this.saveSnippets(realSnippets);
+          }
+          return realSnippets;
+        }
       }
     } catch (e) {
       console.error('Failed to load code snippets', e);
     }
-    // Default starter snippet
-    return [
-      {
-        id: 'snip_default',
-        title: 'Interactive Physics Canvas',
-        code: STARTER_TEMPLATES.html.code,
-        language: 'html',
-        createdAt: Date.now() - 3600000,
-        updatedAt: Date.now(),
-        isFavorite: true,
-      },
-    ];
+    return [];
   },
 
   saveSnippets(snippets: CodeSnippet[]): void {

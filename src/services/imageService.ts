@@ -84,15 +84,7 @@ export const imageService = {
   getImages(): GeneratedImage[] {
     try {
       const key = getImageStorageKey();
-      let stored = localStorage.getItem(key);
-      // Migrate legacy global images if user has no scoped images yet
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_generated_images');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: GeneratedImage[] = JSON.parse(stored);
         // Strictly filter out any legacy mock images

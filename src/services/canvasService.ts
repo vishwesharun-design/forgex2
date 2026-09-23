@@ -10,14 +10,7 @@ export const canvasService = {
   getBoards(): CanvasBoard[] {
     try {
       const key = getBoardStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_canvas_boards');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;

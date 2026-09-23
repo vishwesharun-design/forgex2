@@ -13,15 +13,7 @@ export const chatService = {
   getSessions(): ChatSession[] {
     try {
       const key = getChatStorageKey();
-      let stored = localStorage.getItem(key);
-      // If Vishwesh signs in and has legacy global sessions, migrate them
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_chat_sessions');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: ChatSession[] = JSON.parse(stored);
         // Clean out any legacy mock sessions to strictly adhere to NO default/false data

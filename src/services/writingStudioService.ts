@@ -10,14 +10,7 @@ export const writingStudioService = {
   getDocuments(): WritingDoc[] {
     try {
       const key = getWritingStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_writing_documents');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       return stored ? JSON.parse(stored) : [];
     } catch (_e) {
       return [];

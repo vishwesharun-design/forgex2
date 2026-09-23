@@ -49,7 +49,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 backdrop-blur-xl bg-black/80 animate-in fade-in duration-200">
       <div
         id="modal-media-viewer"
-        className={`relative w-full max-w-5xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] ${
+        className={`relative w-full max-w-5xl rounded-2xl sm:rounded-3xl border shadow-2xl overflow-y-auto md:overflow-hidden flex flex-col md:flex-row max-h-[92vh] ${
           isDark
             ? 'bg-neutral-950 border-neutral-800 text-white shadow-black'
             : 'bg-white border-neutral-200 text-neutral-900 shadow-2xl'
@@ -58,25 +58,25 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-30 p-2 rounded-xl bg-black/60 hover:bg-neutral-800 text-white transition-colors"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 p-2 rounded-xl bg-black/70 hover:bg-neutral-800 text-white transition-colors border border-white/10"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
 
         {/* Media stage */}
-        <div className="flex-1 bg-black flex items-center justify-center min-h-[320px] sm:min-h-[480px] p-2 relative">
+        <div className="flex-1 bg-black flex items-center justify-center min-h-[240px] sm:min-h-[360px] md:min-h-[480px] p-2 sm:p-4 relative">
           {type === 'image' ? (
             <img
               src={(item as GeneratedImage).imageUrl}
               alt={item.prompt}
-              className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl"
+              className="max-h-[50vh] md:max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg"
             />
           ) : (
-            <div className={`relative max-h-[75vh] flex items-center justify-center ${
+            <div className={`relative max-h-[50vh] md:max-h-[75vh] flex items-center justify-center ${
               (item as GeneratedVideo).aspectRatio === '9:16'
-                ? 'aspect-[9/16] h-[75vh] max-w-sm'
+                ? 'aspect-[9/16] h-[50vh] md:h-[75vh] max-w-sm'
                 : (item as GeneratedVideo).aspectRatio === '1:1'
-                ? 'aspect-square h-[75vh] max-w-xl'
+                ? 'aspect-square h-[50vh] md:h-[75vh] max-w-xl'
                 : 'aspect-video w-full max-w-4xl'
             }`}>
               <SlideMotionPlayer

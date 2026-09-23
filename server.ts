@@ -2425,10 +2425,16 @@ Return ONLY valid JSON. No markdown ticks, no commentary.`;
 
   app.post("/api/song-lyrics", async (req: Request, res: Response) => {
     try {
-      const { prompt, genre = "Synthwave", mood = "Energetic", durationSeconds = 210 } = req.body;
+      const { prompt, genre = "Synthwave", mood = "Energetic", durationSeconds = 180 } = req.body;
       const apiKey = getEffectiveApiKey(req);
 
-      const targetDurationStr = durationSeconds >= 180 ? "3:00 to 3:30 minutes" : durationSeconds >= 120 ? "2:00 to 2:30 minutes" : "1:00 to 1:30 minutes";
+      const targetDurationStr = durationSeconds >= 240
+        ? "4:00 to 5:00 minutes (Extended Epic Composition)"
+        : durationSeconds >= 180
+        ? "3:00 to 3:30 minutes (Full Studio Master)"
+        : durationSeconds >= 120
+        ? "2:00 to 2:30 minutes (Radio Edit)"
+        : "1:00 to 1:30 minutes (Short Track)";
       const systemInstruction = `You are a platinum award-winning songwriter. Write compelling, rhythmic lyrics for a song titled/inspired by: "${prompt}".
 Genre: ${genre}
 Mood: ${mood}

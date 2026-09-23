@@ -226,7 +226,7 @@ export interface GeneratedSong {
   genre: SongGenre;
   mood: SongMood;
   tempoBpm: number;
-  durationSeconds: number; // up to 210 seconds (3:30 min)
+  durationSeconds: number; // 30 up to 300 seconds (5:00 min)
   lyrics?: string;
   coverUrl: string;
   modelId: ForgeXModelId;

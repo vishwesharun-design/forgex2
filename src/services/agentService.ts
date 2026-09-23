@@ -90,14 +90,7 @@ export const agentService = {
   getAgents(): AIAgent[] {
     try {
       const key = getAgentStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_agents');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: AIAgent[] = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -138,14 +131,7 @@ export const agentService = {
   getExecutions(): AgentExecution[] {
     try {
       const key = getExecutionStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_agent_executions');
-        if (legacy) {
-          stored = legacy;
-          localStorage.setItem(key, legacy);
-        }
-      }
+      const stored = localStorage.getItem(key);
       return stored ? JSON.parse(stored) : [];
     } catch (_e) {
       return [];

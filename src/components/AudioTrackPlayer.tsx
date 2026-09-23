@@ -62,7 +62,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
   const [vocalVol, setVocalVol] = useState(musicService.getVocalVolume() || 0.85);
   const [isMuted, setIsMuted] = useState(false);
 
-  const duration = playbackDuration || song.durationSeconds || 30;
+  const duration = (playbackDuration && playbackDuration > 0) ? playbackDuration : (song.durationSeconds && song.durationSeconds > 0) ? song.durationSeconds : 180;
   const sections: LyricsSection[] = React.useMemo(() => {
     return parseLyricsSections(song.lyrics, duration);
   }, [song.lyrics, duration]);
@@ -200,7 +200,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
               • {chordData.key}
             </span>
             <span className="text-xs font-mono text-neutral-500 inline-flex items-center leading-none">
-              • {duration}s {duration >= 210 ? '(3:30)' : duration >= 180 ? '(3:00)' : ''}
+              • {duration}s {duration >= 270 ? '(4:30+)' : duration >= 240 ? '(4:00)' : duration >= 210 ? '(3:30)' : duration >= 180 ? '(3:00)' : duration >= 120 ? '(2:00)' : ''}
             </span>
           </div>
         </div>

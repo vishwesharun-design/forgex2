@@ -15,17 +15,11 @@ export const projectService = {
   getProjects(): ForgeXProject[] {
     try {
       const key = getProjectsStorageKey();
-      let stored = localStorage.getItem(key);
-      if (!stored && (key.includes('vishwesh') || key.includes('guest'))) {
-        const legacy = localStorage.getItem('forgex_projects');
-        if (legacy) {
-          stored = legacy;
-        }
-      }
+      const stored = localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          // Clean out any sample / placeholder projects like 'My Roblox Game'
+          // Clean out any sample / placeholder projects
           const filtered = parsed.filter(
             (p: ForgeXProject) =>
               p.id !== 'proj-roblox' &&
@@ -42,7 +36,7 @@ export const projectService = {
     } catch (_e) {
       // fallback
     }
-    return this.getDefaultProjects();
+    return [];
   },
 
   saveProjects(projects: ForgeXProject[]): void {

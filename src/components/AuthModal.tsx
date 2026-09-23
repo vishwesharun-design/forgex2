@@ -271,7 +271,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Vishwesh Varman"
+                  placeholder="e.g. Alex Rivera"
                   className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border transition-colors outline-none focus:border-amber-500 ${
                     isDark
                       ? 'bg-neutral-950 border-neutral-800 text-white placeholder:text-neutral-600'

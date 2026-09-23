@@ -37,29 +37,24 @@ function hashPassword(password: string): string {
   return 'fx_' + btoa(hash.toString() + '_' + password.length);
 }
 
+function isDemoAccount(acc: any): boolean {
+  if (!acc) return false;
+  const id = String(acc.id || '');
+  const email = String(acc.email || '').toLowerCase();
+  const username = String(acc.username || '').toLowerCase();
+  return (
+    id === 'usr_vishwesh' ||
+    id === 'usr_virthika' ||
+    email.endsWith('@forgex.local') ||
+    email === 'vishwesh@forgex.local' ||
+    email === 'virthika@forgex.local' ||
+    username === 'vishwesh' ||
+    username === 'virthika'
+  );
+}
+
 function getInitialDefaultAccounts(): StoredAccount[] {
-  return [
-    {
-      id: 'usr_vishwesh',
-      name: 'Vishwesh',
-      username: 'vishwesh',
-      email: 'vishwesh@forgex.local',
-      passwordHash: hashPassword('password123'),
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 7,
-      creditsUsed: 120,
-      creditsLimit: 1000,
-    },
-    {
-      id: 'usr_virthika',
-      name: 'Virthika',
-      username: 'virthika',
-      email: 'virthika@forgex.local',
-      passwordHash: hashPassword('password123'),
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
-      creditsUsed: 45,
-      creditsLimit: 1000,
-    }
-  ];
+  return [];
 }
 
 function getRegisteredAccounts(): StoredAccount[] {
@@ -67,17 +62,19 @@ function getRegisteredAccounts(): StoredAccount[] {
     const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
     if (raw) {
       const parsed: StoredAccount[] = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        const cleanAccounts = parsed.filter((acc) => !isDemoAccount(acc));
+        if (cleanAccounts.length !== parsed.length) {
+          saveRegisteredAccounts(cleanAccounts);
+        }
+        return cleanAccounts;
       }
     }
   } catch (e) {
     console.error('Failed to load registered accounts', e);
   }
 
-  const initial = getInitialDefaultAccounts();
-  saveRegisteredAccounts(initial);
-  return initial;
+  return [];
 }
 
 function saveRegisteredAccounts(accounts: StoredAccount[]): void {
@@ -103,6 +100,30 @@ export const authService = {
   init(): void {
     if (isInitialized) return;
     isInitialized = true;
+
+    // Purge any stale demo accounts from storage
+    try {
+      const rawSession = localStorage.getItem(STORAGE_KEY_SESSION);
+      if (rawSession) {
+        const parsedSession = JSON.parse(rawSession);
+        if (isDemoAccount(parsedSession)) {
+          localStorage.removeItem(STORAGE_KEY_SESSION);
+          localStorage.removeItem(STORAGE_KEY_AUTH);
+        }
+      }
+      const rawAccounts = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+      if (rawAccounts) {
+        const parsedAccounts = JSON.parse(rawAccounts);
+        if (Array.isArray(parsedAccounts)) {
+          const cleaned = parsedAccounts.filter((a) => !isDemoAccount(a));
+          if (cleaned.length !== parsedAccounts.length) {
+            saveRegisteredAccounts(cleaned);
+          }
+        }
+      }
+    } catch (_e) {
+      // Ignore cleanup error
+    }
 
     // Listen to Firebase Auth state
     onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
@@ -137,6 +158,11 @@ export const authService = {
       const stored = localStorage.getItem(STORAGE_KEY_SESSION);
       if (stored) {
         const parsed = JSON.parse(stored);
+        if (parsed && isDemoAccount(parsed)) {
+          localStorage.removeItem(STORAGE_KEY_SESSION);
+          localStorage.removeItem(STORAGE_KEY_AUTH);
+          return null;
+        }
         if (parsed && parsed.id && (parsed.username || parsed.email || parsed.name)) {
           return parsed;
         }
@@ -151,7 +177,7 @@ export const authService = {
    * Returns a canonical storage partition key for the current user.
    * Prioritizes the person's email address so that each email has a strictly
    * separate database, history, and asset vault.
-   * Example: "email_tradewithpanda_gmail_com" or "usr_vishwesh_at_forgex_local"
+   * Example: "email_alex_at_domain_com"
    */
   getCurrentUserPartitionKey(): string {
     const user = this.getCurrentUser();
@@ -289,10 +315,7 @@ export const authService = {
     }
 
     const inputHash = hashPassword(password);
-    const isSpecialTestAccount = (account.username === 'vishwesh' || account.username === 'virthika') &&
-      (password === 'password' || password === 'password123' || password === '123456');
-
-    if (account.passwordHash !== inputHash && !isSpecialTestAccount) {
+    if (account.passwordHash !== inputHash) {
       throw new Error('Incorrect password. Please verify your credentials and try again.');
     }
 
