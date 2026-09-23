@@ -22,6 +22,7 @@ import {
 import { DocumentItem, DocumentFileType, QuizQuestion, ForgeXTheme, ForgeXModelId, FORGEX_MODELS } from '../types';
 import { documentService } from '../services/documentService';
 import { ModelSelector } from './ModelSelector';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface DocumentWorkspaceProps {
   isDark: boolean;
@@ -498,7 +499,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
                 ) : (
                   /* Standard Markdown / Text Render */
                   <div className={`p-5 rounded-2xl border leading-relaxed text-xs space-y-3 ${isDark ? 'bg-neutral-900/40 border-neutral-850' : 'bg-white border-neutral-200'}`}>
-                    <pre className="whitespace-pre-wrap font-sans leading-relaxed">{resultText}</pre>
+                    <MarkdownRenderer content={resultText} theme={theme} className="text-xs" />
                   </div>
                 )}
               </div>

@@ -15,6 +15,7 @@ import {
 import { ForgeXTheme, ForgeXModelId } from '../types';
 import { webSearchService, WebSearchResult } from '../services/webSearchService';
 import { ModelSelector } from './ModelSelector';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface WebSearchWorkspaceProps {
   isDark: boolean;
@@ -543,9 +544,7 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
 
                 {/* Grounded Summary View */}
                 <div className={`p-4 sm:p-6 rounded-2xl border leading-relaxed text-xs space-y-3 ${isDark ? 'bg-neutral-900/40 border-neutral-850' : 'bg-white border-neutral-200'}`}>
-                  <div className="whitespace-pre-wrap font-sans leading-relaxed text-neutral-200 text-xs selection:bg-amber-500/30">
-                    {currentResult.summary}
-                  </div>
+                  <MarkdownRenderer content={currentResult.summary} theme={theme} className="text-xs" />
                 </div>
               </div>
             ) : (

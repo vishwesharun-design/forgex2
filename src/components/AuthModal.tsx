@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Zap, Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
+import { X, Zap, Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { ForgeXTheme, UserProfile } from '../types';
 import { authService } from '../services/authService';
 
@@ -118,13 +118,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setIsLoading(false);
       setError(err?.message || 'Authentication error. Please check your details.');
     }
-  };
-
-  const handleQuickFill = (testEmail: string) => {
-    setEmail(testEmail);
-    setPassword('password123');
-    setMode('signin');
-    resetFormState();
   };
 
   return (
@@ -405,42 +398,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </button>
         </form>
-
-        {/* Quick Demo Fill Buttons */}
-        <div className="mt-4 pt-3 border-t border-neutral-800/60">
-          <div className="flex items-center justify-between text-[11px] text-neutral-500 mb-2">
-            <span className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              Quick demo accounts:
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickFill('vishwesh@forgex.local')}
-              className={`py-1.5 px-2 rounded-lg text-xs border text-left truncate transition-colors ${
-                isDark
-                  ? 'border-neutral-800 bg-neutral-950/60 hover:bg-neutral-800 text-neutral-300'
-                  : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700'
-              }`}
-            >
-              <div className="font-semibold text-[11px] text-amber-400">Vishwesh (Creator)</div>
-              <div className="text-[10px] text-neutral-500 truncate">vishwesh@forgex.local</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('virthika@forgex.local')}
-              className={`py-1.5 px-2 rounded-lg text-xs border text-left truncate transition-colors ${
-                isDark
-                  ? 'border-neutral-800 bg-neutral-950/60 hover:bg-neutral-800 text-neutral-300'
-                  : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700'
-              }`}
-            >
-              <div className="font-semibold text-[11px] text-amber-400">Virthika</div>
-              <div className="text-[10px] text-neutral-500 truncate">virthika@forgex.local</div>
-            </button>
-          </div>
-        </div>
 
         <div className="mt-4 text-center">
           {mode === 'forgot' && (

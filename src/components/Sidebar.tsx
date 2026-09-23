@@ -26,8 +26,6 @@ import {
   Trash2, 
   X,
   Sparkles,
-  PanelLeftClose,
-  PanelLeftOpen,
   Search,
   Check,
   Palette,
@@ -128,6 +126,15 @@ const STUDIOS: StudioDefinition[] = [
     accentColor: 'text-teal-400',
     badge: 'Autonomous',
     description: 'Multi-agent goal swarms & tool orchestration',
+  },
+  {
+    id: 'data_analysis',
+    title: 'Data Analysis',
+    category: 'intelligence',
+    icon: BarChart3,
+    accentColor: 'text-amber-400',
+    badge: 'BI & Stats',
+    description: 'Upload CSV/JSON for automated stats, anomalies, and reports',
   },
 
   // 3. Productivity & Dev Studios
@@ -327,31 +334,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1">
-            {/* Desktop Minimize/Expand Toggle Button */}
-            {onToggleCollapse && (
-              <button
-                id="btn-sidebar-toggle-collapse"
-                onClick={onToggleCollapse}
-                title={isCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
-                className={`p-1.5 rounded-lg hidden md:flex items-center justify-center transition-colors ${
-                  isDark ? 'hover:bg-neutral-850 text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900'
-                }`}
-              >
-                {isCollapsed ? <PanelLeftOpen className="w-4 h-4 text-amber-400" /> : <PanelLeftClose className="w-4 h-4" />}
-              </button>
-            )}
-
-            {/* Mobile Close Button */}
-            <button
-              onClick={onCloseMobile}
-              className={`p-1.5 rounded-lg md:hidden ${
-                isDark ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
-              }`}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          {/* Mobile Close Button */}
+          <button
+            onClick={onCloseMobile}
+            className={`p-1.5 rounded-lg md:hidden ${
+              isDark ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
+            }`}
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Action: + New Chat button & Voice Mode */}

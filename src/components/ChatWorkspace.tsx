@@ -442,7 +442,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       <div className="mt-3 pt-2.5 border-t border-neutral-800/40 flex items-center justify-between text-xs text-neutral-400">
                         <span className="text-[11px] font-mono text-amber-400 inline-flex items-center gap-1">
                           <Zap className="w-3 h-3 shrink-0" />
-                          <span>{message.modelUsed || currentModel.name}</span>
+                          <span>
+                            {message.modelUsed && !/gemini/i.test(message.modelUsed)
+                              ? message.modelUsed
+                              : currentModel.name || 'ForgeX Neural Engine'}
+                          </span>
                         </span>
 
                         <div className="flex items-center gap-2">
@@ -689,7 +693,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               {isProcessing && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                  <span className="text-[11px] font-medium">Transcribing voice with Gemini...</span>
+                  <span className="text-[11px] font-medium">Processing voice input...</span>
                 </div>
               )}
             </div>

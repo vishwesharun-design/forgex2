@@ -39,6 +39,7 @@ import {
   STARTER_TEMPLATES,
   CodeStudioResponse
 } from '../services/codeStudioService';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface CodeStudioWorkspaceProps {
   isDark: boolean;
@@ -1124,7 +1125,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                     <p className="font-semibold text-amber-400 mb-1">
                       {lastResponse.action === 'correct' ? 'Auto-Correction Report:' : 'Alteration Summary:'}
                     </p>
-                    <p>{lastResponse.explanation}</p>
+                    <MarkdownRenderer content={lastResponse.explanation} theme={isDark ? 'dark' : 'light'} className="text-xs" />
                   </div>
 
                   {/* Bulleted Corrections List */}

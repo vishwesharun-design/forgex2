@@ -119,6 +119,72 @@ export const writingStudioService = {
       // Proceed to fallback
     }
 
+function perfectGrammarFix(text: string): string {
+  if (!text) return text;
+  const corrections: [RegExp, string | ((m: string) => string)][] = [
+    [/\b(i)\b/g, 'I'],
+    [/\b(i'm|im)\b/gi, "I'm"],
+    [/\b(i've|ive)\b/gi, "I've"],
+    [/\b(i'll|ill)\b/gi, "I'll"],
+    [/\b(i'd|id)\b/gi, "I'd"],
+    [/\b(dont)\b/gi, "don't"],
+    [/\b(cant)\b/gi, "can't"],
+    [/\b(wont)\b/gi, "won't"],
+    [/\b(didnt)\b/gi, "didn't"],
+    [/\b(doesnt)\b/gi, "doesn't"],
+    [/\b(couldnt)\b/gi, "couldn't"],
+    [/\b(shouldnt)\b/gi, "shouldn't"],
+    [/\b(wouldnt)\b/gi, "wouldn't"],
+    [/\b(hasnt)\b/gi, "hasn't"],
+    [/\b(havent)\b/gi, "haven't"],
+    [/\b(isnt)\b/gi, "isn't"],
+    [/\b(arent)\b/gi, "aren't"],
+    [/\b(wasnt)\b/gi, "wasn't"],
+    [/\b(werent)\b/gi, "weren't"],
+    [/\b(youre)\b/gi, "you're"],
+    [/\b(theyre)\b/gi, "they're"],
+    [/\b(weve)\b/gi, "we've"],
+    [/\b(youve)\b/gi, "you've"],
+    [/\b(theyve)\b/gi, "they've"],
+    [/\b(thats)\b/gi, "that's"],
+    [/\b(whats)\b/gi, "what's"],
+    [/\b(heres)\b/gi, "here's"],
+    [/\b(theres)\b/gi, "there's"],
+    [/\b(teh)\b/gi, "the"],
+    [/\b(definately|definitly)\b/gi, "definitely"],
+    [/\b(untill)\b/gi, "until"],
+    [/\b(occured)\b/gi, "occurred"],
+    [/\b(occurance)\b/gi, "occurrence"],
+    [/\b(alot)\b/gi, "a lot"],
+    [/\b(goverment)\b/gi, "government"],
+    [/\b(accomodate)\b/gi, "accommodate"],
+    [/\b(enviroment)\b/gi, "environment"],
+    [/\b(truely)\b/gi, "truly"],
+    [/\b(wich)\b/gi, "which"],
+    [/\b(wierd)\b/gi, "weird"],
+    [/\b(calender)\b/gi, "calendar"],
+    [/\b(tommorow|tommorrow)\b/gi, "tomorrow"],
+    [/\b(the|is|and|in|that|to|it)\s+\1\b/gi, "$1"],
+  ];
+
+  let cleaned = text;
+  for (const [pattern, replacement] of corrections) {
+    cleaned = cleaned.replace(pattern, replacement as any);
+  }
+  // Fix spaces around punctuation
+  cleaned = cleaned.replace(/\s+([,.:;?!])/g, "$1");
+  cleaned = cleaned.replace(/([,.:;?!])([A-Za-z])/g, "$1 $2");
+
+  // Capitalize start of sentences
+  const lines = cleaned.split('\n');
+  const capitalized = lines.map((l) => {
+    if (!l.trim() || l.startsWith('#') || l.startsWith('```')) return l;
+    return l.replace(/(^\s*|[.!?]\s+)([a-z])/g, (_m, prefix, char) => prefix + char.toUpperCase());
+  });
+
+  return capitalized.join('\n').trim();
+}
+
     // High quality client-side alteration
     const { currentContent, alterAction, tone, category } = params;
     if (alterAction === 'shorten') {
@@ -127,7 +193,7 @@ export const writingStudioService = {
     } else if (alterAction === 'expand') {
       return `${currentContent}\n\nFurthermore, when examined through an analytical ${tone.toLowerCase()} perspective, several foundational principles emerge. Emphasizing sustained iteration, systematic execution, and continuous alignment ensures reliable, enduring results.`;
     } else if (alterAction === 'grammar') {
-      return currentContent.replace(/\s+/g, ' ').replace(/\s+([,.;?!])/g, '$1').trim();
+      return perfectGrammarFix(currentContent);
     } else {
       return `### Refined ${category} (${tone} Tone)\n\n${currentContent}`;
     }

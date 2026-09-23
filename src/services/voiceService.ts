@@ -16,6 +16,7 @@ export class VoiceController {
     error?: string
   ) => void;
   private onLevelUpdate?: (level: number) => void;
+  private onInterruptCallback?: () => void;
   private lastCapturedText: string = '';
 
   constructor() {
@@ -107,8 +108,9 @@ export class VoiceController {
         source.connect(analyser);
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let consecutiveVoiceHits = 0;
         const loop = () => {
-          if (!this.isListening) return;
+          if (!this.isListening && !this.isSpeaking) return;
           analyser.getByteFrequencyData(dataArray);
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
@@ -117,6 +119,18 @@ export class VoiceController {
           const avg = sum / dataArray.length;
           const level = Math.min(100, Math.round((avg / 128) * 100));
           this.onLevelUpdate?.(level);
+
+          // Barge-in Voice Activity Detection: If user speaks while AI is talking, immediately cut off AI!
+          if (this.isSpeaking && level > 22) {
+            consecutiveVoiceHits++;
+            if (consecutiveVoiceHits >= 2) {
+              this.interruptSpeaking();
+              consecutiveVoiceHits = 0;
+            }
+          } else {
+            consecutiveVoiceHits = 0;
+          }
+
           this.animFrameId = requestAnimationFrame(loop);
         };
         loop();
@@ -292,10 +306,28 @@ export class VoiceController {
     return this.lastCapturedText.trim();
   }
 
+  public setOnInterrupt(cb?: () => void): void {
+    this.onInterruptCallback = cb;
+  }
+
+  public isCurrentlySpeaking(): boolean {
+    return this.isSpeaking || (typeof window !== 'undefined' && Boolean(window.speechSynthesis?.speaking));
+  }
+
+  public isCurrentlyListening(): boolean {
+    return this.isListening;
+  }
+
   public interruptSpeaking(): void {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const wasSpeaking = this.isSpeaking || window.speechSynthesis.speaking;
       window.speechSynthesis.cancel();
       this.isSpeaking = false;
+      if (wasSpeaking && this.onInterruptCallback) {
+        try {
+          this.onInterruptCallback();
+        } catch {}
+      }
     }
   }
 

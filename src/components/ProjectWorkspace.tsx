@@ -148,62 +148,90 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {projects.map((proj) => {
-              const isActive = activeProjectId === proj.id;
-              return (
-                <div
-                  key={proj.id}
-                  onClick={() => handleActivate(proj)}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                    isActive
-                      ? 'border-amber-500 bg-amber-500/10 shadow-sm'
-                      : isDark
-                      ? 'border-neutral-850 hover:border-neutral-800 bg-neutral-900/70'
-                      : 'border-neutral-200 hover:border-neutral-300 bg-white'
-                  }`}
+            {projects.length === 0 ? (
+              <div className="text-center py-8 px-3">
+                <FolderKanban className="w-8 h-8 mx-auto text-neutral-500/50 mb-2" />
+                <p className="text-xs text-neutral-400 font-medium">No projects yet</p>
+                <p className="text-[11px] text-neutral-500 mt-1">Start a fresh project to organize your chats, files, and ideas.</p>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-black text-xs font-bold hover:bg-amber-400 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
-                      <h4 className="text-xs font-bold truncate">{proj.name}</h4>
-                    </div>
-                    {projects.length > 1 && (
+                  <Plus className="w-3.5 h-3.5" /> Create Project
+                </button>
+              </div>
+            ) : (
+              projects.map((proj) => {
+                const isActive = activeProjectId === proj.id;
+                return (
+                  <div
+                    key={proj.id}
+                    onClick={() => handleActivate(proj)}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                      isActive
+                        ? 'border-amber-500 bg-amber-500/10 shadow-sm'
+                        : isDark
+                        ? 'border-neutral-850 hover:border-neutral-800 bg-neutral-900/70'
+                        : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                        <h4 className="text-xs font-bold truncate">{proj.name}</h4>
+                      </div>
                       <button
                         onClick={(e) => handleDelete(proj.id, e)}
                         className="text-neutral-500 hover:text-red-400 p-1"
+                        title="Delete project"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
-                  </div>
+                    </div>
 
-                  <p className={`text-[11px] mt-1.5 line-clamp-2 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                    {proj.description}
-                  </p>
+                    <p className={`text-[11px] mt-1.5 line-clamp-2 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      {proj.description}
+                    </p>
 
-                  <div className="flex flex-wrap gap-1 mt-2.5">
-                    {proj.tags?.map((t) => (
-                      <span
-                        key={t}
-                        className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300"
-                      >
-                        #{t}
-                      </span>
-                    ))}
+                    <div className="flex flex-wrap gap-1 mt-2.5">
+                      {proj.tags?.map((t) => (
+                        <span
+                          key={t}
+                          className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300"
+                        >
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
         {/* Right Project Detail & Memory Vault */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {!activeProject ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
-              <FolderKanban className="w-12 h-12 text-neutral-500 opacity-40" />
-              <h3 className="text-sm font-bold text-neutral-300">No Project Active</h3>
-              <p className="text-xs text-neutral-500">Create a project or select one from the left menu.</p>
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <FolderKanban className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-neutral-200">No Projects Created Yet</h3>
+                <p className="text-xs text-neutral-400 max-w-sm mt-1">
+                  Create a custom project workspace to hold your code snippets, generated media, research queries, and persistent memory context.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-amber-500 text-black text-xs font-bold hover:bg-amber-400 transition-colors flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Your First Project</span>
+              </button>
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -257,7 +285,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                   rows={6}
                   value={activeProject.contextNotes || ''}
                   onChange={(e) => handleUpdateNotes(e.target.value)}
-                  placeholder="e.g. Engine: Luau / Roblox. Design aesthetic: Cyberpunk neon. Always output typed functions..."
+                  placeholder="e.g. Architecture specs: React, Tailwind, TypeScript. Target audience: Developers. Key requirements..."
                   className={`w-full p-3.5 rounded-xl border text-xs font-mono resize-none focus:outline-none focus:border-amber-500 ${
                     isDark ? 'bg-neutral-950 border-neutral-800 text-neutral-200' : 'bg-neutral-50 border-neutral-300 text-neutral-900'
                   }`}
@@ -326,7 +354,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                 <label className="block font-semibold mb-1 text-neutral-400">Project Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. My Roblox Game, My Portfolio, Biology Thesis"
+                  placeholder="e.g. NextGen SaaS Platform, Mobile App, Research Thesis"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
@@ -340,8 +368,8 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                   onChange={(e) => setNewCategory(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
                 >
-                  <option value="Game Development">Game Development</option>
                   <option value="Web Development">Web Development</option>
+                  <option value="Game Development">Game Development</option>
                   <option value="Education">Education & School</option>
                   <option value="Business">Business & Marketing</option>
                   <option value="Creative">Creative Writing & Art</option>
@@ -375,7 +403,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                 <label className="block font-semibold mb-1 text-neutral-400">Tags (comma-separated)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Roblox, Lua, Multi-player"
+                  placeholder="e.g. React, Full-stack, API, Production"
                   value={newTagInput}
                   onChange={(e) => setNewTagInput(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}

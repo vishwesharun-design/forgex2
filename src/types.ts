@@ -66,7 +66,8 @@ export type ActiveWorkspace =
   | 'writing'
   | 'presentation'
   | 'canvas'
-  | 'projects';
+  | 'projects'
+  | 'data_analysis';
 
 export type CodeLanguage = 
   | 'typescript' 
@@ -531,4 +532,69 @@ export interface VoiceOption {
   name: string;
   lang: string;
   gender?: string;
+}
+
+// ==========================================
+// 10. DATA ANALYSIS STUDIO TYPES
+// ==========================================
+export type DataColumnType = 'number' | 'string' | 'date' | 'boolean';
+
+export interface DataColumnStat {
+  name: string;
+  type: DataColumnType;
+  missingCount: number;
+  distinctCount: number;
+  nullCount?: number;
+  uniqueCount?: number;
+  min?: number | string;
+  max?: number | string;
+  mean?: number;
+  median?: number;
+  sum?: number;
+  sampleValues: (string | number)[];
+  topValues?: Array<{ value: string | number; count: number }>;
+}
+
+export interface ParsedDataset {
+  id: string;
+  name: string;
+  fileName: string;
+  rowCount: number;
+  columnCount: number;
+  fileSizeBytes: number;
+  headers: string[];
+  rows: Record<string, string | number>[];
+  columnStats: DataColumnStat[];
+  stats?: DataColumnStat[];
+  uploadedAt: number;
+}
+
+export interface DataAnalysisReport {
+  id: string;
+  datasetId: string;
+  datasetName: string;
+  timestamp: number;
+  title?: string;
+  summary: string;
+  executiveSummary?: string;
+  keyMetrics: Array<{ label: string; value: string; change?: string; sentiment?: 'positive' | 'negative' | 'neutral' }>;
+  trends: string[];
+  anomalies: string[];
+  correlations: string[];
+  insights?: string[];
+  recommendations?: string[];
+  actionableInsights: string[];
+  suggestedCharts?: Array<{
+    type: 'bar' | 'line' | 'pie' | 'scatter';
+    title: string;
+    xAxis: string;
+    yAxis: string;
+  }>;
+  chartSuggestions?: Array<{
+    type: 'bar' | 'line' | 'pie' | 'scatter';
+    title: string;
+    xAxis: string;
+    yAxis: string;
+    data?: Array<{ label: string; value: number }>;
+  }>;
 }

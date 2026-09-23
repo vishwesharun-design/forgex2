@@ -35,6 +35,7 @@ import { DocumentWorkspace } from './components/DocumentWorkspace';
 import { AgentWorkspace } from './components/AgentWorkspace';
 import { WebSearchWorkspace } from './components/WebSearchWorkspace';
 import { WritingStudioWorkspace } from './components/WritingStudioWorkspace';
+import { DataAnalysisWorkspace } from './components/DataAnalysisWorkspace';
 import { PresentationWorkspace } from './components/PresentationWorkspace';
 import { CanvasWorkspace } from './components/CanvasWorkspace';
 import { ProjectWorkspace } from './components/ProjectWorkspace';
@@ -524,6 +525,17 @@ export default function App() {
               {activeWorkspace === 'writing' && (
                 <WritingStudioWorkspace
                   isDark={isDark}
+                  theme={settings.theme}
+                  selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'data_analysis' && (
+                <DataAnalysisWorkspace
                   theme={settings.theme}
                   selectedModelId={selectedModelId}
                   onSelectModel={setSelectedModelId}

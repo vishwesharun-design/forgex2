@@ -67,13 +67,13 @@ const TEMPOS = [
   { label: 'High-Energy (145 BPM)', val: 145 },
 ];
 const DURATIONS = [
-  { label: '3:30 Min (Full Master)', val: 210 },
-  { label: '3:00 Min (Full Track)', val: 180 },
-  { label: '2:30 Min (Extended)', val: 150 },
-  { label: '2:00 Min (Radio Edit)', val: 120 },
-  { label: '1:30 Min (Mid Track)', val: 90 },
-  { label: '1:00 Min (Short Cut)', val: 60 },
-  { label: '30s Hook', val: 30 },
+  { label: '3.3 Min (200s Full Master)', val: 200 },
+  { label: '3:00 Min (180s Full Track)', val: 180 },
+  { label: '2:30 Min (150s Extended)', val: 150 },
+  { label: '2:00 Min (120s Radio Edit)', val: 120 },
+  { label: '1:30 Min (90s Mid Track)', val: 90 },
+  { label: '1:00 Min (60s Short Track)', val: 60 },
+  { label: '30s Hook (Intro Snippet)', val: 30 },
 ];
 
 const VOICE_PROFILES: { id: SongVoiceProfile; name: string; desc: string; tag: string }[] = [
@@ -103,7 +103,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const [selectedGenre, setSelectedGenre] = useState<SongGenre>('Synthwave');
   const [selectedMood, setSelectedMood] = useState<SongMood>('Energetic');
   const [selectedTempo, setSelectedTempo] = useState<number>(110);
-  const [selectedDuration, setSelectedDuration] = useState<number>(210);
+  const [selectedDuration, setSelectedDuration] = useState<number>(200);
   const [hasVoice, setHasVoice] = useState(true);
   const [selectedVoiceProfile, setSelectedVoiceProfile] = useState<SongVoiceProfile>('Zephyr');
   const [selectedVocalStyle, setSelectedVocalStyle] = useState<SongVocalStyle>('Melodic Singing');
@@ -116,7 +116,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const [activeSongId, setActiveSongId] = useState<string | null>(null);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
   const [playbackTime, setPlaybackTime] = useState(0);
-  const [playbackDuration, setPlaybackDuration] = useState(210);
+  const [playbackDuration, setPlaybackDuration] = useState(200);
   const [isMuted, setIsMuted] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeLyricsTab, setActiveLyricsTab] = useState(false);
@@ -534,7 +534,10 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                     AI Singing Voice Engine
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30">
+                  <span className="px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm">
+                    BETA
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 hidden sm:inline-flex">
                     Dual Beat + Vocal Synthesis
                   </span>
                 </div>

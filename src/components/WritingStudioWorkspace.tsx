@@ -15,11 +15,15 @@ import {
   ArrowRight,
   Download,
   Undo2,
-  Redo2
+  Redo2,
+  Eye,
+  Columns,
+  BookOpen
 } from 'lucide-react';
 import { WritingDoc, WritingCategory, WritingTone, WritingAction, ForgeXTheme, ForgeXModelId } from '../types';
 import { writingStudioService } from '../services/writingStudioService';
 import { ModelSelector } from './ModelSelector';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface WritingStudioWorkspaceProps {
   isDark: boolean;
@@ -67,10 +71,12 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // History stacks for Undo & Redo
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'edit' | 'split' | 'preview'>('edit');
 
   // Synchronize documents with auth state changes and initialize if empty
   useEffect(() => {
@@ -305,6 +311,14 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
       writingStudioService.saveDocument(updatedDoc);
       setDocuments(writingStudioService.getDocuments());
       setActiveDocId(targetId);
+
+      if (alterAction === 'grammar') {
+        setSuccessToast('✓ AI Grammar & spelling perfected!');
+        setTimeout(() => setSuccessToast(null), 3500);
+      } else {
+        setSuccessToast(`✓ Text updated with ${alterAction}!`);
+        setTimeout(() => setSuccessToast(null), 2500);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Text alteration notice: ${msg}`);
@@ -595,6 +609,11 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {successToast && (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold animate-in fade-in duration-200">
+                  {successToast}
+                </span>
+              )}
               <button
                 onClick={handleCopy}
                 disabled={!currentText}
@@ -652,10 +671,55 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               placeholder="Document Title..."
               className="text-base font-bold bg-transparent border-none focus:outline-none flex-1"
             />
-            <div className="flex items-center gap-3 text-[11px] font-mono text-neutral-400">
-              <span>{wordCount} words</span>
-              <span>•</span>
-              <span>{charCount} characters</span>
+            <div className="flex items-center gap-3">
+              {/* View Mode Switcher: Edit | Split | Markdown Preview */}
+              <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('edit')}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                    viewMode === 'edit'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm font-bold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Raw Text Editor"
+                >
+                  <PenTool className="w-3 h-3" />
+                  <span className="hidden sm:inline">Editor</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('split')}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                    viewMode === 'split'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm font-bold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Split Screen Editor & Markdown Preview"
+                >
+                  <Columns className="w-3 h-3" />
+                  <span className="hidden sm:inline">Split</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('preview')}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                    viewMode === 'preview'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm font-bold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Rendered Markdown Document"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span className="hidden sm:inline">Markdown</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 text-[11px] font-mono text-neutral-400">
+                <span>{wordCount} words</span>
+                <span>•</span>
+                <span>{charCount} characters</span>
+              </div>
             </div>
           </div>
 
@@ -665,6 +729,74 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               <div className="flex flex-col items-center justify-center h-full space-y-3">
                 <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
                 <p className="text-xs font-semibold text-amber-400">Crafting prose and refining vocabulary...</p>
+              </div>
+            ) : viewMode === 'preview' ? (
+              <div
+                className={`w-full flex-1 p-6 rounded-2xl border overflow-y-auto custom-scrollbar ${
+                  isDark
+                    ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100'
+                    : 'bg-white border-neutral-200 text-neutral-900'
+                }`}
+              >
+                <MarkdownRenderer content={currentText || '*No content yet. Switch to Editor to start writing.*'} theme={theme} />
+              </div>
+            ) : viewMode === 'split' ? (
+              <div className="w-full flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden">
+                <textarea
+                  id="writing-studio-editor"
+                  value={currentText}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+                      e.preventDefault();
+                      handleUndo();
+                    } else if (
+                      ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') ||
+                      ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+                    ) {
+                      e.preventDefault();
+                      handleRedo();
+                    }
+                  }}
+                  onChange={(e) => {
+                    const newContent = e.target.value;
+                    if (Math.abs(newContent.length - currentText.length) > 3 || newContent.endsWith('\n')) {
+                      pushUndoState(currentText);
+                    }
+                    setCurrentText(newContent);
+                    const targetId = activeDocId || 'doc-' + Date.now();
+                    if (!activeDocId) setActiveDocId(targetId);
+                    const updated: WritingDoc = {
+                      id: targetId,
+                      title: docTitle || 'Untitled Writing',
+                      category,
+                      tone,
+                      content: newContent,
+                      wordCount: newContent.trim() ? newContent.trim().split(/\s+/).length : 0,
+                      charCount: newContent.length,
+                      lastModified: Date.now(),
+                    };
+                    writingStudioService.saveDocument(updated);
+                    setDocuments(writingStudioService.getDocuments());
+                  }}
+                  placeholder="Type markdown content..."
+                  className={`w-full h-full p-4 rounded-2xl border text-sm leading-relaxed font-mono resize-none focus:outline-none focus:border-amber-500 transition-colors ${
+                    isDark
+                      ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100 placeholder-neutral-500'
+                      : 'bg-white border-neutral-200 text-neutral-900 placeholder-neutral-400'
+                  }`}
+                />
+                <div
+                  className={`w-full h-full p-4 rounded-2xl border overflow-y-auto custom-scrollbar ${
+                    isDark
+                      ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100'
+                      : 'bg-white border-neutral-200 text-neutral-900'
+                  }`}
+                >
+                  <div className="text-[10px] font-mono text-amber-400 font-bold uppercase mb-2 pb-1 border-b border-neutral-800">
+                    Live Markdown Preview
+                  </div>
+                  <MarkdownRenderer content={currentText || '*Live preview appears here...*'} theme={theme} />
+                </div>
               </div>
             ) : (
               <textarea

@@ -28,6 +28,7 @@ import { AIAgent, AgentExecution, ForgeXTheme, ForgeXModelId, AgentCategory, Age
 import { agentService, PRESET_AGENTS } from '../services/agentService';
 import { ModelSelector } from './ModelSelector';
 import { AgentBrowser } from './AgentBrowser';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface AgentWorkspaceProps {
   isDark: boolean;
@@ -410,9 +411,13 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                           </button>
                         )}
                       </div>
-                      <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-neutral-200">
-                        {currentExecution.finalResponse}
-                      </pre>
+                      <div className="pt-2 text-xs leading-relaxed">
+                        <MarkdownRenderer
+                          content={currentExecution.finalResponse || ''}
+                          theme={theme}
+                          className="text-xs"
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : (

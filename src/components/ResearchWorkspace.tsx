@@ -20,9 +20,8 @@ import {
   ArrowRight,
   Zap
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { DeepResearchReport, ForgeXModelId } from '../types';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface ResearchWorkspaceProps {
   isDark: boolean;
@@ -581,10 +580,8 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                 </h3>
               </div>
 
-              <div className="prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed space-y-4">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {currentReport.answer}
-                </ReactMarkdown>
+              <div className="max-w-none text-sm leading-relaxed space-y-4">
+                <MarkdownRenderer content={currentReport.answer} theme={isDark ? 'dark' : 'light'} />
               </div>
             </div>
 

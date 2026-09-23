@@ -20,12 +20,24 @@ export const projectService = {
         const legacy = localStorage.getItem('forgex_projects');
         if (legacy) {
           stored = legacy;
-          localStorage.setItem(key, legacy);
         }
       }
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Clean out any sample / placeholder projects like 'My Roblox Game'
+          const filtered = parsed.filter(
+            (p: ForgeXProject) =>
+              p.id !== 'proj-roblox' &&
+              p.id !== 'proj-website' &&
+              p.id !== 'proj-school' &&
+              !p.name?.toLowerCase().includes('roblox')
+          );
+          if (filtered.length !== parsed.length) {
+            this.saveProjects(filtered);
+          }
+          return filtered;
+        }
       }
     } catch (_e) {
       // fallback
@@ -108,52 +120,6 @@ export const projectService = {
   },
 
   getDefaultProjects(): ForgeXProject[] {
-    return [
-      {
-        id: 'proj-roblox',
-        name: 'My Roblox Game',
-        description: 'Multiplayer adventure obby with Lua scripting, custom badges, and responsive camera physics.',
-        category: 'Game Development',
-        createdTime: Date.now() - 1000 * 60 * 60 * 48,
-        lastActive: Date.now() - 1000 * 60 * 30,
-        contextNotes: 'Game Title: Cyber Odyssey Obby\nEngine: Roblox Studio\nLanguage: Luau\nTarget Audience: 9-16\nKey Mechanics: Double-jump checkpoints, laser grid hazards, coin multipliers.',
-        chatSessionIds: [],
-        fileIds: [],
-        codeSnippetIds: [],
-        imageIds: [],
-        researchQueries: ['Roblox Luau optimal collision loops'],
-        tags: ['Roblox', 'Gaming', 'Luau'],
-      },
-      {
-        id: 'proj-website',
-        name: 'My Website',
-        description: 'Modern portfolio and product storefront built with React, Tailwind CSS, and full-stack API integration.',
-        category: 'Web Development',
-        createdTime: Date.now() - 1000 * 60 * 60 * 72,
-        lastActive: Date.now() - 1000 * 60 * 120,
-        contextNotes: 'Stack: React 19, Tailwind CSS v4, Vite\nVisual Style: Sleek dark theme, amber accents, accessible typography\nPages: Home, Features, Showcase, Contact',
-        chatSessionIds: [],
-        fileIds: [],
-        codeSnippetIds: [],
-        imageIds: [],
-        researchQueries: ['Tailwind CSS high-performance animations'],
-        tags: ['Web', 'React', 'Frontend'],
-      },
-      {
-        id: 'proj-school',
-        name: 'School Project',
-        description: 'Comprehensive research paper and presentation deck exploring renewable energy and solar storage cells.',
-        category: 'Education',
-        createdTime: Date.now() - 1000 * 60 * 60 * 96,
-        lastActive: Date.now() - 1000 * 60 * 300,
-        contextNotes: 'Subject: Physics & Environmental Science\nTopic: Perovskite Solar Cells Efficiency\nDeliverables: 10-page report, 8-slide presentation deck, comparative dataset.',
-        chatSessionIds: [],
-        fileIds: [],
-        codeSnippetIds: [],
-        imageIds: [],
-        researchQueries: ['Perovskite solar efficiency benchmarks 2026'],
-        tags: ['School', 'Science', 'Research'],
-      },
-    ];
+    return [];
   },
 };

@@ -60,6 +60,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Live Web Search', category: 'Intelligence' };
       case 'writing':
         return { title: 'Writing Studio', category: 'Productivity' };
+      case 'data_analysis':
+        return { title: 'Data Analysis Studio', category: 'Intelligence' };
       case 'presentation':
         return { title: 'Presentations', category: 'Productivity' };
       case 'canvas':

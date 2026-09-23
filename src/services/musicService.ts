@@ -854,16 +854,36 @@ Forever resonant and true...`;
       }
 
       // 4. AI Vocal Formant Singing Synthesizer (True Melodic Singing, Not Spoken Reading)
-      if (song.hasVoice !== false && song.lyrics) {
-        // Melodic notes derived from the chord progression scale for true musical singing
+      if (song.hasVoice !== false) {
+        // Adjust vocal pitch register based on the chosen AI Voice Profile
+        let pitchMultiplier = 1.5;
+        let vocalBrightness = 1.0;
+        if (song.voiceProfile === 'Aoede') {
+          pitchMultiplier = 2.0; // Soprano
+          vocalBrightness = 1.25;
+        } else if (song.voiceProfile === 'Puck') {
+          pitchMultiplier = 1.75; // Bright Tenor
+          vocalBrightness = 1.15;
+        } else if (song.voiceProfile === 'Kore') {
+          pitchMultiplier = 1.4; // Soulful Alto
+          vocalBrightness = 0.95;
+        } else if (song.voiceProfile === 'Fenrir') {
+          pitchMultiplier = 1.0; // Deep Resonant Baritone
+          vocalBrightness = 0.85;
+        } else if (song.voiceProfile === 'Charon') {
+          pitchMultiplier = 0.85; // Low Bass
+          vocalBrightness = 0.8;
+        }
+
+        // Melodic singing notes derived from the chord progression scale
         const scaleNotes = [
-          chord[0] * 1.5,                      // Root singing pitch (e.g. A3 / C4)
-          (chord[1] || chord[0] * 1.25) * 1.5, // 3rd degree
-          (chord[2] || chord[0] * 1.5) * 1.5,  // 5th degree
-          chord[0] * 2.0,                      // Octave vocal belt
+          chord[0] * pitchMultiplier,
+          (chord[1] || chord[0] * 1.25) * pitchMultiplier,
+          (chord[2] || chord[0] * 1.5) * pitchMultiplier,
+          chord[0] * pitchMultiplier * 1.33,
         ];
 
-        // Sing 2 distinct melodic phrases per bar with glissando and vibrato
+        // Sing 2 distinct melodic phrases per bar with glissando, singer's formant, and vibrato
         for (let phraseIdx = 0; phraseIdx < 2; phraseIdx++) {
           const phraseStart = noteTrigger + phraseIdx * (beatDuration * 2);
           const phraseDuration = beatDuration * 1.85;
@@ -872,38 +892,39 @@ Forever resonant and true...`;
           // Lead Singing Oscillator (Vocal Cord Vibration)
           const leadOsc = ctx.createOscillator();
           leadOsc.type = 'sawtooth';
-          leadOsc.frequency.setValueAtTime(targetPitch, phraseStart);
+          leadOsc.frequency.setValueAtTime(targetPitch * 0.98, phraseStart);
           // Glissando / Portamento pitch bend into the singing note
-          leadOsc.frequency.exponentialRampToValueAtTime(targetPitch * 1.01, phraseStart + 0.1);
+          leadOsc.frequency.exponentialRampToValueAtTime(targetPitch, phraseStart + 0.12);
 
-          // Vocal Tract Formant Filter (F1 Throat Vowel Resonance ~750Hz)
+          // Vocal Tract Formant Filter 1 (F1 Throat Vowel Resonance: cycles through Ah / Oh / Ee)
           const formant1 = ctx.createBiquadFilter();
           formant1.type = 'bandpass';
-          formant1.frequency.setValueAtTime((barIndex + phraseIdx) % 2 === 0 ? 800 : 1150, phraseStart);
-          formant1.Q.setValueAtTime(4.2, phraseStart);
+          const vowelFreq = (barIndex + phraseIdx) % 3 === 0 ? 800 : (barIndex + phraseIdx) % 3 === 1 ? 550 : 1100;
+          formant1.frequency.setValueAtTime(vowelFreq * vocalBrightness, phraseStart);
+          formant1.Q.setValueAtTime(4.5, phraseStart);
 
-          // Vocal Tract Formant Filter 2 (F2 Singer's Ring Formant ~2400Hz)
+          // Vocal Tract Formant Filter 2 (F2 Singer's Ring Formant ~2600Hz)
           const formant2 = ctx.createBiquadFilter();
           formant2.type = 'peaking';
-          formant2.frequency.setValueAtTime(2400, phraseStart);
-          formant2.gain.setValueAtTime(6.0, phraseStart);
-          formant2.Q.setValueAtTime(3.0, phraseStart);
+          formant2.frequency.setValueAtTime(2600 * vocalBrightness, phraseStart);
+          formant2.gain.setValueAtTime(7.0, phraseStart);
+          formant2.Q.setValueAtTime(3.2, phraseStart);
 
-          // Singing Vibrato LFO (5.4 Hz with onset delay)
+          // Singing Vibrato LFO (5.2 Hz with delayed human swell)
           const vibratoLfo = ctx.createOscillator();
           const vibratoGain = ctx.createGain();
-          vibratoLfo.frequency.setValueAtTime(5.4, phraseStart);
+          vibratoLfo.frequency.setValueAtTime(5.2, phraseStart);
           vibratoGain.gain.setValueAtTime(0, phraseStart);
-          // Swell vibrato after note attack for authentic human singing technique
-          vibratoGain.gain.linearRampToValueAtTime(targetPitch * 0.022, phraseStart + 0.35);
+          // Swell vibrato after attack
+          vibratoGain.gain.linearRampToValueAtTime(targetPitch * 0.024, phraseStart + 0.35);
           vibratoLfo.connect(vibratoGain);
           vibratoGain.connect(leadOsc.frequency);
 
-          // Vocal Amplitude Envelope
+          // Vocal Amplitude Envelope (Smooth singing attack & natural release)
           const vocalAmp = ctx.createGain();
           vocalAmp.gain.setValueAtTime(0.0001, phraseStart);
-          vocalAmp.gain.exponentialRampToValueAtTime(0.18, phraseStart + 0.08); // Gentle singing attack
-          vocalAmp.gain.exponentialRampToValueAtTime(0.14, phraseStart + phraseDuration * 0.7);
+          vocalAmp.gain.exponentialRampToValueAtTime(0.22, phraseStart + 0.09);
+          vocalAmp.gain.exponentialRampToValueAtTime(0.16, phraseStart + phraseDuration * 0.7);
           vocalAmp.gain.exponentialRampToValueAtTime(0.0001, phraseStart + phraseDuration);
 
           // Routing
@@ -918,14 +939,15 @@ Forever resonant and true...`;
           vibratoLfo.stop(phraseStart + phraseDuration);
           oscillators.push(leadOsc, vibratoLfo);
 
-          // 5. Harmonized Backing Vocalist Layer (at a musical third above)
+          // 5. Harmonized Backing Vocalist Layer (at a musical third or fifth above)
           if (song.vocalStyle === 'Harmonized Vocals' || barIndex % 2 === 1) {
             const harmOsc = ctx.createOscillator();
             harmOsc.type = 'triangle';
             harmOsc.frequency.setValueAtTime(targetPitch * 1.25, phraseStart);
+            harmOsc.frequency.exponentialRampToValueAtTime(targetPitch * 1.26, phraseStart + 0.12);
             const harmGain = ctx.createGain();
             harmGain.gain.setValueAtTime(0.0001, phraseStart);
-            harmGain.gain.exponentialRampToValueAtTime(0.06, phraseStart + 0.12);
+            harmGain.gain.exponentialRampToValueAtTime(0.08, phraseStart + 0.14);
             harmGain.gain.exponentialRampToValueAtTime(0.0001, phraseStart + phraseDuration);
 
             harmOsc.connect(formant1);
@@ -942,61 +964,13 @@ Forever resonant and true...`;
       playChordBar(bar);
     }
 
-    // Interval ticker for progress bar and synchronized musical singing cadence
+    // Interval ticker for playback tracking without monotone robotic speech reading
     const interval = window.setInterval(() => {
       if (isStopped) {
         clearInterval(interval);
         return;
       }
       const elapsed = ctx.currentTime - startTime;
-
-      // Synchronize Singing Lyrics Voice with Melodic Musical Intonation (Not Flat Reading)
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window && song.hasVoice !== false && lyricsSections.length > 0) {
-        const activeSec = lyricsSections.find(
-          (s) => elapsed >= s.startTimeSec && elapsed < s.endTimeSec && !triggeredSpeechSections.has(s.id)
-        );
-        if (activeSec) {
-          triggeredSpeechSections.add(activeSec.id);
-          try {
-            window.speechSynthesis.cancel();
-            // Format lyrics as musical singing phrasing rather than continuous prose
-            const firstLyricLine = activeSec.lines[0] || '';
-            const secondLyricLine = activeSec.lines[1] || '';
-            // Sung lyric phrasing with musical cadence
-            const musicalLyric = [firstLyricLine, secondLyricLine].filter(Boolean).join(' ~ ');
-            
-            const utterance = new SpeechSynthesisUtterance(musicalLyric);
-
-            // Singing pitch registers (higher musical singing pitch range)
-            let singingPitch = 1.35;
-            if (song.voiceProfile === 'Puck') singingPitch = 1.45;
-            else if (song.voiceProfile === 'Kore') singingPitch = 1.6;
-            else if (song.voiceProfile === 'Fenrir') singingPitch = 0.88;
-            else if (song.voiceProfile === 'Aoede') singingPitch = 1.75;
-            else if (song.voiceProfile === 'Charon') singingPitch = 0.82;
-            else singingPitch = 1.35; // Zephyr (melodic tenor singing)
-
-            utterance.pitch = singingPitch;
-            // Rhythmic singing cadence matched to tempo
-            utterance.rate = Math.max(0.9, Math.min(1.25, (bpm / 120) * 1.05));
-            utterance.volume = Math.min(1.0, currentVocalVolume * masterGain.gain.value * 0.9);
-
-            const voices = window.speechSynthesis.getVoices();
-            if (voices.length > 0) {
-              const pref = voices.find((v) =>
-                song.voiceProfile === 'Kore' || song.voiceProfile === 'Aoede'
-                  ? v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('victoria')
-                  : v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('george') || v.name.toLowerCase().includes('daniel')
-              );
-              if (pref) utterance.voice = pref;
-            }
-
-            window.speechSynthesis.speak(utterance);
-          } catch (e) {
-            console.warn('AI voice singing synthesis notice:', e);
-          }
-        }
-      }
 
       if (elapsed >= totalDuration) {
         clearInterval(interval);

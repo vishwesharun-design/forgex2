@@ -206,7 +206,7 @@ export const chatService = {
         if (data && data.reply) {
           assistantReplyText = data.reply;
           if (data.model) {
-            modelUsedName = data.model;
+            modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
           }
         }
       }
