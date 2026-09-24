@@ -36,10 +36,19 @@ export interface UserWebSearchItem {
  * Prevents unauthenticated permission errors in the console when operating in guest/demo mode.
  */
 function isAuthorizedForUser(userId: string): boolean {
-  if (!userId || userId === 'guest') return false;
+  if (!userId || userId === 'guest' || userId.startsWith('guest_')) return false;
   const current = auth.currentUser;
-  if (!current) return false;
-  return current.uid === userId;
+  if (current) {
+    return current.uid === userId || (current.email ? userId.includes(current.email.split('@')[0]) : true);
+  }
+  try {
+    const sessionRaw = localStorage.getItem('forgex_user_session');
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw);
+      return parsed && (parsed.id === userId || (parsed.email && userId.includes(parsed.email.split('@')[0])));
+    }
+  } catch {}
+  return false;
 }
 
 export const firestoreStorageService = {
@@ -357,5 +366,106 @@ export const firestoreStorageService = {
       console.warn('Firestore loadUserSettings notice:', err);
     }
     return null;
+  },
+
+  // --- SEPARATE USER DOCUMENTS STORAGE ---
+  async saveUserDocument(userId: string, documentItem: any): Promise<void> {
+    if (!userId || !documentItem || !documentItem.id || !isAuthorizedForUser(userId)) return;
+    try {
+      const docRef = doc(db, 'users', userId, 'documents', String(documentItem.id));
+      await setDoc(docRef, { ...documentItem, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserDocument notice:', err);
+    }
+  },
+
+  async loadUserDocuments(userId: string): Promise<any[]> {
+    if (!userId || !isAuthorizedForUser(userId)) return [];
+    try {
+      const docsRef = collection(db, 'users', userId, 'documents');
+      const snap = await getDocs(query(docsRef, limit(50)));
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    } catch (err) {
+      console.warn('Firestore loadUserDocuments notice:', err);
+      return [];
+    }
+  },
+
+  async deleteUserDocument(userId: string, docId: string): Promise<void> {
+    if (!userId || !docId || !isAuthorizedForUser(userId)) return;
+    try {
+      await deleteDoc(doc(db, 'users', userId, 'documents', docId));
+    } catch (err) {
+      console.warn('Firestore deleteUserDocument notice:', err);
+    }
+  },
+
+  // --- SEPARATE USER CODE SNIPPETS STORAGE ---
+  async saveUserCodeSnippet(userId: string, snippet: any): Promise<void> {
+    if (!userId || !snippet || !snippet.id || !isAuthorizedForUser(userId)) return;
+    try {
+      const snipRef = doc(db, 'users', userId, 'codeSnippets', String(snippet.id));
+      await setDoc(snipRef, { ...snippet, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserCodeSnippet notice:', err);
+    }
+  },
+
+  async loadUserCodeSnippets(userId: string): Promise<any[]> {
+    if (!userId || !isAuthorizedForUser(userId)) return [];
+    try {
+      const snipRef = collection(db, 'users', userId, 'codeSnippets');
+      const snap = await getDocs(query(snipRef, limit(50)));
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    } catch (err) {
+      console.warn('Firestore loadUserCodeSnippets notice:', err);
+      return [];
+    }
+  },
+
+  // --- SEPARATE USER PRESENTATIONS STORAGE ---
+  async saveUserPresentation(userId: string, presentation: any): Promise<void> {
+    if (!userId || !presentation || !presentation.id || !isAuthorizedForUser(userId)) return;
+    try {
+      const presRef = doc(db, 'users', userId, 'presentations', String(presentation.id));
+      await setDoc(presRef, { ...presentation, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserPresentation notice:', err);
+    }
+  },
+
+  async loadUserPresentations(userId: string): Promise<any[]> {
+    if (!userId || !isAuthorizedForUser(userId)) return [];
+    try {
+      const presRef = collection(db, 'users', userId, 'presentations');
+      const snap = await getDocs(query(presRef, limit(50)));
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    } catch (err) {
+      console.warn('Firestore loadUserPresentations notice:', err);
+      return [];
+    }
+  },
+
+  // --- SEPARATE USER PROJECTS STORAGE ---
+  async saveUserProject(userId: string, project: any): Promise<void> {
+    if (!userId || !project || !project.id || !isAuthorizedForUser(userId)) return;
+    try {
+      const projRef = doc(db, 'users', userId, 'projects', String(project.id));
+      await setDoc(projRef, { ...project, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserProject notice:', err);
+    }
+  },
+
+  async loadUserProjects(userId: string): Promise<any[]> {
+    if (!userId || !isAuthorizedForUser(userId)) return [];
+    try {
+      const projRef = collection(db, 'users', userId, 'projects');
+      const snap = await getDocs(query(projRef, limit(50)));
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    } catch (err) {
+      console.warn('Firestore loadUserProjects notice:', err);
+      return [];
+    }
   }
 };

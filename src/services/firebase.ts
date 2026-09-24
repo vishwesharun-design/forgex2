@@ -33,4 +33,7 @@ export async function testFirestoreConnection(): Promise<boolean> {
   }
 }
 
+// Call on startup
+testFirestoreConnection().catch(() => {});
+
 export default app;

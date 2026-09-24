@@ -445,7 +445,7 @@ export default function App() {
             />
 
             {/* Workspace Core Views */}
-            <main className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-14 md:pb-0">
+            <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-14 md:pb-0">
               {activeWorkspace === 'chat' && (
                 <ChatWorkspace
                   currentSession={currentChatSession}

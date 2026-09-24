@@ -23,6 +23,13 @@ export interface StoredAccount {
   isGoogleUser?: boolean;
 }
 
+export interface SavedGoogleAccount {
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  lastUsed: number;
+}
+
 const STORAGE_KEY_ACCOUNTS = 'forgex_registered_accounts';
 const STORAGE_KEY_SESSION = 'forgex_session_user';
 const STORAGE_KEY_AUTH = 'forgex_is_authenticated';
@@ -111,15 +118,13 @@ export const authService = {
           localStorage.removeItem(STORAGE_KEY_AUTH);
         }
       }
-      const rawAccounts = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
-      if (rawAccounts) {
-        const parsedAccounts = JSON.parse(rawAccounts);
-        if (Array.isArray(parsedAccounts)) {
-          const cleaned = parsedAccounts.filter((a) => !isDemoAccount(a));
-          if (cleaned.length !== parsedAccounts.length) {
-            saveRegisteredAccounts(cleaned);
-          }
-        }
+      const lastEmail = localStorage.getItem('forgex_last_google_email');
+      if (lastEmail && lastEmail.includes('vishwesharun')) {
+        localStorage.removeItem('forgex_last_google_email');
+      }
+      const known = localStorage.getItem('forgex_known_google_accounts');
+      if (known && known.includes('vishwesharun')) {
+        localStorage.removeItem('forgex_known_google_accounts');
       }
     } catch (_e) {
       // Ignore cleanup error
@@ -181,7 +186,18 @@ export const authService = {
    */
   getCurrentUserPartitionKey(): string {
     const user = this.getCurrentUser();
-    if (!user) return 'guest';
+    if (!user) {
+      try {
+        let guestId = localStorage.getItem('forgex_guest_device_id');
+        if (!guestId) {
+          guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+          localStorage.setItem('forgex_guest_device_id', guestId);
+        }
+        return guestId;
+      } catch {
+        return 'guest_device';
+      }
+    }
     const email = (user.email || '').trim().toLowerCase();
     if (email && email.includes('@')) {
       const safeEmail = email.replace(/@/g, '_at_').replace(/[^a-z0-9_]/g, '_');
@@ -190,7 +206,7 @@ export const authService = {
     if (user.id) {
       return `usr_${user.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
     }
-    return 'guest';
+    return 'guest_device';
   },
 
   getCurrentUserEmail(): string {
@@ -216,6 +232,47 @@ export const authService = {
       username: a.username || a.name.toLowerCase().replace(/\s+/g, ''),
       email: a.email,
     }));
+  },
+
+  getKnownGoogleAccounts(): SavedGoogleAccount[] {
+    try {
+      const stored = localStorage.getItem('forgex_known_google_accounts');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((a) => a && a.email && !a.email.toLowerCase().includes('vishwesharun'));
+        }
+      }
+    } catch {}
+    return [];
+  },
+
+  saveKnownGoogleAccount(acc: { email: string; name?: string; avatarUrl?: string }): void {
+    if (!acc.email || !acc.email.includes('@')) return;
+    try {
+      const cleanEmail = acc.email.trim().toLowerCase();
+      if (cleanEmail.includes('vishwesharun')) return;
+      const accounts = this.getKnownGoogleAccounts().filter((a) => a.email !== cleanEmail);
+      const name = acc.name?.trim() || cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      accounts.unshift({
+        email: cleanEmail,
+        name,
+        avatarUrl: acc.avatarUrl || '',
+        lastUsed: Date.now(),
+      });
+      localStorage.setItem('forgex_known_google_accounts', JSON.stringify(accounts.slice(0, 6)));
+    } catch {}
+  },
+
+  removeKnownGoogleAccount(email: string): SavedGoogleAccount[] {
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const accounts = this.getKnownGoogleAccounts().filter((a) => a.email !== cleanEmail);
+      localStorage.setItem('forgex_known_google_accounts', JSON.stringify(accounts));
+      return accounts;
+    } catch {
+      return [];
+    }
   },
 
   // --- CONTINUE WITH GOOGLE DIRECT (FOR PREVIEW / CLOUD RUN ENVIRONMENTS) ---
@@ -256,6 +313,12 @@ export const authService = {
       console.warn('Could not sync user profile to Firestore immediately:', saveErr);
     }
 
+    this.saveKnownGoogleAccount({
+      email: cleanEmail,
+      name: userProfile.name,
+      avatarUrl: userProfile.avatarUrl,
+    });
+
     try {
       localStorage.setItem('forgex_last_google_email', cleanEmail);
       localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
@@ -269,7 +332,11 @@ export const authService = {
   },
 
   // --- CONTINUE WITH GOOGLE ---
-  async signInWithGoogle(fallbackEmail?: string, fallbackName?: string): Promise<UserProfile> {
+  async signInWithGoogle(explicitEmail?: string, fallbackName?: string): Promise<UserProfile> {
+    if (explicitEmail && explicitEmail.includes('@')) {
+      return await this.signInWithGoogleDirect(explicitEmail, fallbackName);
+    }
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
@@ -291,6 +358,12 @@ export const authService = {
       // Store in Firestore under this user's isolated document
       await firestoreStorageService.saveUserProfile(userProfile);
 
+      this.saveKnownGoogleAccount({
+        email: userProfile.email,
+        name: userProfile.name,
+        avatarUrl: userProfile.avatarUrl,
+      });
+
       localStorage.setItem('forgex_last_google_email', userProfile.email);
       localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(userProfile));
       localStorage.setItem(STORAGE_KEY_AUTH, 'true');
@@ -304,20 +377,12 @@ export const authService = {
         error?.code === 'auth/operation-not-allowed'
       ) {
         console.warn(
-          'Firebase Google Sign-In: Current preview domain is not in Firebase authorized domains. Activating seamless Google fallback.'
+          'Firebase Google Sign-In: Preview domain requires account selection.'
         );
 
-        if (fallbackEmail && fallbackEmail.includes('@')) {
-          return await this.signInWithGoogleDirect(fallbackEmail, fallbackName);
-        }
-
-        const lastEmail = localStorage.getItem('forgex_last_google_email');
-        if (lastEmail && lastEmail.includes('@')) {
-          return await this.signInWithGoogleDirect(lastEmail, fallbackName);
-        }
-
+        // DO NOT silently auto-login with old email! Always trigger the Choose Account UI.
         const domainErr: any = new Error(
-          'Preview domain authorization needed. Please enter your Google email to sign in.'
+          'Please choose your Google account to sign in.'
         );
         domainErr.code = 'auth/unauthorized-domain';
         domainErr.isDomainError = true;
@@ -326,9 +391,9 @@ export const authService = {
       }
 
       if (error?.code === 'auth/popup-closed-by-user') {
-        throw new Error('Sign-in cancelled. Please click "Continue with Google" again.');
+        throw new Error('Sign-in cancelled. Please choose an account to sign in.');
       } else if (error?.code === 'auth/popup-blocked') {
-        throw new Error('Sign-in popup was blocked by browser. Please allow popups or use email sign in.');
+        throw new Error('Sign-in popup was blocked by browser. Please choose an account below.');
       } else if (error?.code === 'auth/network-request-failed') {
         throw new Error('Network error during Google sign in. Please check your internet connection.');
       }
@@ -543,6 +608,9 @@ export const authService = {
     }
     localStorage.removeItem(STORAGE_KEY_SESSION);
     localStorage.removeItem(STORAGE_KEY_AUTH);
+    try {
+      localStorage.setItem('forgex_guest_device_id', 'guest_' + Math.random().toString(36).substring(2, 9));
+    } catch {}
     dispatchAuthChanged(null);
   },
 
