@@ -66,103 +66,20 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
   const [playerState, setPlayerState] = useState(() => spotifyPlayerService.getState());
   const [favorites, setFavorites] = useState<string[]>(() => spotifyPlayerService.getFavorites());
   const [currentSong, setCurrentSong] = useState<SpotifyTrack>(() => SPOTIFY_TRACKS[0]);
-  const [playbackMode, setPlaybackMode] = useState<'full_song' | 'real_audio' | 'spotify_embed'>('real_audio');
-
-  // Background Audio Streaming Engine (Streams full 3+ min audio with NO video shown in UI)
-  const [bgIsPlaying, setBgIsPlaying] = useState(false);
-  const [bgCurrentTime, setBgCurrentTime] = useState(0);
-  const [bgVolume, setBgVolume] = useState(0.85);
-  const [bgIsMuted, setBgIsMuted] = useState(false);
-  const bgIframeRef = useRef<HTMLIFrameElement | null>(null);
-
-  // Parse duration helper (e.g. "3:23" -> 203)
-  const songDurationSeconds = useMemo(() => {
-    if (!currentSong.duration) return 180;
-    const parts = currentSong.duration.split(':').map(Number);
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return parts[0] * 60 + parts[1];
-    }
-    return 180;
-  }, [currentSong]);
-
-  // Background stream URL for current track (YouTube with autoplay and JS API enabled)
-  const bgStreamUrl = useMemo(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    if (currentSong.youtubeId) {
-      return `https://www.youtube-nocookie.com/embed/${currentSong.youtubeId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
-    }
-    return `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(currentSong.creator + ' ' + currentSong.title + ' audio')}&autoplay=1&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
-  }, [currentSong]);
-
-  // Send command to hidden background YouTube iframe
-  const sendBgCommand = (func: string, args: (number | string | boolean)[] = []) => {
-    try {
-      bgIframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func, args }),
-        '*'
-      );
-    } catch (e) {
-      console.warn('Background command notice:', e);
-    }
-  };
-
-  // Timer interval for background audio scrubber
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (bgIsPlaying && playbackMode === 'full_song') {
-      interval = setInterval(() => {
-        setBgCurrentTime((prev) => {
-          if (prev >= songDurationSeconds) {
-            if (playerState.isRepeating) {
-              sendBgCommand('seekTo', [0, true]);
-              sendBgCommand('playVideo');
-              return 0;
-            } else {
-              handleNextTrack();
-              return 0;
-            }
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [bgIsPlaying, playbackMode, songDurationSeconds, playerState.isRepeating]);
-
-  const toggleBgPlayPause = () => {
-    if (playerState.isPlaying) {
-      spotifyPlayerService.pause();
-      setBgIsPlaying(false);
-    } else {
-      if (playerState.duration > 0 && playerState.currentTime >= playerState.duration - 0.5) {
-        spotifyPlayerService.seek(0);
-      }
-      spotifyPlayerService.playTrack(currentSong, playerState.currentTime);
-      setBgIsPlaying(true);
-    }
-  };
-
-  const seekBg = (seconds: number) => {
-    spotifyPlayerService.seek(seconds);
-    setBgCurrentTime(seconds);
-  };
-
-  const setBgVol = (val: number) => {
-    setBgVolume(val);
-    spotifyPlayerService.setVolume(val);
-  };
-
-  const toggleBgMute = () => {
-    const nextMuted = !bgIsMuted;
-    setBgIsMuted(nextMuted);
-    spotifyPlayerService.toggleMute();
-  };
+  const [playbackMode, setPlaybackMode] = useState<'real_audio' | 'spotify_embed' | 'video'>('real_audio');
 
   // Mobile View Toggle
   const [mobileTab, setMobileTab] = useState<'browse' | 'player'>('browse');
 
   // Canvas Waveform Ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Clean up playback when leaving SpotifyStudioWorkspace
+  useEffect(() => {
+    return () => {
+      spotifyPlayerService.pause();
+    };
+  }, []);
 
   // Subscribe to real audio player service
   useEffect(() => {
@@ -209,26 +126,31 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
   }, [selectedCategory]);
 
   // Handle Play Real Song
-  const handlePlayRealSong = (track: SpotifyTrack, modeOverride?: 'full_song' | 'real_audio' | 'spotify_embed') => {
+  const handlePlayRealSong = (track: SpotifyTrack, modeOverride?: 'real_audio' | 'spotify_embed' | 'video') => {
     const isSameTrack = currentSong.id === track.id;
     setCurrentSong(track);
     const targetMode = modeOverride || playbackMode;
 
-    if (targetMode === 'spotify_embed') {
-      spotifyPlayerService.pause();
-      setBgIsPlaying(false);
-    } else {
-      setBgIsPlaying(false);
+    if (targetMode === 'real_audio') {
       if (playerState.duration > 0 && playerState.currentTime >= playerState.duration - 0.5) {
         spotifyPlayerService.seek(0);
       }
       spotifyPlayerService.playTrack(track, isSameTrack ? playerState.currentTime : 0);
+    } else {
+      spotifyPlayerService.pause();
     }
 
     if (modeOverride) {
       setPlaybackMode(modeOverride);
     }
     setMobileTab('player');
+  };
+
+  const handleSelectPlaybackMode = (mode: 'real_audio' | 'spotify_embed' | 'video') => {
+    setPlaybackMode(mode);
+    if (mode !== 'real_audio') {
+      spotifyPlayerService.pause();
+    }
   };
 
   // Handle Next Track
@@ -284,8 +206,8 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
 
       if (analyser && playerState.isPlaying) {
         analyser.getByteFrequencyData(dataArray);
-      } else if (bgIsPlaying) {
-        // High-energy reactive pulse when streaming full background song
+      } else if (playerState.isPlaying) {
+        // High-energy reactive pulse when playing master audio
         const now = Date.now() / 150;
         for (let i = 0; i < dataArray.length; i++) {
           const w1 = Math.sin(now * 1.6 + i * 0.45) * 60;
@@ -297,7 +219,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
         // Idle gentle waveform pulse
         const now = Date.now() / 250;
         for (let i = 0; i < dataArray.length; i++) {
-          dataArray[i] = playerState.isPlaying ? 85 + Math.sin(now + i * 0.4) * 45 : 16;
+          dataArray[i] = 16;
         }
       }
 
@@ -880,70 +802,56 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
               </div>
             </div>
 
-            {/* Switch Mode: Full 3-5m Song vs Fast Preview vs Spotify Embed */}
+            {/* Switch Mode: Master Audio vs Spotify Embed vs Music Video */}
             <div className={`flex items-center rounded-xl p-0.5 border ${
               isDark ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-200 bg-neutral-100'
             }`}>
               <button
                 type="button"
-                onClick={() => setPlaybackMode('full_song')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                  playbackMode === 'full_song'
-                    ? 'bg-[#1DB954] text-black shadow-sm'
-                    : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
-                }`}
-                title="Play complete full-length 3+ minute song"
-              >
-                Full 3-5m Song
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlaybackMode('real_audio')}
+                onClick={() => handleSelectPlaybackMode('real_audio')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                   playbackMode === 'real_audio'
                     ? 'bg-[#1DB954] text-black shadow-sm'
                     : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
                 }`}
-                title="Play 30s preview with live visualizer spectrum"
+                title="Play master audio with live visualizer spectrum"
               >
-                Preview (30s)
+                Master Audio
               </button>
               <button
                 type="button"
-                onClick={() => setPlaybackMode('spotify_embed')}
+                onClick={() => handleSelectPlaybackMode('spotify_embed')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                   playbackMode === 'spotify_embed'
                     ? 'bg-[#1DB954] text-black shadow-sm'
                     : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
                 }`}
-                title="Spotify embedded stream"
+                title="Spotify embedded web player"
               >
                 Spotify Embed
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectPlaybackMode('video')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  playbackMode === 'video'
+                    ? 'bg-[#1DB954] text-black shadow-sm'
+                    : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
+                }`}
+                title="Full music video"
+              >
+                Music Video
               </button>
             </div>
           </div>
 
           {/* Current Song Details & Controls */}
           <div className="p-4 sm:p-5 flex flex-col gap-4">
-            {/* Explainer Banner: 30s raw file vs 3-min full song */}
-            <div className={`p-3 rounded-2xl border text-xs flex items-start gap-2.5 ${
-              isDark ? 'border-[#1DB954]/30 bg-[#1DB954]/10 text-neutral-200' : 'border-emerald-200 bg-emerald-50/80 text-emerald-950'
-            }`}>
-              <Info className="w-4 h-4 text-[#1DB954] shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <div className="font-bold text-xs text-[#1DB954] flex items-center gap-1.5">
-                  Full 3+ Minute Song Unlocked
-                </div>
-                <p className={`text-[11px] leading-relaxed mt-0.5 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                  Record label copyright law limits raw MP3 files to 30s samples. In <strong>Full 3-5m Song Mode</strong> below, you can listen to the <strong>complete unedited original recording ({currentSong.duration})</strong> without cutoff!
-                </p>
-              </div>
-            </div>
             {/* Spinning Vinyl Turntable Display */}
             <div className="relative mx-auto w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center">
               {/* Vinyl Disc that slides out and spins when playing */}
               <div className={`absolute w-44 h-44 sm:w-52 sm:h-52 rounded-full bg-gradient-to-tr from-neutral-950 via-neutral-900 to-neutral-950 border-4 border-neutral-800 shadow-2xl transition-all duration-700 flex items-center justify-center ${
-                (playerState.isPlaying || (playbackMode === 'full_song' && bgIsPlaying))
+                playerState.isPlaying
                   ? 'translate-x-6 rotate-180 animate-[spin_4s_linear_infinite]' 
                   : 'translate-x-0 rotate-0'
               }`}>
@@ -1016,149 +924,8 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
               </a>
             </div>
 
-            {/* Player View: Mode 1 - Full 3-5m Song Player (Audio in background, NO video in UI) */}
-            {playbackMode === 'full_song' ? (
-              <div className={`p-4 rounded-2xl border ${
-                isDark ? 'border-neutral-800 bg-neutral-950/90' : 'border-neutral-200 bg-white shadow-sm'
-              }`}>
-                {/* Header */}
-                <div className="flex items-center justify-between text-[11px] mb-2.5">
-                  <span className="text-[#1DB954] font-bold flex items-center gap-1.5">
-                    <Disc3 className={`w-3.5 h-3.5 text-[#1DB954] ${bgIsPlaying ? 'animate-spin' : ''}`} />
-                    Full Uncut Audio Track
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 flex items-center gap-1 leading-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Video Hidden • Background Audio
-                  </span>
-                </div>
-
-                {/* Pure Music Player Visualizer Display */}
-                <div className="rounded-xl overflow-hidden bg-neutral-900/90 border border-neutral-800 p-3 flex flex-col items-center justify-center relative shadow-inner">
-                  {/* Canvas Audio Spectrum */}
-                  <canvas
-                    ref={canvasRef}
-                    width={340}
-                    height={68}
-                    className="w-full h-16 rounded-lg bg-neutral-950/60"
-                  />
-                  <div className="mt-2 text-center">
-                    <p className="text-xs font-bold text-white truncate max-w-[280px] leading-tight">
-                      {currentSong.title}
-                    </p>
-                    <p className="text-[11px] text-[#1DB954] font-semibold truncate mt-0.5 leading-normal">
-                      By {currentSong.creator} • {currentSong.album}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Scrubber Progress Bar for Full Song */}
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-neutral-400 mb-1">
-                    <span>{formatTime(bgCurrentTime)}</span>
-                    <span className="text-[#1DB954] font-semibold">
-                      {formatTime(songDurationSeconds)} full length
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={songDurationSeconds || 180}
-                    step={1}
-                    value={bgCurrentTime}
-                    onChange={(e) => seekBg(Number(e.target.value))}
-                    className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
-                  />
-                </div>
-
-                {/* Full Song Nav & Playback Controls */}
-                <div className="mt-3.5 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => spotifyPlayerService.toggleShuffle()}
-                    className={`p-2 rounded-lg transition-colors ${
-                      playerState.isShuffled ? 'text-[#1DB954] bg-[#1DB954]/15' : 'text-neutral-400 hover:text-white'
-                    }`}
-                    title="Shuffle tracks"
-                  >
-                    <Shuffle className="w-4 h-4" />
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handlePrevTrack}
-                      className="p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
-                      title="Previous song"
-                    >
-                      <SkipBack className="w-5 h-5" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={toggleBgPlayPause}
-                      className="w-12 h-12 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-lg shadow-[#1DB954]/30 transition-transform active:scale-95"
-                      title={bgIsPlaying ? 'Pause' : 'Play Full Song'}
-                    >
-                      {bgIsPlaying ? (
-                        <Pause className="w-5 h-5 fill-black" />
-                      ) : (
-                        <Play className="w-5 h-5 fill-black ml-0.5" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleNextTrack}
-                      className="p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
-                      title="Next song"
-                    >
-                      <SkipForward className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => spotifyPlayerService.toggleRepeat()}
-                    className={`p-2 rounded-lg transition-colors ${
-                      playerState.isRepeating ? 'text-[#1DB954] bg-[#1DB954]/15' : 'text-neutral-400 hover:text-white'
-                    }`}
-                    title="Repeat track"
-                  >
-                    <Repeat className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Volume Slider & Mute Toggle */}
-                <div className="mt-3.5 pt-3 border-t border-neutral-800/60 flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={toggleBgMute}
-                    className="text-neutral-400 hover:text-white transition-colors"
-                    title={bgIsMuted ? 'Unmute' : 'Mute'}
-                  >
-                    {bgIsMuted || bgVolume === 0 ? (
-                      <VolumeX className="w-4 h-4 text-rose-400" />
-                    ) : (
-                      <Volume2 className="w-4 h-4 text-[#1DB954]" />
-                    )}
-                  </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={bgIsMuted ? 0 : bgVolume}
-                    onChange={(e) => setBgVol(Number(e.target.value))}
-                    className="flex-1 h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
-                  />
-                  <span className="text-[10px] font-mono text-neutral-400 w-8 text-right">
-                    {Math.round((bgIsMuted ? 0 : bgVolume) * 100)}%
-                  </span>
-                </div>
-              </div>
-            ) : playbackMode === 'real_audio' ? (
-              /* Mode 2 - 30s Fast Master Preview with Live Waveform Canvas Spectrum */
+            {/* Player View: Mode 1 - Real Audio Master Player */}
+            {playbackMode === 'real_audio' ? (
               <div className={`p-4 rounded-2xl border ${
                 isDark ? 'border-neutral-800 bg-neutral-950/90' : 'border-neutral-200 bg-white shadow-sm'
               }`}>
@@ -1166,7 +933,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                 <div className="flex items-center justify-between text-[11px] mb-2">
                   <span className="text-[#1DB954] font-bold flex items-center gap-1.5">
                     <Waves className="w-3.5 h-3.5" />
-                    30s Master Equalizer Spectrum
+                    Master Equalizer Spectrum
                   </span>
                   <span className="text-neutral-400 font-mono text-[10px]">
                     {currentSong.genre} • {currentSong.bpm} BPM
@@ -1286,26 +1053,47 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                   </span>
                 </div>
               </div>
-            ) : (
-              /* Mode 3: Official Spotify Player Embed */
+            ) : playbackMode === 'spotify_embed' ? (
+              /* Mode 2: Official Spotify Player Embed */
               <div className="rounded-2xl border border-neutral-800/80 overflow-hidden bg-black/40 shadow-inner p-1">
                 <div className="px-2 py-1.5 flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-800/40 mb-1">
                   <span className="flex items-center gap-1.5 text-[#1DB954] font-bold">
                     <SpotifyBrandIcon className="w-3.5 h-3.5" />
                     Official Spotify Embedded Player
                   </span>
-                  <span>Direct Stream</span>
+                  <span>Spotify Direct</span>
                 </div>
                 <iframe
                   title={`Spotify Player: ${currentSong.title}`}
                   src={currentSong.embedUrl}
                   width="100%"
                   height="152"
-                  frameBorder="0"
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                   loading="lazy"
-                  className="rounded-xl"
+                  className="rounded-xl border-0"
                 />
+              </div>
+            ) : (
+              /* Mode 3: Official Music Video Player (YouTube) */
+              <div className="rounded-2xl border border-neutral-800/80 overflow-hidden bg-black/40 shadow-inner p-3">
+                <div className="flex items-center justify-between text-[11px] mb-2">
+                  <span className="text-red-400 font-bold flex items-center gap-1.5">
+                    <Disc3 className="w-3.5 h-3.5 text-red-400" />
+                    Full Music Video
+                  </span>
+                  <span className="text-neutral-400 font-mono text-[10px]">
+                    {currentSong.duration}
+                  </span>
+                </div>
+                <div className="aspect-video w-full rounded-xl overflow-hidden border border-neutral-800 bg-black shadow-md">
+                  <iframe
+                    title={`Music Video: ${currentSong.title}`}
+                    src={currentSong.youtubeId ? `https://www.youtube-nocookie.com/embed/${currentSong.youtubeId}?autoplay=1` : undefined}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
               </div>
             )}
 
@@ -1340,23 +1128,6 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Hidden Background YouTube Audio Streamer - Plays audio in background with NO video shown in UI */}
-      <div
-        className="fixed -top-[9999px] -left-[9999px] w-1 h-1 opacity-0 pointer-events-none overflow-hidden select-none"
-        aria-hidden="true"
-        tabIndex={-1}
-      >
-        <iframe
-          ref={bgIframeRef}
-          id="hidden-bg-yt-audio-player"
-          title="Background Audio Stream"
-          src={bgStreamUrl}
-          width="100"
-          height="100"
-          allow="autoplay; encrypted-media"
-        />
       </div>
     </div>
   );

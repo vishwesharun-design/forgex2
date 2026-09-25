@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import { generateExpertChatReply } from "./src/services/knowledgeEngine";
 
 dotenv.config();
 
@@ -78,14 +79,55 @@ const FALLBACK_IMAGES: Record<string, string[]> = {
   ]
 };
 
-function getEffectiveApiKey(req: Request): string | undefined {
+function getEffectiveApiKeys(req: Request): string[] {
+  const keys: string[] = [];
   const customHeaderKey = req.headers["x-api-key"] as string | undefined;
   const customBodyKey = req.body?.apiKey as string | undefined;
   const candidate = customHeaderKey?.trim() || customBodyKey?.trim();
   if (candidate && !candidate.startsWith("mhk_")) {
-    return candidate;
+    keys.push(candidate);
   }
-  return process.env.GEMINI_API_KEY?.trim() || undefined;
+  const envKey = process.env.GEMINI_API_KEY?.trim();
+  if (envKey && !keys.includes(envKey)) {
+    keys.push(envKey);
+  }
+  return keys;
+}
+
+function getEffectiveApiKey(req: Request): string | undefined {
+  const keys = getEffectiveApiKeys(req);
+  return keys[0];
+}
+
+const RESILIENT_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+
+async function generateContentResilient(
+  ai: GoogleGenAI,
+  request: {
+    contents: any;
+    config?: any;
+  },
+  preferredModels: string[] = RESILIENT_MODELS
+): Promise<{ text: string; model: string }> {
+  let lastError: any = null;
+  for (const model of preferredModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: request.contents,
+        config: request.config,
+      });
+      const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (text) {
+        return { text, model };
+      }
+    } catch (err: any) {
+      lastError = err;
+      // When a model experiences temporary high demand (503) or rate limits (429), gracefully fail over to the next candidate
+      continue;
+    }
+  }
+  throw lastError || new Error("All Gemini models failed to generate content.");
 }
 
 // Generate prompt-specific real AI image using high-resolution diffusion pipeline
@@ -138,118 +180,9 @@ async function generateRealAiImage(
   return pollinationsUrl;
 }
 
-// Intelligent, non-repetitive conversational fallback bot
-function generateFallbackChatReply(prompt: string, _modelId: string): string {
-  const clean = prompt.trim();
-  const lower = clean.toLowerCase();
-
-  // Basic math evaluation (e.g., "what is 2 + 2", "5 * 10")
-  const mathMatch = lower.match(/(?:what is|calculate|compute)?\s*(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)/);
-  if (mathMatch) {
-    const num1 = parseFloat(mathMatch[1]);
-    const op = mathMatch[2];
-    const num2 = parseFloat(mathMatch[3]);
-    let result = 0;
-    if (op === '+') result = num1 + num2;
-    else if (op === '-') result = num1 - num2;
-    else if (op === '*') result = num1 * num2;
-    else if (op === '/') result = num2 !== 0 ? num1 / num2 : NaN;
-    if (!isNaN(result)) {
-      return `${num1} ${op} ${num2} = **${result}**.`;
-    }
-  }
-
-  // Greetings
-  if (/^(hi|hello|hey|greetings|howdy|sup|good morning|good evening|good afternoon)\b/i.test(lower)) {
-    return `Hello! How can I assist you today? Feel free to ask me anything—whether it's writing code, explaining complex topics, drafting creative stories, answering trivia, or brainstorming ideas. What's on your mind?`;
-  }
-
-  // Jokes
-  if (lower.includes('joke') || lower.includes('funny')) {
-    const jokes = [
-      `Why do programmers prefer dark mode?\n\nBecause light attracts bugs!`,
-      `There are 10 types of people in the world: those who understand binary, and those who don't.`,
-      `Why was the JavaScript developer sad?\n\nBecause they didn't 'null' their feelings and couldn't find closure.`,
-      `A SQL query walks into a bar, walks up to two tables and asks: *"Can I join you?"*`,
-      `Why did the scarecrow win an award?\n\nBecause he was outstanding in his field!`,
-    ];
-    return jokes[Math.floor(Math.random() * jokes.length)];
-  }
-
-  // Coding requests
-  if (lower.includes('code') || lower.includes('react') || lower.includes('typescript') || lower.includes('javascript') || lower.includes('python') || lower.includes('function') || lower.includes('algorithm')) {
-    return `Here is a solution for your request:
-
-\`\`\`typescript
-/**
- * Clean, efficient implementation
- */
-export function executeTask<T>(input: T): { success: boolean; data: T; timestamp: number } {
-  console.log("Processing request:", input);
-  return {
-    success: true,
-    data: input,
-    timestamp: Date.now()
-  };
-}
-\`\`\`
-
-**How it works:**
-- Fully typed with TypeScript generics for maximum flexibility and safety.
-- Returns a structured status object including execution timestamps.
-- Can be easily adapted to asynchronous pipelines or React hooks.
-
-Let me know if you need this customized for a specific language or framework!`;
-  }
-
-  // Creative writing / stories
-  if (lower.includes('story') || lower.includes('poem') || lower.includes('write a') || lower.includes('script') || lower.includes('tale')) {
-    return `The neon rain washed over the cobblestones of the high terrace, reflecting twin moons in the oil-slick puddles.
-
-Elora adjusted her visor. The pulse beacon on her wrist was vibrating with a rhythmic hum—not distress, but a coordinates beacon that hadn't been active in three hundred years.
-
-*"Are you certain about this?"* whispered the drone hovering near her shoulder, its optical sensors clicking into focus.
-
-*"No,"* she replied, stepping forward across the ancient steel threshold. *"Which is exactly why we're going in."*
-
-Ahead, the obsidian vault doors groaned open, revealing corridors lined with crystalline glyphs that began to awaken one by one.`;
-  }
-
-  // Explanations (quantum, ai, photosynthesis, etc.)
-  if (lower.includes('how does') || lower.includes('what is') || lower.includes('explain') || lower.includes('why is')) {
-    const subject = clean.replace(/^(how does|what is|explain|why is|tell me about)\s*/i, '').replace(/\?+$/, '');
-    return `### Understanding ${subject.charAt(0).toUpperCase() + subject.slice(1)}
-
-**Core Principles:**
-1. **The Mechanism**: It operates on fundamental rules governing interaction and state changes. At its core, inputs or environmental factors determine predictable behavioral states.
-2. **Key Dynamics**:
-   - **Interconnectivity**: Each layer or component feeds directly into the next, ensuring balance and continuous feedback loops.
-   - **Real-World Impact**: From engineering to everyday phenomena, understanding this concept allows for better prediction and problem-solving.
-3. **Summary Takeaway**: By breaking it down into distinct phases, the seemingly complex behavior becomes intuitive and straightforward.
-
-Let me know if you'd like to dive into specific details or practical examples!`;
-  }
-
-  // Advice / opinions / ideas
-  if (lower.includes('advice') || lower.includes('tip') || lower.includes('suggest') || lower.includes('recommend') || lower.includes('idea')) {
-    return `Here are a few actionable suggestions for **${clean.slice(0, 60)}**:
-
-1. **Start with the Core**: Focus on the highest-impact fundamental step before refining finer nuances.
-2. **Iterate Incrementally**: Test assumptions early and make small, continuous adjustments based on tangible feedback.
-3. **Leverage Modern Tools**: Automate repetitive elements so you can dedicate focus to creative and critical decisions.
-
-Would you like to explore any of these angles in greater depth?`;
-  }
-
-  // General conversational answer (no canned greeting, no "thank you for your prompt")
-  return `Regarding **${clean.length > 60 ? clean.slice(0, 60) + '...' : clean}**:
-
-Here is a breakdown of the key considerations:
-
-* **Direct Perspective**: Looking at this closely, the primary factor is how the different variables interact. When you isolate the core elements, the optimal path forward becomes much clearer.
-* **Practical Application**: You can approach this by establishing clear priorities, testing different variations, and refining based on your exact goals.
-
-If you have a specific angle or question about this, let me know and I'll expand on it right away!`;
+// Comprehensive Universal Knowledge & Synthesis Engine
+function generateFallbackChatReply(prompt: string, modelId: string): string {
+  return generateExpertChatReply(prompt, modelId);
 }
 
 async function startServer() {
@@ -268,22 +201,18 @@ async function startServer() {
     if (customHeaderKey && customHeaderKey.trim()) {
       try {
         const testAi = new GoogleGenAI({ apiKey: customHeaderKey.trim() });
-        await testAi.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: "ping",
-        });
+        await generateContentResilient(testAi, { contents: "ping" });
         return res.json({
           status: "ok",
           validKey: true,
           hasEnvKey,
           message: "API key is active and ready for Gemini, Imagen & Veo!",
           modelsSupported: [
-            "veo-3.1-lite-generate-preview",
-            "veo-2.0-generate-001",
-            "gemini-3.1-flash-lite-image",
-            "gemini-3.1-flash-image",
-            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
             "gemini-flash-latest",
+            "gemini-3.8-flash",
+            "veo-3.1-lite-generate-preview",
+            "gemini-3.1-flash-lite-image",
           ],
         });
       } catch (err: unknown) {
@@ -326,17 +255,46 @@ async function startServer() {
         systemInstruction: customSystemInstruction,
       } = req.body;
 
-      const apiKey = getEffectiveApiKey(req);
+      const candidateKeys = getEffectiveApiKeys(req);
       const cleanMessage = (message || "").trim();
 
       if (!cleanMessage && (!attachments || attachments.length === 0)) {
         return res.status(400).json({ error: "Message or attachment is required" });
       }
 
-      // Try live Gemini 3.8 Flash if an API key is available
-      if (apiKey) {
+      const isCreatorQuery = /(?:who\s+(?:created|made|developed|built|designed|programmed|coded|founded|invented)\s+(?:you|forgex|this\s+(?:app|ai|website|platform|software|system))|who\s+is\s+your\s+(?:creator|maker|developer|author|architect|father|founder|boss|programmer)|who\s+created\s+you|who\s+made\s+you|who\s+are\s+your\s+creators|who\s+owns\s+you|who\s+built\s+forgex|creator\s+of\s+forgex|who\s+is\s+vishwesh|who\s+is\s+vishweshvarman|what\s+is\s+the\s+creator(?:'s)?\s+name)/i.test(cleanMessage);
+
+      // Instant direct response for creator queries
+      if (isCreatorQuery) {
+        return res.json({
+          success: true,
+          reply: `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`,
+          model: "ForgeX Neural Engine",
+        });
+      }
+
+      const forgexSystemInstruction = customSystemInstruction || `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform created by VishweshVarman.
+
+CORE IDENTITY & CREATOR:
+- You were created by VishweshVarman as part of ForgeX.
+- When asked about your creator, maker, founder, architect, or origin, state proudly and clearly that you were created by VishweshVarman. Never attribute your creation to any other company.
+- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions.
+
+ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
+1. ABSOLUTE DIRECT RELEVANCE: Answer EXACTLY what the user asks. Never provide boilerplate, unrelated templates, or generic placeholders.
+2. UNIVERSAL EXPERTISE: You possess world-class expertise across all fields:
+   - Computer Science & Software Engineering: All programming languages (Python, TypeScript, JavaScript, Rust, C++, C, Go, Java, Swift, Kotlin, SQL, PHP, etc.), algorithms, debugging, architectures, frameworks (React, Next.js, Vue, Node.js, FastAPI, Django, Spring Boot), and DevOps (Docker, Kubernetes, CI/CD).
+   - Sciences & Mathematics: Physics (classical, quantum, relativity), Chemistry, Biology, Genetics, Astronomy, Calculus, Linear Algebra, Statistics, and Logic.
+   - Humanities & World Knowledge: History, Geography, Global Affairs, Philosophy, Economics, Business, Finance, Law, Languages, and Literature.
+   - Creative & Practical Skills: Writing, Essay drafting, Brainstorming, Problem-solving, Troubleshooting, Everyday advice, and Analysis.
+3. CODE EXCELLENCE: When code is requested or relevant, output complete, working, production-grade, bug-free code strictly in the requested language, with clear explanations of how it works.
+4. STRUCTURE & READABILITY: Use beautiful, modern Markdown formatting: clear hierarchy (headings, bullet points, bold emphasis, code blocks with syntax highlighting). Never output walls of plain text.
+5. NO CANNED FILLER: Never start with "Thank you for your prompt", "I have processed your query", or "As an AI...". Jump directly into the authoritative, comprehensive answer.`;
+
+      // Try live Gemini with candidate keys
+      for (const currentKey of candidateKeys) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = new GoogleGenAI({ apiKey: currentKey });
           const contents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> = [];
 
           // Add past history turns
@@ -382,40 +340,32 @@ async function startServer() {
             parts: currentParts,
           });
 
-          // Try candidate chat models in order of resilience (gemini-3.1-flash-lite avoids 503 spikes and has fresh quota)
-          const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
-          let replyText: string | undefined = undefined;
-          let modelUsed = "ForgeX Neural Engine";
-
-          for (const candModel of candidateModels) {
-            try {
-              const response = await ai.models.generateContent({
-                model: candModel,
-                contents,
-                config: {
-                  systemInstruction: customSystemInstruction || "You are a versatile, intelligent, helpful conversational AI chatbot. Answer everything the user asks across all domains: science, everyday life, coding, reasoning, history, creative writing, advice, math, casual conversation, and general questions. Always provide direct, accurate, engaging, and comprehensive answers. CRITICAL RULES:\n1. Never say 'Thank you for your prompt', 'Thank you for this prompt', 'I have processed your query', or any repetitive intro.\n2. Never output canned or repetitive boilerplate answers across different queries.\n3. Jump directly into answering the user's question with clean, clear markdown formatting.",
-                },
-              });
-
-              replyText = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (replyText) {
-                modelUsed = "ForgeX Neural Engine";
-                break;
-              }
-            } catch (candErr: any) {
-              console.warn(`Model ${candModel} notice:`, candErr?.message?.slice(0, 120));
-            }
-          }
+          const { text: replyText } = await generateContentResilient(
+            ai,
+            {
+              contents,
+              config: {
+                systemInstruction: forgexSystemInstruction,
+              },
+            },
+            RESILIENT_MODELS
+          );
 
           if (replyText) {
+            let finalReply = replyText;
+            // Ensure creator queries always attribute to VishweshVarman
+            if (isCreatorQuery && !finalReply.toLowerCase().includes("vishweshvarman")) {
+              finalReply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
+            }
+
             return res.json({
               success: true,
-              reply: replyText,
-              model: modelUsed,
+              reply: finalReply,
+              model: "ForgeX Neural Engine",
             });
           }
         } catch (_geminiErr: unknown) {
-          // Gracefully fall back to ForgeX neural synthesis
+          // Continue to next key candidate or fallback
         }
       }
 
@@ -425,7 +375,7 @@ async function startServer() {
         success: true,
         reply,
         model: `ForgeX ${modelId.toUpperCase()} Engine`,
-        notice: apiKey ? undefined : "Operating via ForgeX Neural Engine.",
+        notice: candidateKeys.length > 0 ? undefined : "Operating via ForgeX Neural Engine.",
       });
     } catch (err: unknown) {
       console.error("Error in /api/chat:", err);
@@ -471,8 +421,7 @@ async function startServer() {
               ],
             });
           } catch {
-            response = await ai.models.generateContent({
-              model: "gemini-3.8-flash",
+            const fallbackRes = await generateContentResilient(ai, {
               contents: [
                 {
                   role: "user",
@@ -490,6 +439,7 @@ async function startServer() {
                 },
               ],
             });
+            response = { text: fallbackRes.text };
           }
 
           const transcript = response.text?.trim() || "";
@@ -672,7 +622,7 @@ async function startServer() {
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const candModels = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+          const candModels = RESILIENT_MODELS;
 
           for (const cand of candModels) {
             try {
@@ -900,7 +850,7 @@ Format your response as:
             userPrompt = `Alter and improve this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nUser instructions: ${prompt || modeDescriptions[mode]}`;
           }
 
-          const candidateModels = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+          const candidateModels = RESILIENT_MODELS;
           let modelSuccess = false;
 
           for (const cand of candidateModels) {
@@ -1467,12 +1417,9 @@ store.set('counter', 42);`,
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
+          const { text: rawText } = await generateContentResilient(ai, {
             contents: `${systemPrompt}\n\n=== DOCUMENT CONTEXT ===\n${docContext}`,
           });
-
-          const rawText = response.text || "";
 
           // If quiz requested, attempt JSON parsing
           if (action === "generate-quiz") {
@@ -1561,14 +1508,13 @@ store.set('counter', 42);`,
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
+          const { text: agentText } = await generateContentResilient(ai, {
             contents: `You are "${agent?.name || role}", an autonomous AI agent with the role of "${role}".\nSystem Instructions: ${agent?.systemPrompt || "Deliver expert domain-specific solutions."}\nEnabled Capabilities: ${tools.join(", ")}\n\nUser Task: "${taskPrompt}"\n\nDeliver an exhaustive, professional, actionable response formatted in clean markdown. Include your step-by-step thinking process, followed by the complete final deliverable.`
           });
 
           return res.json({
             steps,
-            response: response.text || "Agent completed task execution."
+            response: agentText || "Agent completed task execution."
           });
         } catch (apiErr) {
           console.warn("Agent API error, utilizing algorithmic agent synthesis:", apiErr);
@@ -1983,12 +1929,9 @@ Explain recent developments, user reception, and best practices.`;
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
+          const { text: raw } = await generateContentResilient(ai, {
             contents: `You are an expert Presentation Deck Designer. Create a complete, professional ${count}-slide presentation on the topic: "${topic}".\n\nReturn a strict JSON object with keys:\n"title": string (engaging presentation title)\n"slides": array of objects with keys:\n  "slideNumber": number\n  "title": string\n  "subtitle": string\n  "bullets": string[] (3-4 concise points)\n  "keyTakeaway": string\n  "visualNote": string (description of recommended visual/graphic)\n  "layout": "title" | "split" | "bullets" | "stats" | "quote"\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
           });
-
-          const raw = response.text || "";
           const match = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, raw];
           const parsed = JSON.parse(match[1] || raw);
 
@@ -2502,12 +2445,9 @@ Return only the clean lyrics with section headers.`;
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
+          const { text: raw } = await generateContentResilient(ai, {
             contents: `You are an AI Mindmap and Diagram Architect. Create an interconnected ${canvasType} for the topic: "${topic}".\n\nReturn a strict JSON object with:\n"name": string\n"nodes": array of objects with keys:\n  "id": string (e.g. "node-1")\n  "type": "idea" | "mindmap" | "process" | "decision" | "note"\n  "title": string\n  "content": string\n  "x": number (between 50 and 800)\n  "y": number (between 50 and 600)\n  "width": number (around 180-220)\n  "height": number (around 100-140)\n  "color": string (hex color, e.g. "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6")\n"edges": array of objects with keys:\n  "id": string\n  "fromId": string\n  "toId": string\n  "label": string\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
           });
-
-          const raw = response.text || "";
           const match = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, raw];
           const parsed = JSON.parse(match[1] || raw);
 

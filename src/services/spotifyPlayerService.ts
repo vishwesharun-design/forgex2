@@ -1,5 +1,6 @@
 import { SpotifyTrack } from '../types';
 import { authService } from './authService';
+import { playbackManager } from './playbackManager';
 
 function getFavoritesStorageKey(): string {
   const partition = authService.getCurrentUserPartitionKey();
@@ -26,6 +27,9 @@ class SpotifyPlayerService {
   constructor() {
     if (typeof window !== 'undefined') {
       this.initAudioElement();
+      playbackManager.register('spotify_player', () => {
+        this.pause();
+      });
     }
   }
 
@@ -103,6 +107,8 @@ class SpotifyPlayerService {
 
     if (!this.audioElement) return;
 
+    playbackManager.notifyPlaying('spotify_player');
+
     this.currentTrack = track;
     this.isLoading = true;
     this.playbackError = null;
@@ -156,6 +162,7 @@ class SpotifyPlayerService {
 
   public resume() {
     if (this.audioElement && this.audioElement.src) {
+      playbackManager.notifyPlaying('spotify_player');
       // If audio is at the end or within 0.5s of the end, reset to 0 so clicking play always starts playback
       const isAtEnd =
         this.audioElement.ended ||

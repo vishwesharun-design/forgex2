@@ -2,6 +2,7 @@ import { GeneratedSong, SongGenre, SongMood, SongVoiceProfile, SongVocalStyle, F
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 import { storageService } from './storageService';
+import { playbackManager } from './playbackManager';
 
 function getSongStorageKey(): string {
   const partition = authService.getCurrentUserPartitionKey();
@@ -23,6 +24,13 @@ interface AudioPlaybackHandle {
 let activePlayback: AudioPlaybackHandle | null = null;
 let currentVocalVolume = 0.85;
 let currentBeatVolume = 0.85;
+
+// Register with global playback manager to prevent overlapping playback
+if (typeof window !== 'undefined') {
+  playbackManager.register('music_service', () => {
+    musicService.stopPlayback();
+  });
+}
 
 // Preset seeds and sample covers
 const COVER_IMAGES: Record<SongGenre, string> = {
@@ -580,6 +588,7 @@ Forever resonant and true...`;
     initialVolume: number = 0.5
   ): { stop: () => void; setVolume: (vol: number) => void } {
     this.stopPlayback();
+    playbackManager.notifyPlaying('music_service');
 
     if (song.audioUrl) {
       try {
@@ -645,6 +654,7 @@ Forever resonant and true...`;
         };
 
         audio.play().catch((playErr) => {
+          if (playErr?.name === 'AbortError') return;
           if (!isStopped && !didFallback) {
             didFallback = true;
             console.warn('Audio play() notice, falling back to synthesizer:', playErr);
@@ -679,6 +689,7 @@ Forever resonant and true...`;
     initialVolume: number = 0.5
   ): { stop: () => void; setVolume: (vol: number) => void; setVocalVolume: (vol: number) => void; setBeatVolume: (vol: number) => void } {
     this.stopPlayback();
+    playbackManager.notifyPlaying('music_service');
 
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioContextClass();
