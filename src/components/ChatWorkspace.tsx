@@ -15,8 +15,7 @@ import {
   ArrowRight,
   AlertCircle,
   Trash2,
-  RotateCcw,
-  ArrowDown
+  RotateCcw
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
@@ -61,13 +60,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Track if user has explicitly scrolled up so auto-scroll stops
-  const [userHasScrolledUp, setUserHasScrolledUp] = useState<boolean>(false);
-  const userScrolledUpRef = useRef<boolean>(false);
 
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
@@ -102,28 +96,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const hasMessages = displayMessages.length > 0;
   const baseTextRef = useRef<string>('');
 
-  // Handle user scrolling: if user scrolls up away from bottom, pause autoscroll
-  const handleScroll = () => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-
-    // If user scrolled up by more than 48px from the bottom, pause auto-scroll
-    if (distanceFromBottom > 48) {
-      if (!userScrolledUpRef.current) {
-        userScrolledUpRef.current = true;
-        setUserHasScrolledUp(true);
-      }
-    } else {
-      // User scrolled all the way back down to the bottom, resume auto-scroll
-      if (userScrolledUpRef.current) {
-        userScrolledUpRef.current = false;
-        setUserHasScrolledUp(false);
-      }
-    }
-  };
-
   // Dual-Engine Web Speech & Gemini Audio Transcription integration
   const {
     isListening,
@@ -151,35 +123,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     rawToggleListening();
   };
 
-  // Auto scroll to bottom only if user hasn't scrolled up (or if force=true)
-  const scrollToBottom = (force = false) => {
-    if (!force && userScrolledUpRef.current) {
-      return;
-    }
-    const el = scrollContainerRef.current;
-    if (el) {
-      if (isSubmitting) {
-        // Direct assignment during fast streaming avoids browser smooth-scroll queuing jitter
-        el.scrollTop = el.scrollHeight;
-      } else {
-        el.scrollTo({
-          top: el.scrollHeight,
-          behavior: 'smooth',
-        });
-      }
-    } else {
-      messagesEndRef.current?.scrollIntoView({ behavior: isSubmitting ? 'auto' : 'smooth' });
-    }
+  // Auto scroll to bottom
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Reset scroll lock when switching chat sessions
-  useEffect(() => {
-    userScrolledUpRef.current = false;
-    setUserHasScrolledUp(false);
-    scrollToBottom(true);
-  }, [currentSession?.id]);
-
-  // Autoscroll as tokens arrive, unless user has scrolled up
   useEffect(() => {
     scrollToBottom();
   }, [displayMessages.length, streamingReply?.text, isSubmitting]);
@@ -208,9 +156,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setPendingUserTurn({ text, attachments: filesToAttach });
     setStreamingReply(null);
     setIsSubmitting(true);
-    userScrolledUpRef.current = false;
-    setUserHasScrolledUp(false);
-    scrollToBottom(true);
 
     try {
       const sessionId = currentSession?.id || 'new';
@@ -313,11 +258,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       />
 
       {/* Main Content Area */}
-      <div 
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6 relative"
-      >
+      <div className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
         {!hasMessages ? (
           /* Empty Initial State */
           <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-8 sm:py-12 select-none animate-in fade-in duration-300">
@@ -595,27 +536,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           </div>
         )}
       </div>
-
-      {/* Floating Scroll to Bottom Button when user has scrolled up */}
-      {userHasScrolledUp && hasMessages && (
-        <button
-          id="btn-scroll-to-bottom"
-          onClick={() => {
-            userScrolledUpRef.current = false;
-            setUserHasScrolledUp(false);
-            scrollToBottom(true);
-          }}
-          className={`absolute bottom-32 sm:bottom-36 right-6 sm:right-10 z-30 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-xl border transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 cursor-pointer ${
-            isDark
-              ? 'bg-neutral-900/95 hover:bg-neutral-800 border-neutral-700 text-neutral-200 hover:text-white shadow-black/80'
-              : 'bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-800 hover:text-black shadow-neutral-400/40'
-          }`}
-          title="Scroll to latest message"
-        >
-          <ArrowDown className={`w-3.5 h-3.5 text-amber-400 ${streamingReply ? 'animate-bounce' : ''}`} />
-          <span>{streamingReply ? 'Following reply...' : 'Scroll to bottom'}</span>
-        </button>
-      )}
 
       {/* Bottom Area: Quick Actions & Large Rounded Chat Input */}
       <div className="px-3 sm:px-6 pt-0 pb-2 sm:pb-4 max-w-3xl w-full mx-auto shrink-0">
