@@ -140,6 +140,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   modelUsed?: string;
+  isStreaming?: boolean;
   attachments?: {
     type: 'image' | 'file';
     name: string;

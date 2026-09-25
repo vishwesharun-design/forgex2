@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { generateExpertChatReply } from "./src/services/knowledgeEngine";
 
 dotenv.config();
@@ -79,6 +79,25 @@ const FALLBACK_IMAGES: Record<string, string[]> = {
   ]
 };
 
+// Cached GenAI SDK client instances for low-latency reuse
+const genAiClientCache = new Map<string, GoogleGenAI>();
+
+function getGenAiClient(apiKey: string): GoogleGenAI {
+  let client = genAiClientCache.get(apiKey);
+  if (!client) {
+    client = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+    genAiClientCache.set(apiKey, client);
+  }
+  return client;
+}
+
 function getEffectiveApiKeys(req: Request): string[] {
   const keys: string[] = [];
   const customHeaderKey = req.headers["x-api-key"] as string | undefined;
@@ -99,6 +118,7 @@ function getEffectiveApiKey(req: Request): string | undefined {
   return keys[0];
 }
 
+// Resilient, ultra-fast Gemini model priority cascade
 const RESILIENT_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
 
 async function generateContentResilient(
@@ -110,12 +130,20 @@ async function generateContentResilient(
   preferredModels: string[] = RESILIENT_MODELS
 ): Promise<{ text: string; model: string }> {
   let lastError: any = null;
+  // Always enforce low latency (minimal thinking delay) for maximum response speed
+  const mergedConfig = {
+    ...request.config,
+    thinkingConfig: request.config?.thinkingConfig || {
+      thinkingLevel: ThinkingLevel.LOW,
+    },
+  };
+
   for (const model of preferredModels) {
     try {
       const response = await ai.models.generateContent({
         model,
         contents: request.contents,
-        config: request.config,
+        config: mergedConfig,
       });
       const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || "";
       if (text) {
@@ -128,6 +156,51 @@ async function generateContentResilient(
     }
   }
   throw lastError || new Error("All Gemini models failed to generate content.");
+}
+
+async function* generateContentStreamResilient(
+  ai: GoogleGenAI,
+  request: {
+    contents: any;
+    config?: any;
+  },
+  preferredModels: string[] = RESILIENT_MODELS
+): AsyncGenerator<{ text: string; model: string; done?: boolean }> {
+  const mergedConfig = {
+    ...request.config,
+    thinkingConfig: request.config?.thinkingConfig || {
+      thinkingLevel: ThinkingLevel.LOW,
+    },
+  };
+
+  let lastError: any = null;
+  for (const model of preferredModels) {
+    try {
+      const responseStream = await ai.models.generateContentStream({
+        model,
+        contents: request.contents,
+        config: mergedConfig,
+      });
+
+      let emittedAny = false;
+      for await (const chunk of responseStream) {
+        const text = chunk.text || "";
+        if (text) {
+          emittedAny = true;
+          yield { text, model };
+        }
+      }
+
+      if (emittedAny) {
+        yield { text: "", model, done: true };
+        return;
+      }
+    } catch (err: any) {
+      lastError = err;
+      continue;
+    }
+  }
+  throw lastError || new Error("All streaming models failed.");
 }
 
 // Generate prompt-specific real AI image using high-resolution diffusion pipeline
@@ -294,7 +367,7 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
       // Try live Gemini with candidate keys
       for (const currentKey of candidateKeys) {
         try {
-          const ai = new GoogleGenAI({ apiKey: currentKey });
+          const ai = getGenAiClient(currentKey);
           const contents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> = [];
 
           // Add past history turns
@@ -346,6 +419,9 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
               contents,
               config: {
                 systemInstruction: forgexSystemInstruction,
+                thinkingConfig: {
+                  thinkingLevel: ThinkingLevel.LOW,
+                },
               },
             },
             RESILIENT_MODELS
@@ -382,6 +458,156 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
       return res.status(500).json({
         error: err instanceof Error ? err.message : "Failed to process chat message",
       });
+    }
+  });
+
+  // High-Speed Real-Time Streaming Chat Endpoint (Server-Sent Events)
+  app.post("/api/chat/stream", async (req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    if (typeof (res as any).flushHeaders === "function") {
+      (res as any).flushHeaders();
+    }
+
+    try {
+      const {
+        message,
+        history = [],
+        modelId = "unreal-5",
+        attachments = [],
+        systemInstruction: customSystemInstruction,
+      } = req.body;
+
+      const candidateKeys = getEffectiveApiKeys(req);
+      const cleanMessage = (message || "").trim();
+
+      if (!cleanMessage && (!attachments || attachments.length === 0)) {
+        res.write(`data: ${JSON.stringify({ error: "Message or attachment is required" })}\n\n`);
+        return res.end();
+      }
+
+      const isCreatorQuery = /(?:who\s+(?:created|made|developed|built|designed|programmed|coded|founded|invented)\s+(?:you|forgex|this\s+(?:app|ai|website|platform|software|system))|who\s+is\s+your\s+(?:creator|maker|developer|author|architect|father|founder|boss|programmer)|who\s+created\s+you|who\s+made\s+you|who\s+are\s+your\s+creators|who\s+owns\s+you|who\s+built\s+forgex|creator\s+of\s+forgex|who\s+is\s+vishwesh|who\s+is\s+vishweshvarman|what\s+is\s+the\s+creator(?:'s)?\s+name)/i.test(cleanMessage);
+
+      if (isCreatorQuery) {
+        const reply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
+        res.write(`data: ${JSON.stringify({ text: reply })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Neural Engine" })}\n\n`);
+        return res.end();
+      }
+
+      const forgexSystemInstruction = customSystemInstruction || `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform created by VishweshVarman.
+
+CORE IDENTITY & CREATOR:
+- You were created by VishweshVarman as part of ForgeX.
+- When asked about your creator, maker, founder, architect, or origin, state proudly and clearly that you were created by VishweshVarman. Never attribute your creation to any other company.
+- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions.
+
+ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
+1. ABSOLUTE DIRECT RELEVANCE: Answer EXACTLY what the user asks. Never provide boilerplate, unrelated templates, or generic placeholders.
+2. UNIVERSAL EXPERTISE: You possess world-class expertise across all fields:
+   - Computer Science & Software Engineering: All programming languages (Python, TypeScript, JavaScript, Rust, C++, C, Go, Java, Swift, Kotlin, SQL, PHP, etc.), algorithms, debugging, architectures, frameworks (React, Next.js, Vue, Node.js, FastAPI, Django, Spring Boot), and DevOps (Docker, Kubernetes, CI/CD).
+   - Sciences & Mathematics: Physics (classical, quantum, relativity), Chemistry, Biology, Genetics, Astronomy, Calculus, Linear Algebra, Statistics, and Logic.
+   - Humanities & World Knowledge: History, Geography, Global Affairs, Philosophy, Economics, Business, Finance, Law, Languages, and Literature.
+   - Creative & Practical Skills: Writing, Essay drafting, Brainstorming, Problem-solving, Troubleshooting, Everyday advice, and Analysis.
+3. CODE EXCELLENCE: When code is requested or relevant, output complete, working, production-grade, bug-free code strictly in the requested language, with clear explanations of how it works.
+4. STRUCTURE & READABILITY: Use beautiful, modern Markdown formatting: clear hierarchy (headings, bullet points, bold emphasis, code blocks with syntax highlighting). Never output walls of plain text.
+5. NO CANNED FILLER: Never start with "Thank you for your prompt", "I have processed your query", or "As an AI...". Jump directly into the authoritative, comprehensive answer.`;
+
+      // Try streaming with live Gemini candidate keys
+      for (const currentKey of candidateKeys) {
+        try {
+          const ai = getGenAiClient(currentKey);
+          const contents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> = [];
+
+          if (Array.isArray(history)) {
+            for (const item of history) {
+              if (item.role === "user" || item.role === "assistant") {
+                contents.push({
+                  role: item.role === "assistant" ? "model" : "user",
+                  parts: [{ text: item.content }],
+                });
+              }
+            }
+          }
+
+          const currentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+          if (Array.isArray(attachments)) {
+            for (const att of attachments) {
+              if (att.url && typeof att.url === "string" && att.url.startsWith("data:")) {
+                const matches = att.url.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+                if (matches && matches[2]) {
+                  currentParts.push({
+                    inlineData: {
+                      mimeType: matches[1] || "image/jpeg",
+                      data: matches[2],
+                    },
+                  });
+                }
+              }
+            }
+          }
+
+          if (cleanMessage) {
+            currentParts.push({ text: cleanMessage });
+          } else if (currentParts.length > 0) {
+            currentParts.push({ text: "Please analyze the attached image in detail." });
+          }
+
+          contents.push({
+            role: "user",
+            parts: currentParts,
+          });
+
+          let streamedAny = false;
+          let modelUsed = "ForgeX Neural Engine";
+
+          for await (const chunk of generateContentStreamResilient(
+            ai,
+            {
+              contents,
+              config: {
+                systemInstruction: forgexSystemInstruction,
+                thinkingConfig: {
+                  thinkingLevel: ThinkingLevel.LOW,
+                },
+              },
+            },
+            RESILIENT_MODELS
+          )) {
+            if (chunk.text) {
+              streamedAny = true;
+              res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+            }
+            if (chunk.done) {
+              modelUsed = "ForgeX Neural Engine";
+            }
+          }
+
+          if (streamedAny) {
+            res.write(`data: ${JSON.stringify({ done: true, model: modelUsed })}\n\n`);
+            return res.end();
+          }
+        } catch (_geminiErr: unknown) {
+          // Continue to next key candidate or fallback
+        }
+      }
+
+      // Procedural synthesis fast stream fallback
+      const fallbackReply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
+      const words = fallbackReply.split(" ");
+      for (let i = 0; i < words.length; i += 4) {
+        const slice = words.slice(i, i + 4).join(" ") + (i + 4 < words.length ? " " : "");
+        res.write(`data: ${JSON.stringify({ text: slice })}\n\n`);
+        await new Promise((resolve) => setTimeout(resolve, 8));
+      }
+      res.write(`data: ${JSON.stringify({ done: true, model: `ForgeX ${modelId.toUpperCase()} Engine` })}\n\n`);
+      return res.end();
+    } catch (err: unknown) {
+      console.error("Error in /api/chat/stream:", err);
+      res.write(`data: ${JSON.stringify({ error: err instanceof Error ? err.message : "Streaming failed" })}\n\n`);
+      return res.end();
     }
   });
 
@@ -621,7 +847,7 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const candModels = RESILIENT_MODELS;
 
           for (const cand of candModels) {
@@ -647,6 +873,9 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
                 config: {
                   tools: [{ googleSearch: {} }],
                   systemInstruction: "You are an elite deep research engine. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
+                  thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.LOW,
+                  },
                 }
               });
 
@@ -803,7 +1032,7 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           let systemTask = "";
           let userPrompt = "";
 
@@ -862,7 +1091,12 @@ Format your response as:
                     role: "user",
                     parts: [{ text: `${systemTask}\n\n${userPrompt}` }]
                   }
-                ]
+                ],
+                config: {
+                  thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.LOW,
+                  },
+                },
               });
 
               const text = result.candidates?.[0]?.content?.parts?.[0]?.text;

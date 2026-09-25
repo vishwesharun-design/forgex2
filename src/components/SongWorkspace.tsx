@@ -352,13 +352,13 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
       <div className="relative z-10 max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-28 sm:pb-32">
         {/* Studio Header & Generator Card */}
         <div
-          className={`p-4 sm:p-8 rounded-3xl border shadow-xl transition-colors ${
+          className={`p-3.5 sm:p-8 rounded-3xl border shadow-xl transition-colors ${
             isDark
               ? 'bg-neutral-900/90 border-neutral-800 shadow-black/40'
               : 'bg-white border-neutral-200 shadow-neutral-100'
           }`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10 shrink-0">
                 <Music className="w-5 h-5" />
@@ -371,14 +371,14 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="flex items-center gap-1.5 px-3 h-9 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-semibold">
-                <Mic className="w-3.5 h-3.5 text-cyan-400" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 h-8 sm:h-9 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-semibold">
+                <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                 <span>AI Voice: {selectedVoiceProfile}</span>
               </div>
 
-              <div className="flex items-center gap-1.5 h-9">
-                <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Engine:</span>
+              <div className="flex items-center gap-1.5 h-8 sm:h-9">
+                <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'} hidden sm:inline`}>Engine:</span>
                 <ModelSelector
                   selectedModelId={selectedModelId}
                   onSelectModel={onSelectModel}
@@ -392,7 +392,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                 type="button"
                 disabled={isGenerating}
                 onClick={() => handleGenerateSong()}
-                className={`flex items-center gap-2 px-4 h-9 rounded-xl font-bold text-xs text-neutral-950 transition-all shadow-md shadow-amber-500/20 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 h-8 sm:h-9 rounded-xl font-bold text-xs text-neutral-950 transition-all shadow-md shadow-amber-500/20 shrink-0 ${
                   isGenerating
                     ? 'bg-amber-500/50 cursor-not-allowed'
                     : 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 active:scale-95'
@@ -658,7 +658,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
             <button
               type="submit"
               disabled={isGenerating}
-              className={`flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-sm text-neutral-950 transition-all ${
+              className={`w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-sm text-neutral-950 transition-all ${
                 isGenerating
                   ? 'bg-amber-500/50 cursor-not-allowed'
                   : 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 active:scale-95 shadow-lg shadow-amber-500/25'
@@ -844,7 +844,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                     <div
                       key={song.id}
                       onClick={() => setSelectedSongId(song.id)}
-                      className={`relative flex flex-col justify-between p-5 rounded-3xl border transition-all cursor-pointer ${
+                      className={`relative flex flex-col justify-between p-3.5 sm:p-5 rounded-3xl border transition-all cursor-pointer ${
                         isSelected
                           ? 'border-amber-500/70 bg-amber-500/5 ring-1 ring-amber-500/30 shadow-lg shadow-amber-500/10'
                           : isDark
@@ -852,9 +852,9 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                           : 'bg-white border-neutral-200 hover:border-neutral-300'
                       }`}
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4">
                         {/* Vinyl / Cover Art */}
-                        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-md bg-black">
+                        <div className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-md bg-black">
                           <img
                             src={song.coverUrl}
                             alt={song.title}
@@ -874,11 +874,11 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                               isPlaying ? 'opacity-100' : 'hover:opacity-100 opacity-90'
                             }`}
                           >
-                            <div className="w-10 h-10 rounded-full bg-amber-500 text-neutral-950 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-amber-500 text-neutral-950 flex items-center justify-center shadow-lg shadow-amber-500/40">
                               {isPlaying ? (
-                                <Pause className="w-5 h-5 fill-current" />
+                                <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                               ) : (
-                                <Play className="w-5 h-5 fill-current ml-0.5" />
+                                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />
                               )}
                             </div>
                           </button>

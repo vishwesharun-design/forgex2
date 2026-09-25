@@ -169,49 +169,49 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
     >
       {/* Top Banner Header with Track Attributes */}
       <div
-        className={`px-5 py-3 border-b flex flex-wrap items-center justify-between gap-3 ${
+        className={`px-3.5 sm:px-5 py-2.5 sm:py-3 border-b flex flex-wrap items-center justify-between gap-2.5 ${
           isDark ? 'bg-neutral-950/70 border-neutral-800/80' : 'bg-neutral-50 border-neutral-200'
         }`}
       >
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <div className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold shrink-0">
-            <Music className="w-3.5 h-3.5 shrink-0" />
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+          <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 h-6 sm:h-7 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[11px] sm:text-xs font-semibold shrink-0">
+            <Music className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
             <span className="leading-none">AI Studio Track</span>
-            {song.artist && <span className="opacity-80 font-normal truncate max-w-[180px] leading-none">• {song.artist}</span>}
+            {song.artist && <span className="opacity-80 font-normal truncate max-w-[110px] sm:max-w-[180px] leading-none">• {song.artist}</span>}
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
             {song.hasVoice !== false && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 h-7 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 leading-none">
-                <Mic className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 h-6 sm:h-7 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 leading-none">
+                <Mic className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-cyan-400 shrink-0" />
                 <span>Voice: {song.voiceProfile || 'Zephyr'}</span>
               </span>
             )}
-            <span className="text-xs font-semibold px-2.5 h-7 rounded-full bg-neutral-800/90 text-neutral-200 border border-neutral-700/60 inline-flex items-center leading-none">
+            <span className="text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 h-6 sm:h-7 rounded-full bg-neutral-800/90 text-neutral-200 border border-neutral-700/60 inline-flex items-center leading-none">
               {song.genre}
             </span>
-            <span className={`text-xs font-medium px-2.5 h-7 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800/60 text-neutral-300 border-neutral-700/40' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
+            <span className={`text-[11px] sm:text-xs font-medium px-2 sm:px-2.5 h-6 sm:h-7 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800/60 text-neutral-300 border-neutral-700/40' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
               {song.mood}
             </span>
-            <span className="text-xs font-mono tabular-nums text-neutral-400 px-1 inline-flex items-center leading-none">
+            <span className="text-[10px] sm:text-xs font-mono tabular-nums text-neutral-400 px-1 inline-flex items-center leading-none">
               {song.tempoBpm} BPM
             </span>
-            <span className="text-xs font-mono text-neutral-400 inline-flex items-center leading-none">
+            <span className="text-[10px] sm:text-xs font-mono text-neutral-400 inline-flex items-center leading-none">
               • {chordData.key}
             </span>
-            <span className="text-xs font-mono tabular-nums text-neutral-500 inline-flex items-center leading-none">
-              • {duration}s {duration >= 270 ? '(4:30+)' : duration >= 240 ? '(4:00)' : duration >= 210 ? '(3:30)' : duration >= 180 ? '(3:00)' : duration >= 120 ? '(2:00)' : ''}
+            <span className="text-[10px] sm:text-xs font-mono tabular-nums text-neutral-500 inline-flex items-center leading-none">
+              • {duration}s
             </span>
           </div>
         </div>
 
         {/* Quick actions top right */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto sm:ml-0">
           {onSaveToCloud && (
             <button
               onClick={() => onSaveToCloud(song)}
               title={song.cloudStorageUrl ? 'Stored in Firebase Storage' : 'Save Track Audio to Firebase Storage'}
-              className={`inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-xl font-medium transition-colors leading-none ${
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 sm:px-3 h-7 sm:h-8 rounded-xl font-medium transition-colors leading-none ${
                 song.cloudStorageUrl
                   ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
                   : isDark
@@ -220,13 +220,13 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
               }`}
             >
               <Cloud className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-              <span>{song.cloudStorageUrl ? 'Cloud Synced' : 'Save to Firebase'}</span>
+              <span className="hidden sm:inline">{song.cloudStorageUrl ? 'Cloud Synced' : 'Save to Firebase'}</span>
             </button>
           )}
           <button
             onClick={() => onToggleFavorite(song.id)}
             title={song.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            className={`w-8 h-8 rounded-xl inline-flex items-center justify-center transition-colors ${
+            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl inline-flex items-center justify-center transition-colors ${
               song.isFavorite
                 ? 'text-red-500 bg-red-500/15 border border-red-500/30'
                 : isDark
@@ -239,36 +239,256 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
           <button
             onClick={() => onDownload(song)}
             title="Export High-Res Master Audio File"
-            className="inline-flex items-center gap-1.5 text-xs px-3 h-8 rounded-xl font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors leading-none"
+            className="inline-flex items-center gap-1.5 text-xs px-2.5 sm:px-3 h-7 sm:h-8 rounded-xl font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors leading-none"
           >
             <Download className="w-3.5 h-3.5 shrink-0" />
-            <span>Export Audio</span>
+            <span className="hidden sm:inline">Export Audio</span>
           </button>
           <button
             onClick={() => onDelete(song.id)}
             title="Delete Track"
-            className="w-8 h-8 rounded-xl inline-flex items-center justify-center text-neutral-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl inline-flex items-center justify-center text-neutral-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Main 2-Column Audio Layout: LEFT = Lyrics & Sections, RIGHT = Synth Stage & Controls */}
+      {/* Main 2-Column Audio Layout: MOBILE OPTIMIZED (Player stage first on mobile, side-by-side on desktop) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-neutral-800/70">
         
         {/* ========================================================= */}
-        {/* LEFT SIDE: Song Sections & Lyrics Breakdown               */}
+        {/* PLAYER STAGE & CONTROLS: FIRST ON MOBILE, RIGHT ON DESKTOP */}
         {/* ========================================================= */}
-        <div className="lg:col-span-6 flex flex-col p-5 sm:p-6 bg-gradient-to-b from-transparent to-neutral-950/20">
+        <div className="order-1 lg:order-2 lg:col-span-6 flex flex-col justify-between p-4 sm:p-6 space-y-4 sm:space-y-5">
+          {/* Top Section: Title & Prompt info */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-display font-extrabold text-base sm:text-xl tracking-tight leading-snug truncate" title={song.title}>
+                    {song.title}
+                  </h3>
+                  {song.isRealLifeHit && (
+                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
+                      ⭐ Real Hit
+                    </span>
+                  )}
+                </div>
+
+                {song.artist && (
+                  <p className="text-xs font-semibold text-amber-400 mt-0.5 leading-normal flex items-center gap-1.5">
+                    <span className="text-neutral-400 font-normal">Produced by</span>
+                    <span>{song.artist}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <p className={`text-xs line-clamp-2 leading-relaxed text-left pl-2.5 border-l-2 border-amber-500/40 italic ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+              "{song.prompt}"
+            </p>
+          </div>
+
+          {/* Visual Vinyl Record + Visualizer Display Stage */}
+          <div className="relative flex items-center justify-center py-1 sm:py-2 overflow-hidden">
+            <div className="relative flex items-center justify-center">
+              {/* Spinning Vinyl Record behind the cover */}
+              <div
+                className={`w-28 h-28 sm:w-44 sm:h-44 rounded-full bg-neutral-950 border-4 border-neutral-800 shadow-2xl flex items-center justify-center transition-all duration-700 ${
+                  isPlaying ? 'rotate-180 translate-x-5 sm:translate-x-12 scale-100' : 'translate-x-0 scale-95 opacity-60'
+                }`}
+                style={{
+                  backgroundImage:
+                    'repeating-radial-gradient(circle, #171717 0, #171717 2px, #0a0a0a 3px, #0a0a0a 5px)',
+                }}
+              >
+                {/* Vinyl Center label */}
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-amber-500 border-2 border-amber-300 flex items-center justify-center shadow-inner">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-neutral-950" />
+                </div>
+              </div>
+
+              {/* Cover Art Card */}
+              <div className="relative z-10 w-28 h-28 sm:w-44 sm:h-44 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black shrink-0">
+                <img
+                  src={song.coverUrl}
+                  alt={song.title}
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Center play icon toggle overlay */}
+                <button
+                  onClick={() => onPlayToggle(song)}
+                  className="absolute inset-0 bg-black/30 hover:bg-black/10 flex items-center justify-center transition-all group"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                >
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-500 text-neutral-950 flex items-center justify-center shadow-xl shadow-amber-500/50 group-hover:scale-110 active:scale-95 transition-transform">
+                    {isPlaying ? (
+                      <Pause className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+                    ) : (
+                      <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current ml-0.5" />
+                    )}
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Audio Visualizer Equalizer Bars */}
+          <div className="space-y-1.5 sm:space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-amber-400">
+              <span className="font-semibold leading-none">{formatTime(playbackTime)}</span>
+
+              {/* 16-bar animated audio frequency spectrum */}
+              <div className="flex items-end gap-0.5 sm:gap-1 h-4 sm:h-5 px-1 sm:px-3">
+                {[40, 75, 55, 90, 60, 85, 45, 95, 70, 50, 80, 65, 90, 45, 70, 85].map((height, i) => (
+                  <span
+                    key={i}
+                    className={`w-0.5 sm:w-1 rounded-full bg-gradient-to-t from-amber-500 to-amber-300 transition-all ${
+                      isPlaying ? 'animate-pulse' : 'opacity-40'
+                    }`}
+                    style={{
+                      height: isPlaying ? `${Math.max(15, (height * (Math.sin(playbackTime * 4 + i) + 1.2)) / 2.2)}%` : '20%',
+                      animationDelay: `${i * 60}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <span className="text-neutral-400 font-mono tabular-nums leading-none">{formatTime(duration)}</span>
+            </div>
+
+            {/* Seekable Audio Progress Scrubber */}
+            <div className="relative flex items-center group">
+              <input
+                type="range"
+                min="0"
+                max={duration}
+                step="0.1"
+                value={playbackTime}
+                onChange={handleScrubberChange}
+                className="w-full h-2 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Full Master Transport & Volume Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-800/60">
+            {/* Transport Buttons: Rewind, Play/Pause, Forward */}
+            <div className="flex items-center justify-center gap-2 sm:gap-3 w-full sm:w-auto">
+              <button
+                onClick={() => handleSkip(-5)}
+                title="Skip back 5 seconds"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 active:scale-95 transition-all"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => onPlayToggle(song)}
+                className="flex-1 sm:flex-initial h-10 sm:h-11 px-5 sm:px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-neutral-950 font-bold inline-flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all text-xs"
+              >
+                {isPlaying ? (
+                  <>
+                    <Pause className="w-4 h-4 fill-current shrink-0" />
+                    <span>Pause Track</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current ml-0.5 shrink-0" />
+                    <span>Play Master</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => handleSkip(5)}
+                title="Skip forward 5 seconds"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 active:scale-95 transition-all"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Stems Volume Controls: Beat & Voice & Master */}
+            <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto pt-2 sm:pt-0 sm:pl-3 sm:border-l border-neutral-800/80 overflow-x-auto py-1">
+              {song.hasVoice !== false && (
+                <div className="flex items-center gap-1.5 shrink-0" title="AI Voice / Vocal Level">
+                  <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span className="text-[10px] font-mono text-cyan-300 leading-none">Vox</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={vocalVol}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setVocalVol(v);
+                      musicService.setVocalVolume(v);
+                    }}
+                    className="w-12 sm:w-16 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-cyan-400"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 shrink-0" title="Instrumental Beat Level">
+                <Music className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[10px] font-mono text-amber-300 leading-none">Beat</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={beatVol}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setBeatVol(v);
+                    musicService.setBeatVolume(v);
+                  }}
+                  className="w-12 sm:w-16 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0" title="Master Volume">
+                <button
+                  onClick={handleToggleMute}
+                  className="text-neutral-400 hover:text-neutral-200 transition-colors p-0.5"
+                  title={isMuted ? 'Unmute Master' : 'Mute Master'}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeSlider}
+                  className="w-12 sm:w-16 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================= */}
+        {/* SONG SECTIONS & LYRICS: SECOND ON MOBILE, LEFT ON DESKTOP */}
+        {/* ========================================================= */}
+        <div className="order-2 lg:order-1 lg:col-span-6 flex flex-col p-4 sm:p-6 bg-gradient-to-b from-transparent to-neutral-950/20">
           {/* Section Panel Header & Tab Switcher */}
-          <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-amber-400" />
               <h4 className="font-display font-bold text-sm sm:text-base tracking-wide">
                 Song Sections & Lyrics
               </h4>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400">
+              <span className="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400">
                 {sections.length} parts
               </span>
             </div>
@@ -289,52 +509,56 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
               ) : (
                 <>
                   <Copy className="w-3 h-3 text-neutral-400" />
-                  <span>Copy Full Text</span>
+                  <span className="hidden sm:inline">Copy Full Text</span>
+                  <span className="sm:hidden">Copy</span>
                 </>
               )}
             </button>
           </div>
 
-          {/* Section View Tabs */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-neutral-950/60 border border-neutral-800 mb-4">
+          {/* Section View Tabs (Mobile friendly compact text) */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-neutral-950/60 border border-neutral-800 mb-3 sm:mb-4">
             <button
               onClick={() => setActiveTab('lyrics')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-3 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'lyrics'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <ListMusic className="w-3.5 h-3.5" />
-              <span>Lyrics by Section</span>
+              <ListMusic className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Lyrics by Section</span>
+              <span className="sm:hidden">Lyrics</span>
             </button>
             <button
               onClick={() => setActiveTab('structure')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-3 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'structure'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Arrangement</span>
+              <Layers className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Arrangement</span>
+              <span className="sm:hidden">Structure</span>
             </button>
             <button
               onClick={() => setActiveTab('chords')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-3 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'chords'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Chords & Stems</span>
+              <Sliders className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Chords & Stems</span>
+              <span className="sm:hidden">Stems</span>
             </button>
           </div>
 
           {/* TAB CONTENT 1: Structured Lyrics by Section */}
           {activeTab === 'lyrics' && (
-            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar flex-1">
+            <div className="space-y-2.5 sm:space-y-3 max-h-[340px] sm:max-h-[380px] overflow-y-auto pr-1 custom-scrollbar flex-1">
               {sections.map((section, idx) => {
                 const isSectionActive =
                   isPlaying &&
@@ -345,7 +569,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                   <div
                     key={section.id || idx}
                     onClick={() => onSeek && onSeek(song, section.startTimeSec)}
-                    className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                    className={`group relative p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer ${
                       isSectionActive
                         ? 'border-amber-500/80 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30'
                         : isDark
@@ -384,7 +608,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                           handleCopySection(section);
                         }}
                         title="Copy this section"
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 sm:opacity-0 focus:opacity-100 p-1 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-opacity"
                       >
                         {copiedSectionId === section.id ? (
                           <Check className="w-3 h-3 text-emerald-400" />
@@ -419,9 +643,9 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
 
           {/* TAB CONTENT 2: Musical Arrangement Timeline */}
           {activeTab === 'structure' && (
-            <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 flex-1">
+            <div className="space-y-3 sm:space-y-4 max-h-[340px] sm:max-h-[380px] overflow-y-auto pr-1 flex-1">
               <div
-                className={`p-4 rounded-2xl border ${
+                className={`p-3 sm:p-4 rounded-2xl border ${
                   isDark ? 'bg-neutral-950/40 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
@@ -435,7 +659,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                 </div>
 
                 {/* Timeline visual bar */}
-                <div className="relative h-10 rounded-xl bg-neutral-950 border border-neutral-800 flex overflow-hidden">
+                <div className="relative h-9 sm:h-10 rounded-xl bg-neutral-950 border border-neutral-800 flex overflow-hidden">
                   {sections.map((sec, idx) => {
                     const isSecActive =
                       isPlaying &&
@@ -453,8 +677,8 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                             : 'hover:bg-neutral-800/40 text-neutral-400'
                         }`}
                       >
-                        <span className="truncate px-1">{sec.tag}</span>
-                        <span className="text-[8px] text-neutral-500">{sec.lines.length} lines</span>
+                        <span className="truncate px-1 text-[9px] sm:text-[10px]">{sec.tag}</span>
+                        <span className="text-[7px] sm:text-[8px] text-neutral-500 hidden sm:inline">{sec.lines.length} lines</span>
                       </div>
                     );
                   })}
@@ -468,26 +692,26 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
               </div>
 
               {/* Arrangement breakdown list */}
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {sections.map((sec, idx) => (
                   <div
                     key={idx}
-                    className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
+                    className={`flex items-center justify-between p-2.5 sm:p-3 rounded-xl border text-xs ${
                       isDark ? 'bg-neutral-950/20 border-neutral-800/70' : 'bg-neutral-50/50 border-neutral-200'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center font-mono text-[10px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center font-mono text-[10px] shrink-0">
                         {idx + 1}
                       </span>
-                      <div>
-                        <span className="font-semibold">{sec.title}</span>
-                        <p className="text-[10px] text-neutral-500">
-                          {sec.lines.length} lyrical phrases • 4/4 timing
+                      <div className="min-w-0">
+                        <span className="font-semibold truncate block">{sec.title}</span>
+                        <p className="text-[10px] text-neutral-500 truncate">
+                          {sec.lines.length} phrases • 4/4 timing
                         </p>
                       </div>
                     </div>
-                    <span className="font-mono text-[10px] text-amber-400">
+                    <span className="font-mono text-[10px] text-amber-400 shrink-0 ml-2">
                       {formatTime(sec.startTimeSec)} – {formatTime(sec.endTimeSec)}
                     </span>
                   </div>
@@ -498,10 +722,10 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
 
           {/* TAB CONTENT 3: Chords & Stems Engine */}
           {activeTab === 'chords' && (
-            <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 flex-1">
+            <div className="space-y-3 sm:space-y-4 max-h-[340px] sm:max-h-[380px] overflow-y-auto pr-1 flex-1">
               {/* Harmonic Progression Card */}
               <div
-                className={`p-4 rounded-2xl border ${
+                className={`p-3.5 sm:p-4 rounded-2xl border ${
                   isDark ? 'bg-neutral-950/40 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
@@ -511,7 +735,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                   </span>
                   <span className="text-[10px] font-mono text-amber-400">{chordData.key}</span>
                 </div>
-                <div className="font-mono text-sm font-bold text-amber-300 mb-2">
+                <div className="font-mono text-xs sm:text-sm font-bold text-amber-300 mb-1.5">
                   {chordData.chordsText}
                 </div>
                 <p className="text-xs text-neutral-400 leading-relaxed">
@@ -521,253 +745,31 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
 
               {/* Stems Synthesis Matrix */}
               <div
-                className={`p-4 rounded-2xl border ${
+                className={`p-3.5 sm:p-4 rounded-2xl border ${
                   isDark ? 'bg-neutral-950/40 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
-                <span className="block font-semibold uppercase tracking-wider text-[10px] text-neutral-400 mb-3">
+                <span className="block font-semibold uppercase tracking-wider text-[10px] text-neutral-400 mb-2.5">
                   Synthesized Sound Stems
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   {chordData.instrumentStems.map((stem, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-2 p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs"
+                      className="flex items-center gap-2 p-2 sm:p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs"
                     >
                       <div
-                        className={`w-2 h-2 rounded-full ${
+                        className={`w-2 h-2 rounded-full shrink-0 ${
                           isPlaying ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-600'
                         }`}
                       />
-                      <span className="font-medium truncate text-neutral-200">{stem}</span>
+                      <span className="font-medium truncate text-neutral-200 text-[11px] sm:text-xs">{stem}</span>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           )}
-        </div>
-
-        {/* ========================================================= */}
-        {/* RIGHT SIDE: Audio Player, Vinyl Stage & Master Controls   */}
-        {/* ========================================================= */}
-        <div className="lg:col-span-6 flex flex-col justify-between p-5 sm:p-6 space-y-5">
-          {/* Top Section: Title & Prompt info */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-display font-extrabold text-lg sm:text-xl tracking-tight leading-snug truncate" title={song.title}>
-                    {song.title}
-                  </h3>
-                  {song.isRealLifeHit && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
-                      ⭐ Real Hit
-                    </span>
-                  )}
-                </div>
-
-                {song.artist && (
-                  <p className="text-xs font-semibold text-amber-400 mt-0.5 leading-normal flex items-center gap-1.5">
-                    <span className="text-neutral-400 font-normal">Produced by</span>
-                    <span>{song.artist}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <p className={`text-xs line-clamp-2 leading-relaxed text-left pl-2.5 border-l-2 border-amber-500/40 italic ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              "{song.prompt}"
-            </p>
-          </div>
-
-          {/* Visual Vinyl Record + Visualizer Display Stage */}
-          <div className="relative flex items-center justify-center py-2">
-            <div className="relative flex items-center">
-              {/* Spinning Vinyl Record behind the cover */}
-              <div
-                className={`w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-neutral-950 border-4 border-neutral-800 shadow-2xl flex items-center justify-center transition-all duration-700 ${
-                  isPlaying ? 'rotate-180 translate-x-8 sm:translate-x-12 scale-100' : 'translate-x-0 scale-95 opacity-60'
-                }`}
-                style={{
-                  backgroundImage:
-                    'repeating-radial-gradient(circle, #171717 0, #171717 2px, #0a0a0a 3px, #0a0a0a 5px)',
-                }}
-              >
-                {/* Vinyl Center label */}
-                <div className="w-12 h-12 rounded-full bg-amber-500 border-2 border-amber-300 flex items-center justify-center shadow-inner">
-                  <div className="w-3 h-3 rounded-full bg-neutral-950" />
-                </div>
-              </div>
-
-              {/* Cover Art Card */}
-              <div className="relative z-10 w-36 h-36 sm:w-44 sm:h-44 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black shrink-0">
-                <img
-                  src={song.coverUrl}
-                  alt={song.title}
-                  className="w-full h-full object-cover"
-                />
-
-                {/* Center play icon toggle overlay */}
-                <button
-                  onClick={() => onPlayToggle(song)}
-                  className="absolute inset-0 bg-black/30 hover:bg-black/10 flex items-center justify-center transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-full bg-amber-500 text-neutral-950 flex items-center justify-center shadow-xl shadow-amber-500/50 group-hover:scale-110 active:scale-95 transition-transform">
-                    {isPlaying ? (
-                      <Pause className="w-6 h-6 fill-current" />
-                    ) : (
-                      <Play className="w-6 h-6 fill-current ml-0.5" />
-                    )}
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Dynamic Audio Visualizer Equalizer Bars */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-amber-400">
-              <span className="font-semibold leading-none">{formatTime(playbackTime)}</span>
-
-              {/* 16-bar animated audio frequency spectrum */}
-              <div className="flex items-end gap-1 h-5 px-3">
-                {[40, 75, 55, 90, 60, 85, 45, 95, 70, 50, 80, 65, 90, 45, 70, 85].map((height, i) => (
-                  <span
-                    key={i}
-                    className={`w-1 rounded-full bg-gradient-to-t from-amber-500 to-amber-300 transition-all ${
-                      isPlaying ? 'animate-pulse' : 'opacity-40'
-                    }`}
-                    style={{
-                      height: isPlaying ? `${Math.max(15, (height * (Math.sin(playbackTime * 4 + i) + 1.2)) / 2.2)}%` : '20%',
-                      animationDelay: `${i * 60}ms`,
-                    }}
-                  />
-                ))}
-              </div>
-
-              <span className="text-neutral-400 font-mono tabular-nums leading-none">{formatTime(duration)}</span>
-            </div>
-
-            {/* Seekable Audio Progress Scrubber */}
-            <div className="relative flex items-center group">
-              <input
-                type="range"
-                min="0"
-                max={duration}
-                step="0.1"
-                value={playbackTime}
-                onChange={handleScrubberChange}
-                className="w-full h-2 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Full Master Transport & Volume Controls */}
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-neutral-800/60 flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Rewind 5s */}
-              <button
-                onClick={() => handleSkip(-5)}
-                title="Skip back 5 seconds"
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-
-              {/* Central Play/Pause Button */}
-              <button
-                onClick={() => onPlayToggle(song)}
-                className="h-10 px-5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-neutral-950 font-bold inline-flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all text-xs leading-none"
-              >
-                {isPlaying ? (
-                  <>
-                    <Pause className="w-4 h-4 fill-current shrink-0" />
-                    <span className="leading-none">Pause Track</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-current ml-0.5 shrink-0" />
-                    <span className="leading-none">Play Master</span>
-                  </>
-                )}
-              </button>
-
-              {/* Forward 5s */}
-              <button
-                onClick={() => handleSkip(5)}
-                title="Skip forward 5 seconds"
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60 transition-colors"
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Stems Volume Controls: Beat & Voice & Master */}
-            <div className="flex items-center gap-3 pl-3 border-l border-neutral-800/80 shrink-0 flex-wrap sm:flex-nowrap">
-              {song.hasVoice !== false && (
-                <div className="flex items-center gap-1.5" title="AI Voice / Vocal Level">
-                  <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                  <span className="text-[10px] font-mono text-cyan-300 leading-none">Vox</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={vocalVol}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      setVocalVol(v);
-                      musicService.setVocalVolume(v);
-                    }}
-                    className="w-14 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-cyan-400"
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center gap-1.5" title="Instrumental Beat Level">
-                <Music className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-[10px] font-mono text-amber-300 leading-none">Beat</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={beatVol}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    setBeatVol(v);
-                    musicService.setBeatVolume(v);
-                  }}
-                  className="w-14 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
-                />
-              </div>
-
-              {/* Master Volume */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleToggleMute}
-                  className="text-neutral-400 hover:text-neutral-200 transition-colors"
-                  title={isMuted ? 'Unmute Master' : 'Mute Master'}
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-3.5 h-3.5 text-red-400" />
-                  ) : (
-                    <Volume2 className="w-3.5 h-3.5" />
-                  )}
-                </button>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeSlider}
-                  className="w-14 h-1.5 rounded-full bg-neutral-800 appearance-none cursor-pointer accent-amber-400"
-                />
-              </div>
-            </div>
-          </div>
         </div>
 
       </div>

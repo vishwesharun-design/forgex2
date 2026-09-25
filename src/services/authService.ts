@@ -215,6 +215,9 @@ export const authService = {
   },
 
   getCurrentUserId(): string {
+    if (auth.currentUser && auth.currentUser.uid) {
+      return auth.currentUser.uid;
+    }
     const user = this.getCurrentUser();
     return user && user.id ? user.id : 'guest';
   },

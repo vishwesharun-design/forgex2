@@ -15,7 +15,8 @@ import {
   ArrowRight,
   AlertCircle,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  ArrowDown
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
@@ -53,11 +54,20 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     text: string;
     attachments?: ChatMessage['attachments'];
   } | null>(null);
+  const [streamingReply, setStreamingReply] = useState<{
+    text: string;
+    modelUsed?: string;
+  } | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Track if user has explicitly scrolled up so auto-scroll stops
+  const [userHasScrolledUp, setUserHasScrolledUp] = useState<boolean>(false);
+  const userScrolledUpRef = useRef<boolean>(false);
 
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
@@ -75,10 +85,44 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           },
         ]
       : []),
+    ...(streamingReply && streamingReply.text
+      ? [
+          {
+            id: 'streaming_asst_turn',
+            role: 'assistant' as const,
+            content: streamingReply.text,
+            timestamp: Date.now(),
+            modelUsed: streamingReply.modelUsed || currentModel.name,
+            isStreaming: true,
+          },
+        ]
+      : []),
   ];
 
   const hasMessages = displayMessages.length > 0;
   const baseTextRef = useRef<string>('');
+
+  // Handle user scrolling: if user scrolls up away from bottom, pause autoscroll
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+
+    // If user scrolled up by more than 48px from the bottom, pause auto-scroll
+    if (distanceFromBottom > 48) {
+      if (!userScrolledUpRef.current) {
+        userScrolledUpRef.current = true;
+        setUserHasScrolledUp(true);
+      }
+    } else {
+      // User scrolled all the way back down to the bottom, resume auto-scroll
+      if (userScrolledUpRef.current) {
+        userScrolledUpRef.current = false;
+        setUserHasScrolledUp(false);
+      }
+    }
+  };
 
   // Dual-Engine Web Speech & Gemini Audio Transcription integration
   const {
@@ -107,14 +151,38 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     rawToggleListening();
   };
 
-  // Auto scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Auto scroll to bottom only if user hasn't scrolled up (or if force=true)
+  const scrollToBottom = (force = false) => {
+    if (!force && userScrolledUpRef.current) {
+      return;
+    }
+    const el = scrollContainerRef.current;
+    if (el) {
+      if (isSubmitting) {
+        // Direct assignment during fast streaming avoids browser smooth-scroll queuing jitter
+        el.scrollTop = el.scrollHeight;
+      } else {
+        el.scrollTo({
+          top: el.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: isSubmitting ? 'auto' : 'smooth' });
+    }
   };
 
+  // Reset scroll lock when switching chat sessions
+  useEffect(() => {
+    userScrolledUpRef.current = false;
+    setUserHasScrolledUp(false);
+    scrollToBottom(true);
+  }, [currentSession?.id]);
+
+  // Autoscroll as tokens arrive, unless user has scrolled up
   useEffect(() => {
     scrollToBottom();
-  }, [displayMessages.length, isSubmitting]);
+  }, [displayMessages.length, streamingReply?.text, isSubmitting]);
 
   // Auto resize textarea
   useEffect(() => {
@@ -138,7 +206,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     // Set optimistic message so user never sees input vanish without response
     setPendingUserTurn({ text, attachments: filesToAttach });
+    setStreamingReply(null);
     setIsSubmitting(true);
+    userScrolledUpRef.current = false;
+    setUserHasScrolledUp(false);
+    scrollToBottom(true);
 
     try {
       const sessionId = currentSession?.id || 'new';
@@ -146,15 +218,24 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         sessionId,
         text,
         selectedModelId,
-        filesToAttach
+        filesToAttach,
+        (streamedText) => {
+          setStreamingReply({
+            text: streamedText,
+            modelUsed: currentModel.name,
+          });
+        }
       );
+      setStreamingReply(null);
       setPendingUserTurn(null);
       onUpdateSession(updatedSession);
     } catch (error) {
       console.error('Failed to send message', error);
+      setStreamingReply(null);
       setPendingUserTurn(null);
     } finally {
       setIsSubmitting(false);
+      setStreamingReply(null);
       setPendingUserTurn(null);
     }
   };
@@ -232,7 +313,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6 relative"
+      >
         {!hasMessages ? (
           /* Empty Initial State */
           <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-8 sm:py-12 select-none animate-in fade-in duration-300">
@@ -407,10 +492,15 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         {message.content}
                       </div>
                     ) : (
-                      <MarkdownRenderer
-                        content={message.content}
-                        theme={theme}
-                      />
+                      <div className="relative">
+                        <MarkdownRenderer
+                          content={message.content}
+                          theme={theme}
+                        />
+                        {message.isStreaming && (
+                          <span className="inline-block w-2 h-4 ml-1 bg-amber-400 animate-pulse rounded-xs align-middle shadow-sm shadow-amber-400/50" />
+                        )}
+                      </div>
                     )}
 
                     {/* Action Bar for User Messages */}
@@ -443,9 +533,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         <span className="text-[11px] font-mono text-amber-400 inline-flex items-center gap-1">
                           <Zap className="w-3 h-3 shrink-0" />
                           <span>
-                            {message.modelUsed && !/gemini/i.test(message.modelUsed)
-                              ? message.modelUsed
-                              : currentModel.name || 'ForgeX Neural Engine'}
+                            {message.isStreaming 
+                              ? `${currentModel.name} is streaming...`
+                              : (message.modelUsed && !/gemini/i.test(message.modelUsed)
+                                  ? message.modelUsed
+                                  : currentModel.name || 'ForgeX Neural Engine')}
                           </span>
                         </span>
 
@@ -483,7 +575,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               );
             })}
 
-            {isSubmitting && (
+            {isSubmitting && !streamingReply && (
               <div className="flex gap-3.5 justify-start">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
                   <Zap className="w-4 h-4 fill-amber-400 text-amber-400 glow-lightning animate-bounce" />
@@ -494,7 +586,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   }`}
                 >
                   <div className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-                  <span>{currentModel.name} is thinking...</span>
+                  <span>Connecting with {currentModel.name}...</span>
                 </div>
               </div>
             )}
@@ -503,6 +595,27 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           </div>
         )}
       </div>
+
+      {/* Floating Scroll to Bottom Button when user has scrolled up */}
+      {userHasScrolledUp && hasMessages && (
+        <button
+          id="btn-scroll-to-bottom"
+          onClick={() => {
+            userScrolledUpRef.current = false;
+            setUserHasScrolledUp(false);
+            scrollToBottom(true);
+          }}
+          className={`absolute bottom-32 sm:bottom-36 right-6 sm:right-10 z-30 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-xl border transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 cursor-pointer ${
+            isDark
+              ? 'bg-neutral-900/95 hover:bg-neutral-800 border-neutral-700 text-neutral-200 hover:text-white shadow-black/80'
+              : 'bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-800 hover:text-black shadow-neutral-400/40'
+          }`}
+          title="Scroll to latest message"
+        >
+          <ArrowDown className={`w-3.5 h-3.5 text-amber-400 ${streamingReply ? 'animate-bounce' : ''}`} />
+          <span>{streamingReply ? 'Following reply...' : 'Scroll to bottom'}</span>
+        </button>
+      )}
 
       {/* Bottom Area: Quick Actions & Large Rounded Chat Input */}
       <div className="px-3 sm:px-6 pt-0 pb-2 sm:pb-4 max-w-3xl w-full mx-auto shrink-0">

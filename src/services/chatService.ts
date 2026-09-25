@@ -132,7 +132,8 @@ export const chatService = {
     sessionId: string,
     userContent: string,
     modelId: ForgeXModelId,
-    attachments?: ChatMessage['attachments']
+    attachments?: ChatMessage['attachments'],
+    onStreamChunk?: (streamedText: string) => void
   ): Promise<{ updatedSession: ChatSession; assistantMessage: ChatMessage }> {
     let sessions = this.getSessions();
     let session = sessions.find((s) => s.id === sessionId);
@@ -174,14 +175,15 @@ export const chatService = {
 
     const isCreatorQuery = /(?:who\s+(?:created|made|developed|built|designed|programmed|coded|founded|invented)\s+(?:you|forgex|this\s+(?:app|ai|website|platform|software|system))|who\s+is\s+your\s+(?:creator|maker|developer|author|architect|father|founder|boss|programmer)|who\s+created\s+you|who\s+made\s+you|who\s+are\s+your\s+creators|who\s+owns\s+you|who\s+built\s+forgex|creator\s+of\s+forgex|who\s+is\s+vishwesh|who\s+is\s+vishweshvarman|what\s+is\s+the\s+creator(?:'s)?\s+name)/i.test(userContent);
 
-    // Call full-stack /api/chat endpoint
-    try {
-      const history = session.messages.slice(0, -1).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+    const history = session.messages.slice(0, -1).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-      const res = await fetch('/api/chat', {
+    // 1. Try real-time streaming first for instant token output
+    let streamedSuccessfully = false;
+    try {
+      const streamRes = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -196,17 +198,80 @@ export const chatService = {
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.reply) {
-          assistantReplyText = data.reply;
-          if (data.model) {
-            modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+      if (streamRes.ok && streamRes.body) {
+        const reader = streamRes.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = '';
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            const payloadStr = trimmed.slice(5).trim();
+            if (!payloadStr) continue;
+            try {
+              const data = JSON.parse(payloadStr);
+              if (data.text) {
+                accumulated += data.text;
+                if (onStreamChunk) {
+                  onStreamChunk(accumulated);
+                }
+              }
+              if (data.model) {
+                modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+              }
+            } catch (_parseErr) {
+              // Ignore partial chunk parsing
+            }
           }
         }
+
+        if (accumulated.trim().length > 0) {
+          assistantReplyText = accumulated;
+          streamedSuccessfully = true;
+        }
       }
-    } catch (_networkErr) {
-      // Proceed to procedural synthesizer fallback
+    } catch (_streamErr) {
+      // Fall through to non-streaming endpoint
+    }
+
+    // 2. Fallback to /api/chat if streaming was not available or produced no output
+    if (!streamedSuccessfully) {
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(geminiApiKey ? { 'x-api-key': geminiApiKey } : {}),
+          },
+          body: JSON.stringify({
+            message: userContent,
+            history,
+            modelId,
+            attachments,
+            apiKey: geminiApiKey,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.reply) {
+            assistantReplyText = data.reply;
+            if (data.model) {
+              modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+            }
+          }
+        }
+      } catch (_networkErr) {
+        // Proceed to procedural synthesizer fallback
+      }
     }
 
     // Fallback if network or server did not return text
