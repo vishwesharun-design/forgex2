@@ -102,6 +102,70 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const hasMessages = displayMessages.length > 0;
   const baseTextRef = useRef<string>('');
+  const [voiceModeState, setVoiceModeState] = useState<'idle' | 'listening' | 'transcribing' | 'typing'>('idle');
+  const typingTimerRef = useRef<any>(null);
+  const transcribingSafetyTimerRef = useRef<any>(null);
+
+  // Typewriter effect to smoothly type what user spoke
+  const typeOutTranscript = (speech: string) => {
+    if (transcribingSafetyTimerRef.current) {
+      clearTimeout(transcribingSafetyTimerRef.current);
+      transcribingSafetyTimerRef.current = null;
+    }
+
+    const cleanSpeech = speech.trim();
+    if (!cleanSpeech) {
+      setVoiceModeState('idle');
+      if (baseTextRef.current) {
+        setInputText(baseTextRef.current);
+      }
+      return;
+    }
+
+    setVoiceModeState('transcribing');
+
+    // Show "Transcribing..." in the chat bar for ~450ms before typing out what was spoken
+    setTimeout(() => {
+      setVoiceModeState('typing');
+      const prefix = baseTextRef.current.trim() ? `${baseTextRef.current.trim()} ` : '';
+      const fullText = prefix + cleanSpeech;
+      let currLength = prefix.length;
+      setInputText(prefix);
+
+      const stepDuration = Math.max(12, Math.min(22, Math.floor(600 / Math.max(1, cleanSpeech.length))));
+
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+      }
+
+      typingTimerRef.current = setInterval(() => {
+        currLength++;
+        setInputText(fullText.slice(0, currLength));
+
+        if (currLength >= fullText.length) {
+          if (typingTimerRef.current) {
+            clearInterval(typingTimerRef.current);
+            typingTimerRef.current = null;
+          }
+          setVoiceModeState('idle');
+          baseTextRef.current = fullText;
+          textareaRef.current?.focus();
+        }
+      }, stepDuration);
+    }, 450);
+  };
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+      }
+      if (transcribingSafetyTimerRef.current) {
+        clearTimeout(transcribingSafetyTimerRef.current);
+      }
+    };
+  }, []);
 
   // Dual-Engine Web Speech & Gemini Audio Transcription integration
   const {
@@ -113,21 +177,48 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     toggleListening: rawToggleListening,
     clearError: clearVoiceError,
   } = useVoiceInput({
-    onTranscript: (transcript: string, isFinal: boolean) => {
-      const base = baseTextRef.current.trim();
-      const combined = base ? `${base} ${transcript.trim()}` : transcript.trim();
-      setInputText(combined);
-      if (isFinal) {
-        baseTextRef.current = combined;
-      }
+    onSpeechFinished: (transcript: string) => {
+      typeOutTranscript(transcript);
     },
   });
 
-  const toggleListening = () => {
-    if (!isListening) {
-      baseTextRef.current = inputText;
+  // Revert voiceModeState if voice error occurs
+  useEffect(() => {
+    if (voiceError) {
+      setVoiceModeState('idle');
+      if (baseTextRef.current && !inputText) {
+        setInputText(baseTextRef.current);
+      }
     }
-    rawToggleListening();
+  }, [voiceError]);
+
+  const toggleListening = () => {
+    if (voiceModeState === 'listening' || isListening) {
+      setVoiceModeState('transcribing');
+      rawToggleListening();
+
+      if (transcribingSafetyTimerRef.current) {
+        clearTimeout(transcribingSafetyTimerRef.current);
+      }
+      transcribingSafetyTimerRef.current = setTimeout(() => {
+        setVoiceModeState((prev) => {
+          if (prev === 'transcribing') {
+            if (baseTextRef.current) setInputText(baseTextRef.current);
+            return 'idle';
+          }
+          return prev;
+        });
+      }, 6000);
+    } else {
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      baseTextRef.current = inputText;
+      setInputText('');
+      setVoiceModeState('listening');
+      rawToggleListening();
+    }
   };
 
   // Auto scroll to bottom
@@ -348,9 +439,23 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask ForgeX"
-              className={`w-full bg-transparent px-2 py-1 text-sm sm:text-base resize-none outline-none max-h-36 leading-normal ${
-                isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-500'
+              placeholder={
+                voiceModeState === 'listening' || isListening
+                  ? 'Listening...'
+                  : voiceModeState === 'transcribing' || isProcessing
+                  ? 'Transcribing...'
+                  : 'Ask ForgeX'
+              }
+              className={`w-full bg-transparent px-2 py-1 text-sm sm:text-base resize-none outline-none max-h-36 leading-normal transition-colors ${
+                isDark ? 'text-white' : 'text-neutral-900'
+              } ${
+                voiceModeState === 'listening' || isListening
+                  ? 'placeholder:text-red-400 placeholder:animate-pulse font-medium'
+                  : voiceModeState === 'transcribing' || isProcessing
+                  ? 'placeholder:text-amber-500 dark:placeholder:text-amber-400 font-medium'
+                  : isDark
+                  ? 'placeholder:text-neutral-500'
+                  : 'placeholder:text-neutral-500'
               }`}
             />
           </div>
@@ -362,20 +467,26 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               id="btn-voice-input"
               type="button"
               onClick={toggleListening}
-              title={isListening ? 'Stop recording & transcribe' : 'Dictate voice input'}
+              title={
+                voiceModeState === 'listening' || isListening
+                  ? 'Stop recording & transcribe'
+                  : voiceModeState === 'transcribing' || isProcessing
+                  ? 'Transcribing...'
+                  : 'Dictate voice input'
+              }
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                isListening
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                  : isProcessing
-                  ? 'bg-amber-500/20 text-amber-400 animate-pulse'
+                voiceModeState === 'listening' || isListening
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/50 animate-pulse'
+                  : voiceModeState === 'transcribing' || isProcessing
+                  ? 'bg-amber-500/20 text-amber-400'
                   : isDark
                   ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
                   : 'hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
               }`}
             >
-              {isListening ? (
+              {voiceModeState === 'listening' || isListening ? (
                 <StopCircle className="w-4 h-4 text-red-400 animate-pulse" />
-              ) : isProcessing ? (
+              ) : voiceModeState === 'transcribing' || isProcessing ? (
                 <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
               ) : (
                 <Mic className="w-4 h-4" />
@@ -419,22 +530,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Listening Indicator if active */}
-        {isListening && (
-          <div className="flex items-center justify-center gap-2 mt-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs mx-auto w-fit">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
-            <span className="text-[11px] font-mono font-bold">
-              00:{durationSeconds < 10 ? '0' : ''}{durationSeconds}
-            </span>
-            <div className="flex items-center gap-0.5 h-3">
-              <span className="w-0.5 bg-red-400 rounded-full" style={{ height: `${Math.max(3, (audioLevel / 100) * 12)}px` }} />
-              <span className="w-0.5 bg-red-400 rounded-full" style={{ height: `${Math.max(4, (audioLevel / 100) * 16)}px` }} />
-              <span className="w-0.5 bg-red-400 rounded-full" style={{ height: `${Math.max(3, (audioLevel / 100) * 10)}px` }} />
-            </div>
-            <span className="text-[11px] font-medium">Listening... Speak now</span>
-          </div>
-        )}
 
         {/* Voice error notice */}
         {voiceError && (
@@ -547,14 +642,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   key={message.id}
                   className={`group flex gap-3.5 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  {!isUser && (
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 shadow-sm border ${
-                      isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-600'
-                    }`}>
-                      <Zap className="w-4 h-4 fill-amber-400 text-amber-400 glow-lightning" />
-                    </div>
-                  )}
-
                   {isUser ? (
                     <div className="flex flex-col items-end max-w-[85%] sm:max-w-[78%]">
                       {/* Attachments if any */}
@@ -709,18 +796,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             })}
 
             {isSubmitting && !streamingReply && (
-              <div className="flex gap-3.5 justify-start">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                  <Zap className="w-4 h-4 fill-amber-400 text-amber-400 glow-lightning animate-bounce" />
-                </div>
-                <div
-                  className={`rounded-2xl p-4 text-xs font-mono flex items-center gap-2 ${
-                    isDark ? 'bg-neutral-900 border border-neutral-800 text-amber-400' : 'bg-white border border-neutral-200 text-amber-600'
-                  }`}
-                >
-                  <div className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-                  <span>Connecting with {currentModel.name}...</span>
-                </div>
+              <div className="flex items-center gap-2.5 py-3 px-2 text-xs font-mono text-neutral-400 select-none animate-in fade-in duration-150">
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-400/80 border-t-transparent animate-spin shrink-0" />
+                <span className="text-neutral-500 dark:text-neutral-400 font-medium">Thinking...</span>
               </div>
             )}
 

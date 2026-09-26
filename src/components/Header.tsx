@@ -133,6 +133,7 @@ export const Header: React.FC<HeaderProps> = ({
               onSelectModel={onSelectModel}
               theme={theme}
               variant="pill"
+              useShortName={true}
               align="right"
             />
           </div>

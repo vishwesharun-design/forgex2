@@ -219,6 +219,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

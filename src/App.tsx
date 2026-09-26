@@ -49,6 +49,9 @@ import { SearchModal } from './components/SearchModal';
 import { NotificationsPopover } from './components/NotificationsPopover';
 import { MediaViewerModal } from './components/MediaViewerModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { StudioStoreModal } from './components/StudioStoreModal';
+import { CustomStudioWorkspace } from './components/CustomStudioWorkspace';
+import { studioService } from './services/studioService';
 
 export default function App() {
   // State: View Mode (Landing Page vs In-Workspace)
@@ -125,6 +128,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
+  const [isStudioStoreOpen, setIsStudioStoreOpen] = useState(false);
 
   // Fullscreen Media Viewer Modal
   const [viewingMedia, setViewingMedia] = useState<{
@@ -430,6 +434,7 @@ export default function App() {
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleToggleSidebarCollapse}
             onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
+            onOpenStudioStore={() => setIsStudioStoreOpen(true)}
           />
 
           {/* Main Workspace Column */}
@@ -591,6 +596,28 @@ export default function App() {
                   onSelectWorkspace={setActiveWorkspace}
                 />
               )}
+
+              {/* Custom Created Studio Workspace */}
+              {activeWorkspace.startsWith('custom_') && (() => {
+                const customStudio = studioService.getStudioById(activeWorkspace);
+                if (!customStudio) return null;
+                return (
+                  <CustomStudioWorkspace
+                    key={customStudio.id}
+                    studio={customStudio}
+                    theme={settings.theme}
+                    selectedModelId={selectedModelId}
+                    onSelectModel={setSelectedModelId}
+                    onOpenStore={() => setIsStudioStoreOpen(true)}
+                    user={user}
+                    onDeleteStudio={() => setActiveWorkspace('chat')}
+                    onRemoveFromSidebar={(id) => {
+                      studioService.removeStudioFromSidebar(id);
+                      setActiveWorkspace('chat');
+                    }}
+                  />
+                );
+              })()}
             </main>
 
             {/* Mobile Bottom Navigation Bar (md:hidden) */}
@@ -749,6 +776,20 @@ export default function App() {
         isDark={isDark}
         theme={settings.theme}
         selectedModelId={selectedModelId}
+      />
+
+      {/* Explore & Add Studios Modal */}
+      <StudioStoreModal
+        isOpen={isStudioStoreOpen}
+        onClose={() => setIsStudioStoreOpen(false)}
+        onSelectStudio={(studioId) => {
+          setActiveWorkspace(studioId as ActiveWorkspace);
+          setIsInWorkspace(true);
+        }}
+        theme={settings.theme}
+        userName={user?.name || user?.email?.split('@')[0] || ''}
+        userEmail={user?.email || ''}
+        userId={user?.id || ''}
       />
     </div>
   );

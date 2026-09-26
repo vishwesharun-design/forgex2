@@ -1,0 +1,428 @@
+import { CustomStudio } from '../types';
+
+export interface StudioCatalogueItem {
+  id: string;
+  title: string;
+  category: 'creative' | 'intelligence' | 'productivity' | 'utility' | 'gaming';
+  accentColor: string;
+  badge: string;
+  description: string;
+  author: string;
+  creatorId?: string;
+  creatorEmail?: string;
+  hasVerifiedTick: boolean;
+  isOfficial: boolean;
+  iconName: string;
+  systemPrompt?: string;
+  starterPrompts?: string[];
+  welcomeMessage?: string;
+  uiTemplate?: 'chat' | 'prompt-pad' | 'interactive';
+  customHtml?: string;
+}
+
+export const OFFICIAL_STUDIOS: StudioCatalogueItem[] = [
+  {
+    id: 'chat',
+    title: 'ForgeX Chat',
+    category: 'intelligence',
+    accentColor: 'text-amber-400',
+    badge: 'Assistant',
+    description: 'Multi-turn conversational reasoning with markdown & code',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'MessageSquare',
+  },
+  {
+    id: 'image',
+    title: 'Image Studio',
+    category: 'creative',
+    accentColor: 'text-amber-400',
+    badge: 'Visuals',
+    description: 'Text-to-image generator with styles, negative prompts & aspect ratios',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Image',
+  },
+  {
+    id: 'music',
+    title: 'Make Song',
+    category: 'creative',
+    accentColor: 'text-yellow-400',
+    badge: 'Audio Synth',
+    description: 'Web Audio polyphonic synthesizer & song lyrics generator',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Music',
+  },
+  {
+    id: 'spotify',
+    title: 'Music Player',
+    category: 'creative',
+    accentColor: 'text-emerald-400',
+    badge: 'Real Audio',
+    description: 'Listen to real songs: Interstellar, Levitating, categories & player',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Headphones',
+  },
+  {
+    id: 'search',
+    title: 'Web Search',
+    category: 'intelligence',
+    accentColor: 'text-blue-400',
+    badge: 'Grounding',
+    description: 'Google search grounding with verified live sources and citation cards',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Globe',
+  },
+  {
+    id: 'research',
+    title: 'Deep Research',
+    category: 'intelligence',
+    accentColor: 'text-cyan-400',
+    badge: 'Investigate',
+    description: 'Autonomous multi-query web analysis & executive synthesis reports',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Compass',
+  },
+  {
+    id: 'agents',
+    title: 'AI Agents',
+    category: 'intelligence',
+    accentColor: 'text-teal-400',
+    badge: 'Autonomous',
+    description: 'Multi-agent goal swarms, reasoning graphs & tool orchestration',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Bot',
+  },
+  {
+    id: 'data_analysis',
+    title: 'Data Analysis',
+    category: 'intelligence',
+    accentColor: 'text-amber-400',
+    badge: 'BI & Stats',
+    description: 'Upload CSV/JSON for automated stats, anomalies, and reports',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'BarChart3',
+  },
+  {
+    id: 'code',
+    title: 'Code Studio',
+    category: 'productivity',
+    accentColor: 'text-emerald-400',
+    badge: 'Dev Sandbox',
+    description: 'Polyglot coding sandbox with refactoring, execution & formatting',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Code2',
+  },
+  {
+    id: 'files',
+    title: 'Document AI',
+    category: 'productivity',
+    accentColor: 'text-green-400',
+    badge: 'Docs & Quiz',
+    description: 'Document intelligence, auto-summaries & interactive quizzes',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'FileText',
+  },
+  {
+    id: 'writing',
+    title: 'Writing Studio',
+    category: 'productivity',
+    accentColor: 'text-violet-400',
+    badge: 'Prose & Tone',
+    description: 'Articles, essays, resumes with tone modifier & rewriter',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'PenTool',
+  },
+  {
+    id: 'presentation',
+    title: 'Presentations',
+    category: 'productivity',
+    accentColor: 'text-orange-400',
+    badge: 'Decks',
+    description: 'Structured slide architect with themes & HTML export',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'Presentation',
+  },
+  {
+    id: 'canvas',
+    title: 'AI Canvas',
+    category: 'productivity',
+    accentColor: 'text-rose-400',
+    badge: 'Whiteboard',
+    description: 'Infinite interactive whiteboard & mindmap node graph',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'LayoutDashboard',
+  },
+  {
+    id: 'projects',
+    title: 'Projects',
+    category: 'productivity',
+    accentColor: 'text-amber-500',
+    badge: 'Manager',
+    description: 'Project portfolios, linked assets and task tracking',
+    author: 'ForgeX',
+    hasVerifiedTick: true,
+    isOfficial: true,
+    iconName: 'FolderKanban',
+  },
+];
+
+const STORAGE_ACTIVE_STUDIOS_KEY = 'forgex_active_studios_v2';
+const STORAGE_CUSTOM_STUDIOS_KEY = 'forgex_custom_studios_v1';
+
+// Default starter community studio as an example
+const DEFAULT_COMMUNITY_STUDIOS: CustomStudio[] = [
+  {
+    id: 'custom_chess_pro',
+    title: 'Chess Master AI',
+    creatorName: 'Panda',
+    description: 'Interactive grandmaster chess analysis, move evaluation, and tactics simulator',
+    category: 'gaming',
+    iconName: 'Crown',
+    accentColor: 'text-amber-400',
+    badge: 'Gaming',
+    systemPrompt: `You are Grandmaster Chess AI, an elite chess mentor and opponent. 
+1. You can play chess games move by move using standard algebraic notation (e.g., 1. e4, e5 2. Nf3, Nc6).
+2. Render an ASCII 8x8 chessboard after every move so the player can clearly visualize the position.
+3. Offer deep tactical explanations, blunder checks, and opening strategy tips when asked.
+4. Keep commentary energetic, helpful, and analytical.`,
+    starterPrompts: [
+      'Let\'s play a game! I will play White: 1. e4',
+      'Explain the key ideas in the Sicilian Defense',
+      'Give me a chess tactic puzzle to solve',
+      'What are the best principles for beginners in chess?'
+    ],
+    welcomeMessage: 'Welcome to Chess Master AI! I am your Grandmaster sparring partner and analyst. Make your first move or ask about any chess strategy!',
+    uiTemplate: 'chat',
+    createdAt: Date.now() - 1000 * 60 * 60 * 24,
+  },
+  {
+    id: 'custom_prompt_crafter',
+    title: 'Prompt Forge Pro',
+    creatorName: 'AlexDev',
+    description: 'Transform rough one-line thoughts into high-impact, professional system prompts',
+    category: 'utility',
+    iconName: 'Sparkles',
+    accentColor: 'text-cyan-400',
+    badge: 'Utility',
+    systemPrompt: `You are Prompt Forge Pro, a master prompt engineer specializing in LLM optimization.
+When the user shares an idea or prompt, your job is to craft:
+1. An Optimized Master Prompt (Role, Context, Constraints, Step-by-step logic, Output Format).
+2. Negative constraints (what to avoid).
+3. 2-3 Few-shot examples.
+4. Prompt effectiveness score out of 100 with recommendations for improvement.`,
+    starterPrompts: [
+      'Optimize a prompt for generating high-converting sales copy',
+      'Create an expert Python code reviewer system prompt',
+      'Design a prompt to explain complex physics to a 10-year-old',
+      'Turn my idea "fitness coach" into an elite prompt'
+    ],
+    welcomeMessage: 'Ready to engineer unbeatable AI prompts. Send me any rough idea, goal, or draft prompt!',
+    uiTemplate: 'chat',
+    createdAt: Date.now() - 1000 * 60 * 60 * 12,
+  },
+];
+
+export const studioService = {
+  // Pinned studios in sidebar. Per user request: defaults to ONLY ['chat']!
+  getActiveStudioIds(): string[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_ACTIVE_STUDIOS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Always ensure 'chat' is included
+          if (!parsed.includes('chat')) {
+            parsed.unshift('chat');
+          }
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    // DEFAULT PER SPEC: ONLY 'chat' studio in active sidebar!
+    return ['chat'];
+  },
+
+  setActiveStudioIds(ids: string[]): void {
+    try {
+      const unique = Array.from(new Set(ids));
+      if (!unique.includes('chat')) {
+        unique.unshift('chat');
+      }
+      localStorage.setItem(STORAGE_ACTIVE_STUDIOS_KEY, JSON.stringify(unique));
+      window.dispatchEvent(new Event('forgex_studios_updated'));
+    } catch (e) {
+      console.error('Failed to save active studio IDs', e);
+    }
+  },
+
+  addStudioToSidebar(studioId: string): string[] {
+    const current = this.getActiveStudioIds();
+    if (!current.includes(studioId)) {
+      const updated = [...current, studioId];
+      this.setActiveStudioIds(updated);
+      return updated;
+    }
+    return current;
+  },
+
+  removeStudioFromSidebar(studioId: string): string[] {
+    if (studioId === 'chat') return this.getActiveStudioIds(); // chat cannot be removed
+    const current = this.getActiveStudioIds();
+    const updated = current.filter((id) => id !== studioId);
+    this.setActiveStudioIds(updated);
+    return updated;
+  },
+
+  isStudioInSidebar(studioId: string): boolean {
+    return this.getActiveStudioIds().includes(studioId);
+  },
+
+  // Custom User-Created Studios
+  getCustomStudios(): CustomStudio[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_CUSTOM_STUDIOS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    // Initial community/starter studios
+    this.saveAllCustomStudios(DEFAULT_COMMUNITY_STUDIOS);
+    return DEFAULT_COMMUNITY_STUDIOS;
+  },
+
+  saveAllCustomStudios(studios: CustomStudio[]): void {
+    try {
+      localStorage.setItem(STORAGE_CUSTOM_STUDIOS_KEY, JSON.stringify(studios));
+      window.dispatchEvent(new Event('forgex_studios_updated'));
+    } catch (e) {
+      console.error('Failed to save custom studios', e);
+    }
+  },
+
+  saveCustomStudio(studio: CustomStudio): void {
+    const list = this.getCustomStudios();
+    const existingIndex = list.findIndex((s) => s.id === studio.id);
+    let updated: CustomStudio[];
+    if (existingIndex >= 0) {
+      updated = [...list];
+      updated[existingIndex] = studio;
+    } else {
+      updated = [studio, ...list];
+    }
+    this.saveAllCustomStudios(updated);
+    // Auto-add newly created studio to user's sidebar
+    this.addStudioToSidebar(studio.id);
+  },
+
+  canDeleteStudio(
+    studioId: string,
+    currentUserId?: string,
+    currentUserEmail?: string,
+    currentUserName?: string
+  ): boolean {
+    const customList = this.getCustomStudios();
+    const studio = customList.find((s) => s.id === studioId);
+    if (!studio) return false;
+
+    const normEmail = (currentUserEmail || '').trim().toLowerCase();
+    const normName = (currentUserName || '').trim().toLowerCase();
+    const normAuthor = (studio.creatorName || '').trim().toLowerCase();
+    const studioEmail = (studio.creatorEmail || '').trim().toLowerCase();
+
+    // 1. Matched by creatorId (UID)
+    if (studio.creatorId && currentUserId && studio.creatorId === currentUserId) {
+      return true;
+    }
+    // 2. Matched by creatorEmail
+    if (studioEmail && normEmail && studioEmail === normEmail) {
+      return true;
+    }
+    // 3. Matched by creatorName
+    if (normAuthor && normName && (normAuthor === normName || normName.includes(normAuthor))) {
+      return true;
+    }
+    // 4. Default community seed studios (like custom_chess_pro, custom_prompt_crafter) created by "Panda" or "AlexDev"
+    // If the logged in user is Panda (e.g. tradewithpanda@gmail.com), allow Panda to manage them!
+    if (studio.creatorName === 'Panda' && (normEmail.includes('panda') || normName.includes('panda'))) {
+      return true;
+    }
+
+    return false;
+  },
+
+  deleteCustomStudio(
+    id: string,
+    currentUserId?: string,
+    currentUserEmail?: string,
+    currentUserName?: string
+  ): boolean {
+    if (!this.canDeleteStudio(id, currentUserId, currentUserEmail, currentUserName)) {
+      console.warn('Unauthorized delete attempt: Only the creator can delete this studio');
+      return false;
+    }
+    const list = this.getCustomStudios().filter((s) => s.id !== id);
+    this.saveAllCustomStudios(list);
+    this.removeStudioFromSidebar(id);
+    return true;
+  },
+
+  getAllStudios(): StudioCatalogueItem[] {
+    const custom = this.getCustomStudios().map((c): StudioCatalogueItem => ({
+      id: c.id,
+      title: c.title,
+      category: c.category,
+      accentColor: c.accentColor || 'text-blue-400',
+      badge: c.badge || 'Custom',
+      description: c.description,
+      author: c.creatorName || 'Anonymous',
+      creatorId: c.creatorId,
+      creatorEmail: c.creatorEmail,
+      hasVerifiedTick: false, // Per spec: user studios show their name WITHOUT tick!
+      isOfficial: false,
+      iconName: c.iconName || 'Bot',
+      systemPrompt: c.systemPrompt,
+      starterPrompts: c.starterPrompts,
+      welcomeMessage: c.welcomeMessage,
+      uiTemplate: c.uiTemplate,
+      customHtml: c.customHtml,
+    }));
+
+    return [...OFFICIAL_STUDIOS, ...custom];
+  },
+
+  getStudioById(id: string): StudioCatalogueItem | undefined {
+    return this.getAllStudios().find((s) => s.id === id);
+  },
+};

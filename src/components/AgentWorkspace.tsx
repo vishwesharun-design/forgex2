@@ -233,6 +233,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

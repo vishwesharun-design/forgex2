@@ -385,6 +385,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                   selectedModelId={selectedModelId}
                   onSelectModel={onSelectModel}
                   theme={theme}
+                  useShortName={true}
                 />
               </div>
 

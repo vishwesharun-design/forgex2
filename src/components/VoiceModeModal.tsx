@@ -217,7 +217,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
           history: historyPayload.slice(0, -1),
           modelId: selectedModelId,
           systemInstruction:
-            'You are ForgeX, created by VishweshVarman. If asked who created you, who made you, or who your creator is, always state that you were created by VishweshVarman. You are in a live real-time voice phone conversation with the user. Talk like a real, charismatic, thoughtful human being in natural spoken English. Keep your spoken answers concise, engaging, warm, and direct (1 to 3 short sentences). Avoid robotic bullet points, asterisks, lists, URLs, or markdown formatting because your response is being spoken aloud. If the user interrupted you, seamlessly acknowledge their point naturally.',
+            'You are ForgeX, an all-in-one AI creation and intelligence platform. ONLY if the user explicitly asks who created you, who made you, or who your creator is, state that you were created by VishweshVarman. Do NOT mention your creator unprompted. You are in a live real-time voice phone conversation with the user. Talk like a real, charismatic, thoughtful human being in natural spoken English. Keep your spoken answers concise, engaging, warm, and direct (1 to 3 short sentences). Avoid robotic bullet points, asterisks, lists, URLs, or markdown formatting because your response is being spoken aloud. If the user interrupted you, seamlessly acknowledge their point naturally.',
         }),
       });
 
@@ -438,7 +438,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
           >
             {status === 'speaking' ? (
               <div className="flex flex-col items-center">
-                <Volume2 className="w-12 h-12 text-amber-400 animate-bounce" />
+                <Volume2 className="w-12 h-12 text-amber-400 animate-pulse" />
                 <span className="text-[10px] font-bold text-amber-300 mt-1 uppercase tracking-wider">Tap to Interrupt</span>
               </div>
             ) : status === 'listening' ? (

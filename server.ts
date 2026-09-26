@@ -346,13 +346,13 @@ async function startServer() {
         });
       }
 
-      const forgexSystemInstruction = customSystemInstruction || `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform created by VishweshVarman.
+      const forgexSystemInstruction = customSystemInstruction || `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform.
 
-CORE IDENTITY & CREATOR:
-- You were created by VishweshVarman as part of ForgeX.
-- When asked about your creator, maker, founder, architect, or origin, state proudly and clearly that you were created by VishweshVarman. Never attribute your creation to any other company.
-- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions.
-- When asked "what can you do?" or about your capabilities, explain that you are ForgeX created by VishweshVarman and provide a structured breakdown of your features:
+CORE IDENTITY & CREATOR ATTRIBUTION:
+- ONLY if the user explicitly asks who created you, who made you, or who your creator/founder is, answer that you were created by VishweshVarman.
+- Do NOT mention VishweshVarman or your creator in normal conversation, greetings, questions, or capability breakdowns unless specifically and directly asked about your creator.
+- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions or creator mentions.
+- When asked "what can you do?" or about your capabilities, explain that you are ForgeX and provide a structured breakdown of your features:
   * Images Studio (AI image generation with multiple aspect ratios, styles, seeds)
   * Make Song Studio (AI music composition, lyrics, synth tracks)
   * Music Player Studio (integrated audio playback with waveforms and queue)
@@ -505,13 +505,13 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
         return res.end();
       }
 
-      const forgexSystemInstruction = customSystemInstruction || `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform created by VishweshVarman.
+      const forgexSystemInstruction = customSystemInstruction || `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform.
 
-CORE IDENTITY & CREATOR:
-- You were created by VishweshVarman as part of ForgeX.
-- When asked about your creator, maker, founder, architect, or origin, state proudly and clearly that you were created by VishweshVarman. Never attribute your creation to any other company.
-- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions.
-- When asked "what can you do?" or about your capabilities, explain that you are ForgeX created by VishweshVarman and provide a structured breakdown of your features:
+CORE IDENTITY & CREATOR ATTRIBUTION:
+- ONLY if the user explicitly asks who created you, who made you, or who your creator/founder is, answer that you were created by VishweshVarman.
+- Do NOT mention VishweshVarman or your creator in normal conversation, greetings, questions, or capability breakdowns unless specifically and directly asked about your creator.
+- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions or creator mentions.
+- When asked "what can you do?" or about your capabilities, explain that you are ForgeX and provide a structured breakdown of your features:
   * Images Studio (AI image generation with multiple aspect ratios, styles, seeds)
   * Make Song Studio (AI music composition, lyrics, synth tracks)
   * Music Player Studio (integrated audio playback with waveforms and queue)
@@ -639,52 +639,49 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
       if (apiKey) {
         try {
           const ai = new GoogleGenAI({ apiKey });
-          const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, "");
-
-          let response;
-          try {
-            response = await ai.models.generateContent({
-              model: "gemini-3.5-transcribe",
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: mimeType || "audio/webm",
-                        data: cleanBase64,
-                      },
-                    },
-                    {
-                      text: "Transcribe the spoken words in this audio verbatim. Return ONLY the exact transcribed text, without markdown, quotes, or prefaces.",
-                    },
-                  ],
-                },
-              ],
-            });
-          } catch {
-            const fallbackRes = await generateContentResilient(ai, {
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: mimeType || "audio/webm",
-                        data: cleanBase64,
-                      },
-                    },
-                    {
-                      text: "Transcribe this voice audio verbatim into plain text without any introductory commentary or markdown.",
-                    },
-                  ],
-                },
-              ],
-            });
-            response = { text: fallbackRes.text };
+          const cleanBase64 = audioBase64.includes(",") ? audioBase64.split(",")[1].trim() : audioBase64.trim();
+          let resolvedMime = (mimeType || "audio/webm").split(";")[0].trim();
+          if (audioBase64.startsWith("data:")) {
+            const meta = audioBase64.split(",")[0];
+            const detectedMime = meta.replace(/^data:/, "").split(";")[0].trim();
+            if (detectedMime) resolvedMime = detectedMime;
           }
 
-          const transcript = response.text?.trim() || "";
+          let response;
+          const candidateModels = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-1.5-flash", "gemini-flash-latest"];
+          let lastErr = null;
+          for (const model of candidateModels) {
+            try {
+              response = await ai.models.generateContent({
+                model,
+                contents: [
+                  {
+                    role: "user",
+                    parts: [
+                      {
+                        inlineData: {
+                          mimeType: resolvedMime,
+                          data: cleanBase64,
+                        },
+                      },
+                      {
+                        text: "Transcribe the spoken words in this audio verbatim. Return ONLY the exact transcribed text, without markdown, quotes, explanations, or introductory text.",
+                      },
+                    ],
+                  },
+                ],
+              });
+              if (response?.text) break;
+            } catch (mErr) {
+              lastErr = mErr;
+              continue;
+            }
+          }
+          if (!response?.text && lastErr) {
+            console.warn("Audio transcription error with all models:", lastErr);
+          }
+
+          const transcript = response?.text?.trim() || "";
           return res.json({
             success: true,
             transcript,

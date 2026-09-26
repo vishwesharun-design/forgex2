@@ -35,9 +35,16 @@ import {
   Headphones,
   PanelLeftClose,
   PanelLeftOpen,
+  Crown,
+  Gamepad2,
+  Flame,
+  Rocket,
+  Layers,
+  Wand2,
 } from 'lucide-react';
 import { ActiveWorkspace, ChatSession, ForgeXTheme, UserProfile } from '../types';
 import { ForgeXLogo } from './ForgeXLogo';
+import { studioService, StudioCatalogueItem } from '../services/studioService';
 
 interface SidebarProps {
   activeWorkspace: ActiveWorkspace;
@@ -59,6 +66,7 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onOpenVoiceMode?: () => void;
+  onOpenStudioStore?: () => void;
 }
 
 type StudioCategory = 'all' | 'creative' | 'intelligence' | 'productivity';
@@ -245,17 +253,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
   onToggleCollapse,
   onOpenVoiceMode,
+  onOpenStudioStore,
 }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [isLogoHovered, setIsLogoHovered] = useState(false);
-  const [showAllStudios, setShowAllStudios] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<StudioCategory>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({
-    creative: false,
-    intelligence: false,
-    productivity: false,
-  });
+  
+  // Dynamic Studios tracking from studioService
+  const [activeStudioIds, setActiveStudioIds] = useState<string[]>(() => studioService.getActiveStudioIds());
+  const [allStudios, setAllStudios] = useState<StudioCatalogueItem[]>(() => studioService.getAllStudios());
+
+  useEffect(() => {
+    const handleStudiosUpdated = () => {
+      setActiveStudioIds(studioService.getActiveStudioIds());
+      setAllStudios(studioService.getAllStudios());
+    };
+    window.addEventListener('forgex_studios_updated', handleStudiosUpdated);
+    return () => window.removeEventListener('forgex_studios_updated', handleStudiosUpdated);
+  }, []);
+
+  const activeStudios = useMemo(() => {
+    return allStudios.filter((s) => activeStudioIds.includes(s.id));
+  }, [allStudios, activeStudioIds]);
 
   const accountRef = useRef<HTMLDivElement | null>(null);
   const isDark = theme === 'dark';
@@ -278,29 +296,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [accountMenuOpen]);
 
-  // Filter studios according to category & query
-  const filteredStudios = useMemo(() => {
-    return STUDIOS.filter((s) => {
-      const matchesCategory = selectedCategory === 'all' || s.category === selectedCategory;
-      const matchesQuery = searchQuery.trim() === '' || 
-        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.badge.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesQuery;
-    });
-  }, [selectedCategory, searchQuery]);
-
-  // Toggle category folding
-  const toggleCategoryFold = (categoryKey: string) => {
-    setCollapsedCategories((prev) => ({
-      ...prev,
-      [categoryKey]: !prev[categoryKey],
-    }));
-  };
-
   const handleSelectStudio = (ws: ActiveWorkspace) => {
     onSelectWorkspace(ws);
     if (window.innerWidth < 768) onCloseMobile();
+  };
+
+  const handleRemoveStudio = (studioId: string) => {
+    if (studioId === 'chat') return;
+    const updated = studioService.removeStudioFromSidebar(studioId);
+    setActiveStudioIds(updated);
+    if (activeWorkspace === studioId) {
+      onSelectWorkspace('chat');
+    }
   };
 
   return (
@@ -447,46 +454,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 <div className="space-y-0.5">
-                  {(showAllStudios ? STUDIOS : STUDIOS.slice(0, 6)).map((studio) => {
-                    const Icon = studio.icon;
+                  {activeStudios.map((studio) => {
+                    const Icon = (STUDIOS.find((s) => s.id === studio.id)?.icon) || Bot;
                     const isSelected = activeWorkspace === studio.id;
+                    const isChat = studio.id === 'chat';
                     return (
-                      <button
+                      <div
                         key={studio.id}
-                        id={`nav-workspace-${studio.id}`}
-                        onClick={() => handleSelectStudio(studio.id)}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                          isSelected
-                            ? isDark
-                              ? 'bg-neutral-900 text-amber-400 font-semibold border border-neutral-800 shadow-sm'
-                              : 'bg-white text-neutral-950 font-semibold border border-amber-300/80 shadow-sm'
-                            : isDark
-                              ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/60'
-                              : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200/70'
-                        }`}
+                        className="group/studio relative flex items-center"
                       >
-                        <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-500' : studio.accentColor}`} />
-                        <span className="truncate flex-1 text-left">{studio.title}</span>
-                        <span className={`text-[10px] font-mono opacity-60 px-1 py-0.2 rounded ${isSelected ? 'opacity-100 text-amber-400 font-bold' : ''}`}>
-                          {studio.badge}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          id={`nav-workspace-${studio.id}`}
+                          onClick={() => handleSelectStudio(studio.id as ActiveWorkspace)}
+                          className={`w-full flex items-center gap-2.5 px-2.5 py-2 ${!isChat ? 'pr-7' : ''} rounded-xl text-xs font-medium transition-all ${
+                            isSelected
+                              ? isDark
+                                ? 'bg-neutral-900 text-amber-400 font-semibold border border-neutral-800 shadow-sm'
+                                : 'bg-white text-neutral-950 font-semibold border border-amber-300/80 shadow-sm'
+                              : isDark
+                                ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/60'
+                                : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200/70'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-500' : studio.accentColor}`} />
+                          <span className="truncate flex-1 text-left">{studio.title}</span>
+                          <span className={`text-[10px] font-mono opacity-60 px-1 py-0.2 rounded ${isSelected ? 'opacity-100 text-amber-400 font-bold' : ''}`}>
+                            {studio.badge}
+                          </span>
+                        </button>
+
+                        {/* Remove Studio From Sidebar Button (available for all added studios, cannot remove chat) */}
+                        {!isChat && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveStudio(studio.id);
+                            }}
+                            title={`Remove ${studio.title} from sidebar`}
+                            className="absolute right-1.5 p-1 rounded-md text-neutral-400 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover/studio:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
 
-                  {/* Expand / Collapse toggle for remaining studios */}
-                  {STUDIOS.length > 6 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllStudios((prev) => !prev)}
-                      className={`w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium transition-colors rounded-lg ${
-                        isDark ? 'text-neutral-400 hover:text-amber-400 hover:bg-neutral-900/50' : 'text-neutral-600 hover:text-amber-800 hover:bg-neutral-200/50'
-                      }`}
-                    >
-                      <span>{showAllStudios ? 'Show fewer studios' : `+ ${STUDIOS.length - 6} more studios`}</span>
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showAllStudios ? 'rotate-180' : ''}`} />
-                    </button>
-                  )}
+                  {/* Add Studio Button directly below chat/active studios with a plus icon */}
+                  <button
+                    type="button"
+                    id="sidebar-btn-add-studio"
+                    onClick={() => {
+                      if (onOpenStudioStore) onOpenStudioStore();
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold border border-dashed transition-all mt-1 ${
+                      isDark
+                        ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/60'
+                        : 'border-amber-500/40 text-amber-800 hover:bg-amber-50 hover:border-amber-500'
+                    }`}
+                  >
+                    <Plus className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span className="truncate flex-1 text-left">Add Studio</span>
+                  </button>
                 </div>
               </div>
 
@@ -561,27 +592,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             /* Collapsed Mode: Clean icon list with tooltips */
             <div className="flex flex-col items-center gap-1.5 py-1 w-full">
-              {STUDIOS.map((studio) => {
-                const Icon = studio.icon;
+              {activeStudios.map((studio) => {
+                const Icon = (STUDIOS.find((s) => s.id === studio.id)?.icon) || Bot;
                 const isSelected = activeWorkspace === studio.id;
+                const isChat = studio.id === 'chat';
                 return (
-                  <button
-                    key={studio.id}
-                    id={`nav-workspace-${studio.id}`}
-                    onClick={() => handleSelectStudio(studio.id)}
-                    title={`${studio.title} — ${studio.description}`}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
-                      isSelected
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm'
-                        : isDark
-                          ? 'text-neutral-400 hover:text-white hover:bg-neutral-900'
-                          : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : studio.accentColor}`} />
-                  </button>
+                  <div key={studio.id} className="group/collapsed-studio relative flex items-center justify-center">
+                    <button
+                      id={`nav-workspace-${studio.id}`}
+                      onClick={() => handleSelectStudio(studio.id as ActiveWorkspace)}
+                      title={`${studio.title} — ${studio.description}`}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
+                        isSelected
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm'
+                          : isDark
+                            ? 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                            : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : studio.accentColor}`} />
+                    </button>
+
+                    {!isChat && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveStudio(studio.id);
+                        }}
+                        title={`Remove ${studio.title}`}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[9px] opacity-0 group-hover/collapsed-studio:opacity-100 transition-opacity shadow-sm hover:scale-110"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
+
+              {/* Add Studio button in collapsed mode */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenStudioStore) onOpenStudioStore();
+                }}
+                title="Add Studio"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center border border-dashed transition-all ${
+                  isDark
+                    ? 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10'
+                    : 'border-amber-500/50 text-amber-700 hover:bg-amber-100'
+                }`}
+              >
+                <Plus className="w-4 h-4 text-amber-500" />
+              </button>
             </div>
           )}
         </div>

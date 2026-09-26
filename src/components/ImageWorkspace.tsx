@@ -204,6 +204,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                 selectedModelId={selectedModelId}
                 onSelectModel={onSelectModel}
                 theme={theme}
+                useShortName={true}
               />
             </div>
           </div>

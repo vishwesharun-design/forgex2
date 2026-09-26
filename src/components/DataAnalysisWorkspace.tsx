@@ -309,6 +309,7 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

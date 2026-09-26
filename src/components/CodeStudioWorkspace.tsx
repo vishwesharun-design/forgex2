@@ -522,7 +522,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             >
               {FORGEX_MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name} ({m.badge})
+                  {m.badge}
                 </option>
               ))}
             </select>

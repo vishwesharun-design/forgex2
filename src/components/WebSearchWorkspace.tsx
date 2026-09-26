@@ -154,6 +154,7 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

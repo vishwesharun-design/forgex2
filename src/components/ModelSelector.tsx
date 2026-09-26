@@ -9,6 +9,7 @@ interface ModelSelectorProps {
   compactRoundOnly?: boolean;
   align?: 'left' | 'right';
   variant?: 'chatgpt' | 'pill' | 'round';
+  useShortName?: boolean;
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -18,6 +19,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   compactRoundOnly = false,
   align = 'left',
   variant,
+  useShortName = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -57,14 +59,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           id="btn-model-switcher-chatgpt"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-base sm:text-lg font-display font-semibold transition-all duration-150 ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-display font-semibold transition-all duration-150 ${
+            useShortName ? 'text-sm sm:text-base' : 'text-base sm:text-lg'
+          } ${
             isDark
               ? 'text-neutral-200 hover:text-white hover:bg-neutral-900/90'
               : 'text-neutral-800 hover:text-neutral-950 hover:bg-neutral-100'
           }`}
         >
           <span className="truncate max-w-[160px] sm:max-w-none">
-            {currentModel.name}
+            {useShortName ? currentModel.badge : currentModel.name}
           </span>
           <ChevronDown
             className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${
@@ -97,16 +101,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           id="btn-model-switcher"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs sm:text-sm font-medium transition-all duration-200 shadow-sm ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs sm:text-sm font-medium transition-all duration-200 shadow-sm ${
             isDark
               ? 'bg-neutral-900/90 border-neutral-700 text-neutral-200 hover:border-neutral-600 hover:text-white'
               : 'bg-white border-neutral-300 text-neutral-800 hover:border-neutral-400'
           }`}
         >
-          <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px]">
-            {currentModel.badge}
-          </div>
-          <span className="font-display font-medium">{currentModel.name}</span>
+          {useShortName ? (
+            <span className="font-display font-semibold text-amber-500 dark:text-amber-400">
+              {currentModel.badge}
+            </span>
+          ) : (
+            <>
+              <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px]">
+                {currentModel.badge}
+              </div>
+              <span className="font-display font-medium">{currentModel.name}</span>
+            </>
+          )}
           <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         </button>
       )}

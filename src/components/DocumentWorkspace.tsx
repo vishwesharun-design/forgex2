@@ -182,6 +182,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

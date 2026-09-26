@@ -191,6 +191,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

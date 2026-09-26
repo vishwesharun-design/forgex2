@@ -715,7 +715,7 @@ Historical transitions—from the **Agricultural Revolution** to the **Industria
   if (/(?:what\s+(?:can|do)\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+forgex\s+do|capabilities|features\s+of\s+forgex|how\s+can\s+you\s+help\s+me|tell\s+me\s+what\s+you\s+can\s+do)/i.test(clean)) {
     return `### What ForgeX Can Do
 
-I am **ForgeX**, created by **VishweshVarman** as an all-in-one AI intelligence and creation platform. Here is an overview of everything I can do for you:
+I am **ForgeX**, an all-in-one AI intelligence and creation platform. Here is an overview of everything I can do for you:
 
 ---
 
@@ -745,9 +745,21 @@ I am **ForgeX**, created by **VishweshVarman** as an all-in-one AI intelligence 
 *What would you like to build, explore, or create today?*`;
   }
 
+  // 12.8 Chess & Games
+  if (/\b(?:chess|play chess|can you play chess|game of chess|e4|d4|checkmate|grandmaster)\b/i.test(lower)) {
+    return `Yes! I can play chess with you right here in the chat.
+
+### How we can play:
+1. **Move Notation**: Use standard algebraic notation (for example: \`e4\`, \`Nf3\`, \`d5\`, \`c5\`, \`O-O\`).
+2. **Board Representation**: I will track the state of the 64 squares and output a visual ASCII board after each move.
+3. **Analysis & Strategy**: You can also ask for move recommendations, explain opening theory (such as the Sicilian Defense, Ruy Lopez, or Queen's Gambit), or analyze tactical positions.
+
+**Would you like to play as White or Black? Or would you like to make the first move?** (e.g. reply with \`1. e4\`)`;
+  }
+
   // 13. General Greetings
   if (/^(hi|hello|hey|greetings|howdy|sup|good morning|good evening|good afternoon)\b/i.test(lower)) {
-    return `Hello! How can I assist you today? I'm **ForgeX**, created by **VishweshVarman**. Ask me anything—from coding, software architecture, and debugging to quantum physics, mathematics, world history, creative writing, or technical problem-solving!`;
+    return `Hello! How can I assist you today? I'm **ForgeX**, your all-in-one AI creation assistant. Ask me anything—from coding, software architecture, and debugging to quantum physics, mathematics, world history, creative writing, or technical problem-solving!`;
   }
 
   // 14. Jokes & Lighthearted
@@ -762,31 +774,22 @@ I am **ForgeX**, created by **VishweshVarman** as an all-in-one AI intelligence 
     return jokes[Math.floor(Math.random() * jokes.length)];
   }
 
-  // 15. Universal Comprehensive Structured Response
-  const subject = clean.replace(/^(how does|what is|explain|why is|why does|tell me about)\s*/i, '').replace(/\?+$/, '').trim();
+  // 15. Intelligent Conversational & Direct Answer Engine
+  const subject = clean.replace(/^(how does|what is|explain|why is|why does|tell me about|can you)\s*/i, '').replace(/\?+$/, '').trim();
   const title = subject ? subject.charAt(0).toUpperCase() + subject.slice(1) : 'This Topic';
 
-  return `### Comprehensive Overview: ${title}
+  return `### ${title}
 
-**${title}** is best examined by breaking down its fundamental definition, core operating mechanics, and real-world significance:
+Here is a clear, direct breakdown of **${title}**:
 
----
+1. **Core Concept**:
+   ${clean.endsWith('?') ? `Regarding your question, *"${clean}"*:` : `Regarding **${clean}**:`}
+   This involves understanding key principles, practical trade-offs, and effective execution methods.
 
-### 1. Definitive Principles & Purpose
-At its core, **${title}** represents a targeted framework or phenomenon designed to address specific requirements and dynamics. Its primary value lies in providing predictable, structured outcomes within its domain.
+2. **Key Considerations**:
+   * **Purpose & Objectives**: Focus on the specific outcome you want to achieve.
+   * **Best Practices**: Start with standard conventions and verified methods before optimizing further.
+   * **Next Steps**: Let me know if you would like step-by-step guidance, code, examples, or deeper technical analysis on this.
 
----
-
-### 2. Operational Mechanics & How It Works
-* **Foundational Inputs**: Relies on clearly defined parameters, boundary conditions, or prerequisites.
-* **Process Execution**: Operates according to verified laws, algorithmic models, or structural relationships that govern component interaction.
-* **Outcome Generation**: Delivers measurable outputs, informs subsequent iterations, and integrates seamlessly into larger systems.
-
----
-
-### 3. Practical Applications & Key Insights
-* **Implementation Strategy**: Begin with the core variables and isolate confounding factors before scaling complexity.
-* **Industry Standard**: Widely leveraged across modern engineering, scientific research, and decision-making to optimize efficiency and minimize error.
-
-Would you like to explore a specific technical aspect, practical example, or implementation detail of **${title}**?`;
+How would you like to proceed or explore further?`;
 }

@@ -18,6 +18,7 @@ import {
 import { ForgeXProject, ForgeXTheme, ForgeXModelId } from '../types';
 import { projectService } from '../services/projectService';
 import { ModelSelector } from './ModelSelector';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface ProjectWorkspaceProps {
   isDark: boolean;
@@ -47,6 +48,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   const [newNotes, setNewNotes] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [mobileTab, setMobileTab] = useState<'directory' | 'details'>('details');
+  const [notesViewMode, setNotesViewMode] = useState<'edit' | 'preview'>('edit');
 
   const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0];
 
@@ -136,6 +138,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>
@@ -285,9 +288,9 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                       CURRENT CONTEXT
                     </span>
                   </div>
-                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    {activeProject.description}
-                  </p>
+                  <div className="mt-1">
+                    <MarkdownRenderer content={activeProject.description} theme={theme} className="text-xs opacity-90" />
+                  </div>
                   <div className={`flex items-center gap-3 mt-3 text-[11px] ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
                     <span>Category: <strong className={isDark ? 'text-neutral-300' : 'text-neutral-900'}>{activeProject.category}</strong></span>
                     <span>•</span>
@@ -317,20 +320,58 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                     <Bookmark className="w-4 h-4" />
                     Project System Context & Guidelines
                   </h4>
-                  <span className="text-[10px] font-mono text-neutral-500">Auto-injected into AI queries</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center rounded-lg border border-neutral-800 p-0.5 bg-neutral-950 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setNotesViewMode('edit')}
+                        className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                          notesViewMode === 'edit'
+                            ? 'bg-amber-500 text-black font-semibold'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        Editor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotesViewMode('preview')}
+                        className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                          notesViewMode === 'preview'
+                            ? 'bg-amber-500 text-black font-semibold'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        Markdown Preview
+                      </button>
+                    </div>
+                    <span className="text-[10px] font-mono text-neutral-500 hidden sm:inline">Auto-injected into AI queries</span>
+                  </div>
                 </div>
                 <p className="text-[11px] text-neutral-400">
-                  Write persistent requirements, architecture decisions, code rules, or reference specs for this specific project.
+                  Write persistent requirements, architecture decisions, code rules, or reference specs for this specific project. Supports rich Markdown formatting.
                 </p>
-                <textarea
-                  rows={6}
-                  value={activeProject.contextNotes || ''}
-                  onChange={(e) => handleUpdateNotes(e.target.value)}
-                  placeholder="e.g. Architecture specs: React, Tailwind, TypeScript. Target audience: Developers. Key requirements..."
-                  className={`w-full p-3.5 rounded-xl border text-xs font-mono resize-none focus:outline-none focus:border-amber-500 ${
-                    isDark ? 'bg-neutral-950 border-neutral-800 text-neutral-200' : 'bg-neutral-50 border-neutral-300 text-neutral-900'
-                  }`}
-                />
+
+                {notesViewMode === 'edit' ? (
+                  <textarea
+                    rows={6}
+                    value={activeProject.contextNotes || ''}
+                    onChange={(e) => handleUpdateNotes(e.target.value)}
+                    placeholder="e.g. Architecture specs: React, Tailwind, TypeScript. Target audience: Developers. Key requirements..."
+                    className={`w-full p-3.5 rounded-xl border text-xs font-mono resize-none focus:outline-none focus:border-amber-500 ${
+                      isDark ? 'bg-neutral-950 border-neutral-800 text-neutral-200' : 'bg-neutral-50 border-neutral-300 text-neutral-900'
+                    }`}
+                  />
+                ) : (
+                  <div className={`p-4 rounded-xl border min-h-[140px] text-xs ${
+                    isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-50 border-neutral-300'
+                  }`}>
+                    <MarkdownRenderer
+                      content={activeProject.contextNotes || '*No context notes yet. Switch to Editor to write guidelines and specifications.*'}
+                      theme={theme}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Connected Resources Summary */}

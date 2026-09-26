@@ -385,6 +385,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
             selectedModelId={selectedModelId}
             onSelectModel={onSelectModel}
             theme={theme}
+            useShortName={true}
           />
         </div>
       </div>

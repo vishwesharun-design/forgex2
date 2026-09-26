@@ -73,7 +73,27 @@ export type ActiveWorkspace =
   | 'presentation'
   | 'canvas'
   | 'projects'
-  | 'data_analysis';
+  | 'data_analysis'
+  | (string & {});
+
+export interface CustomStudio {
+  id: string;
+  title: string;
+  creatorName: string; // Shows below studio WITHOUT tick, e.g. "Panda"
+  creatorId?: string; // UID / ID of user who created the studio
+  creatorEmail?: string; // Email of user who created the studio
+  description: string;
+  category: 'creative' | 'intelligence' | 'productivity' | 'utility' | 'gaming';
+  iconName: string;
+  accentColor: string;
+  badge: string;
+  systemPrompt: string;
+  starterPrompts?: string[];
+  welcomeMessage?: string;
+  uiTemplate?: 'chat' | 'prompt-pad' | 'interactive';
+  customHtml?: string;
+  createdAt: number;
+}
 
 export type CodeLanguage = 
   | 'typescript' 
