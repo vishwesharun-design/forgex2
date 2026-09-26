@@ -93,6 +93,9 @@ export const CustomStudioWorkspace: React.FC<CustomStudioWorkspaceProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [resetToast, setResetToast] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -177,18 +180,26 @@ Follow these instructions strictly, adopt the specialized persona, and maintain 
   };
 
   const handleClearChat = () => {
-    if (window.confirm('Reset this studio conversation?')) {
-      const reset = [
-        {
-          id: `msg_welcome_${Date.now()}`,
-          role: 'assistant' as const,
-          content: studio.welcomeMessage || `Welcome to **${studio.title}**! How can I assist you today?`,
-          timestamp: Date.now(),
-        },
-      ];
-      setMessages(reset);
+    const welcomeText =
+      studio.welcomeMessage ||
+      `Welcome to **${studio.title}**!\n\n${studio.description}\n\n*How can I assist you right now?*`;
+    const reset: CustomMessage[] = [
+      {
+        id: `msg_welcome_${Date.now()}`,
+        role: 'assistant',
+        content: welcomeText,
+        timestamp: Date.now(),
+      },
+    ];
+    setMessages(reset);
+    setInputText('');
+    setIsLoading(false);
+    setIsConfirmingReset(false);
+    try {
       localStorage.setItem(storageKey, JSON.stringify(reset));
-    }
+    } catch {}
+    setResetToast(true);
+    setTimeout(() => setResetToast(false), 2200);
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -260,35 +271,86 @@ Follow these instructions strictly, adopt the specialized persona, and maintain 
 
           {/* Delete studio button: ONLY for the creator of this studio */}
           {isCreator && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to permanently delete your studio "${studio.title}"? This cannot be undone.`)) {
-                  const deleted = studioService.deleteCustomStudio(studio.id, user?.id, user?.email, user?.name);
-                  if (deleted && onDeleteStudio) {
-                    onDeleteStudio(studio.id);
-                  }
-                }
-              }}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1.5 transition-colors"
-              title="Delete this studio permanently (Creator only)"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete Studio</span>
-            </button>
+            isConfirmingDelete ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-red-500/10 border border-red-500/40 animate-in fade-in zoom-in-95 duration-150">
+                <span className="text-[11px] font-semibold text-red-400">Permanently delete?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const deleted = studioService.deleteCustomStudio(studio.id, user?.id, user?.email, user?.name);
+                    if (deleted && onDeleteStudio) {
+                      onDeleteStudio(studio.id);
+                    }
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-red-500 hover:bg-red-400 text-white font-bold text-[11px] transition-colors"
+                >
+                  Yes, Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(false)}
+                  className="px-1.5 py-0.5 rounded-lg text-neutral-400 hover:text-white text-[11px]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(true)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1.5 transition-colors"
+                title="Delete this studio permanently (Creator only)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Studio</span>
+              </button>
+            )
           )}
 
-          <button
-            onClick={handleClearChat}
-            className={`p-2 rounded-xl transition-colors ${
-              isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-amber-400' : 'hover:bg-neutral-100 text-neutral-600 hover:text-amber-800'
-            }`}
-            title="Reset conversation"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          {/* Reset Conversation button with inline confirmation */}
+          {isConfirmingReset ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/40 animate-in fade-in zoom-in-95 duration-150">
+              <span className="text-[11px] font-semibold text-amber-400">Reset chat?</span>
+              <button
+                type="button"
+                onClick={handleClearChat}
+                className="px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[11px] transition-colors"
+              >
+                Yes, Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsConfirmingReset(false)}
+                className="px-1.5 py-0.5 rounded-lg text-neutral-400 hover:text-white text-[11px]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsConfirmingReset(true)}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-1.5 transition-colors ${
+                isDark
+                  ? 'border-neutral-800 hover:border-amber-500/40 text-neutral-300 hover:text-amber-400 hover:bg-neutral-900'
+                  : 'border-neutral-200 hover:border-amber-500/40 text-neutral-700 hover:text-amber-800 hover:bg-neutral-100'
+              }`}
+              title="Reset this studio conversation"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Reset Chat</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Floating Success Toast on Reset */}
+      {resetToast && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-neutral-900 border border-emerald-500/40 text-emerald-400 text-xs font-semibold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Studio conversation has been reset.</span>
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">

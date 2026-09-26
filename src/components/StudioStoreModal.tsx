@@ -111,6 +111,8 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
   const [newStarterPrompt3, setNewStarterPrompt3] = useState('');
   const [newUiTemplate, setNewUiTemplate] = useState<'chat' | 'prompt-pad'>('chat');
   const [createError, setCreateError] = useState('');
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
 
   // Sync state whenever modal opens or storage updates
   useEffect(() => {
@@ -149,15 +151,20 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
   const handleDeleteCustomStudio = (studioId: string, studioTitle: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!studioService.canDeleteStudio(studioId, userId, userEmail, userName)) {
-      alert(`Only the creator of this studio has permission to delete it.`);
+      setDeleteNotice('Only the creator of this studio has permission to delete it.');
+      setTimeout(() => setDeleteNotice(null), 3000);
       return;
     }
-    if (window.confirm(`Are you sure you want to delete your custom studio "${studioTitle}" permanently? This action cannot be undone.`)) {
-      const success = studioService.deleteCustomStudio(studioId, userId, userEmail, userName);
-      if (success) {
-        refreshStudios();
-      }
+    setDeleteConfirmTarget({ id: studioId, title: studioTitle });
+  };
+
+  const handleConfirmDeleteStudio = () => {
+    if (!deleteConfirmTarget) return;
+    const success = studioService.deleteCustomStudio(deleteConfirmTarget.id, userId, userEmail, userName);
+    if (success) {
+      refreshStudios();
     }
+    setDeleteConfirmTarget(null);
   };
 
   const handleCreateStudioSubmit = (e: React.FormEvent) => {
@@ -809,6 +816,57 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Delete Notice Toast */}
+        {deleteNotice && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-neutral-900 border border-red-500/40 text-red-400 text-xs font-semibold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+            <span>{deleteNotice}</span>
+          </div>
+        )}
+
+        {/* In-App Confirmation Modal for Deleting Studio */}
+        {deleteConfirmTarget && (
+          <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className={`w-full max-w-sm rounded-2xl border p-5 space-y-4 shadow-2xl ${
+              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm">Delete Studio?</h4>
+                  <p className="text-xs text-neutral-400 mt-0.5 line-clamp-1">
+                    &ldquo;{deleteConfirmTarget.title}&rdquo;
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs leading-relaxed text-neutral-400">
+                Are you sure you want to permanently delete your studio? This action cannot be undone and will remove it from ForgeX.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800/60">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmTarget(null)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteStudio}
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-400 text-white transition-colors"
+                >
+                  Yes, Delete Studio
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
