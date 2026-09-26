@@ -80,7 +80,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <div className="p-1 rounded-lg">
             <LayoutGrid className="w-4 h-4 text-amber-400" />
           </div>
-          <span className="text-[10px] mt-0.5 tracking-tight font-medium text-amber-400">13 Studios</span>
+          <span className="text-[10px] mt-0.5 tracking-tight font-medium text-amber-400">All Studios</span>
         </button>
       </div>
     </nav>

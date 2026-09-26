@@ -515,5 +515,61 @@ export const firestoreStorageService = {
       console.warn('Firestore loadUserProjects notice:', err);
       return [];
     }
+  },
+
+  // --- USER STUDIO PROFILE (STUDIO NAME & EMAIL LINK) ---
+  async saveUserStudioProfile(userId: string, profile: any): Promise<void> {
+    if (!userId || !profile || !profile.studioName || !isAuthorizedForUser(userId)) return;
+    try {
+      const profRef = doc(db, 'users', userId, 'studioProfile', 'current');
+      await setDoc(profRef, { ...profile, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserStudioProfile notice:', err);
+    }
+  },
+
+  async loadUserStudioProfile(userId: string): Promise<any | null> {
+    if (!userId || !isAuthorizedForUser(userId)) return null;
+    try {
+      const profRef = doc(db, 'users', userId, 'studioProfile', 'current');
+      const snap = await getDoc(profRef);
+      return snap.exists() ? snap.data() : null;
+    } catch (err) {
+      console.warn('Firestore loadUserStudioProfile notice:', err);
+      return null;
+    }
+  },
+
+  // --- USER CUSTOM STUDIOS (UPLOADED UNDER STUDIO NAME & EMAIL) ---
+  async saveUserCustomStudio(userId: string, studio: any): Promise<void> {
+    if (!userId || !studio || !studio.id || !isAuthorizedForUser(userId)) return;
+    try {
+      const studioRef = doc(db, 'users', userId, 'customStudios', String(studio.id));
+      await setDoc(studioRef, { ...studio, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserCustomStudio notice:', err);
+    }
+  },
+
+  async loadUserCustomStudios(userId: string): Promise<any[]> {
+    if (!userId || !isAuthorizedForUser(userId)) return [];
+    try {
+      const studiosRef = collection(db, 'users', userId, 'customStudios');
+      const snap = await getDocs(query(studiosRef, limit(50)));
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    } catch (err) {
+      console.warn('Firestore loadUserCustomStudios notice:', err);
+      return [];
+    }
+  },
+
+  async deleteUserCustomStudio(userId: string, studioId: string): Promise<void> {
+    if (!userId || !studioId || !isAuthorizedForUser(userId)) return;
+    try {
+      const studioRef = doc(db, 'users', userId, 'customStudios', String(studioId));
+      await deleteDoc(studioRef);
+    } catch (err) {
+      console.warn('Firestore deleteUserCustomStudio notice:', err);
+    }
   }
 };

@@ -455,7 +455,7 @@ export default function App() {
             />
 
             {/* Workspace Core Views */}
-            <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-14 md:pb-0">
+            <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
               {activeWorkspace === 'chat' && (
                 <ChatWorkspace
                   currentSession={currentChatSession}
@@ -790,6 +790,7 @@ export default function App() {
         userName={user?.name || user?.email?.split('@')[0] || ''}
         userEmail={user?.email || ''}
         userId={user?.id || ''}
+        onOpenAuth={() => setIsAuthOpen(true)}
       />
     </div>
   );

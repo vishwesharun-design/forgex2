@@ -30,8 +30,13 @@ import {
   ExternalLink,
   Layers,
   Wand2,
+  Building2,
+  Shield,
+  Lock,
+  Mail,
+  Edit3,
 } from 'lucide-react';
-import { CustomStudio, ForgeXTheme } from '../types';
+import { CustomStudio, ForgeXTheme, UserStudioProfile } from '../types';
 import { studioService, StudioCatalogueItem } from '../services/studioService';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -43,6 +48,7 @@ interface StudioStoreModalProps {
   userName?: string;
   userEmail?: string;
   userId?: string;
+  onOpenAuth?: () => void;
 }
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -67,6 +73,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Rocket,
   Sparkles,
   Wand2,
+  Building2,
 };
 
 const COLOR_OPTIONS = [
@@ -87,14 +94,27 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
   userName = '',
   userEmail = '',
   userId = '',
+  onOpenAuth,
 }) => {
   const isDark = theme === 'dark';
   const [activeTab, setActiveTab] = useState<'explore' | 'create'>('explore');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'official' | 'community' | 'creative' | 'intelligence' | 'productivity'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'official' | 'my_studios' | 'community' | 'creative' | 'intelligence' | 'productivity'>('all');
   
   const [activeStudioIds, setActiveStudioIds] = useState<string[]>(() => studioService.getActiveStudioIds());
   const [studios, setStudios] = useState<StudioCatalogueItem[]>(() => studioService.getAllStudios());
+
+  // User's Studio Name Profile (tied directly to user's authenticated email)
+  const [studioProfile, setStudioProfile] = useState<UserStudioProfile | null>(() => {
+    return userEmail ? studioService.getUserStudioProfile(userEmail) : null;
+  });
+  const [isEditingStudioName, setIsEditingStudioName] = useState(false);
+  const [regStudioName, setRegStudioName] = useState('');
+  const [regStudioBio, setRegStudioBio] = useState('');
+  const [regStudioIcon, setRegStudioIcon] = useState('Sparkles');
+  const [regStudioColor, setRegStudioColor] = useState('text-amber-400');
+  const [regError, setRegError] = useState('');
+  const [uploadSuccessToast, setUploadSuccessToast] = useState<string | null>(null);
 
   // Form State for creating a new Custom Studio
   const [newTitle, setNewTitle] = useState('');
@@ -119,15 +139,29 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
     if (isOpen) {
       setActiveStudioIds(studioService.getActiveStudioIds());
       setStudios(studioService.getAllStudios());
-      if (userName && !newCreatorName) {
-        setNewCreatorName(userName);
+      if (userEmail) {
+        const p = studioService.getUserStudioProfile(userEmail);
+        setStudioProfile(p);
+        if (p?.studioName) {
+          setRegStudioName(p.studioName);
+          setRegStudioBio(p.bio || '');
+          setRegStudioIcon(p.iconName || 'Sparkles');
+          setRegStudioColor(p.accentColor || 'text-amber-400');
+        } else {
+          const defaultName = userName ? `${userName}'s Studio` : '';
+          setRegStudioName(defaultName);
+        }
       }
     }
-  }, [isOpen, userName]);
+  }, [isOpen, userEmail, userName]);
 
   const refreshStudios = () => {
     setActiveStudioIds(studioService.getActiveStudioIds());
     setStudios(studioService.getAllStudios());
+    if (userEmail) {
+      const p = studioService.getUserStudioProfile(userEmail);
+      setStudioProfile(p);
+    }
   };
 
   const handleToggleAddStudio = (studioId: string) => {

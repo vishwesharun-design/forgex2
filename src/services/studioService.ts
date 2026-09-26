@@ -1,4 +1,5 @@
-import { CustomStudio } from '../types';
+import { CustomStudio, UserStudioProfile } from '../types';
+import { firestoreStorageService } from './firestoreStorageService';
 
 export interface StudioCatalogueItem {
   id: string;
@@ -10,6 +11,7 @@ export interface StudioCatalogueItem {
   author: string;
   creatorId?: string;
   creatorEmail?: string;
+  studioBrandName?: string;
   hasVerifiedTick: boolean;
   isOfficial: boolean;
   iconName: string;
@@ -193,6 +195,7 @@ export const OFFICIAL_STUDIOS: StudioCatalogueItem[] = [
 
 const STORAGE_ACTIVE_STUDIOS_KEY = 'forgex_active_studios_v2';
 const STORAGE_CUSTOM_STUDIOS_KEY = 'forgex_custom_studios_v1';
+const STORAGE_STUDIO_PROFILES_KEY = 'forgex_studio_profiles_by_email_v1';
 
 // Default starter community studio as an example
 const DEFAULT_COMMUNITY_STUDIOS: CustomStudio[] = [
@@ -304,22 +307,75 @@ export const studioService = {
     return this.getActiveStudioIds().includes(studioId);
   },
 
+  // User Studio Profile (Registered Studio Name tied to authenticated email)
+  getUserStudioProfile(email?: string): UserStudioProfile | null {
+    if (!email) return null;
+    const clean = email.trim().toLowerCase();
+    try {
+      const raw = localStorage.getItem(`${STORAGE_STUDIO_PROFILES_KEY}_${clean}`);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch (e) {
+      console.error('Failed to get studio profile from localStorage', e);
+    }
+    return null;
+  },
+
+  saveUserStudioProfile(profile: UserStudioProfile): void {
+    if (!profile.email) return;
+    const clean = profile.email.trim().toLowerCase();
+    const updatedProfile: UserStudioProfile = {
+      ...profile,
+      email: clean,
+      updatedAt: Date.now(),
+    };
+    try {
+      localStorage.setItem(`${STORAGE_STUDIO_PROFILES_KEY}_${clean}`, JSON.stringify(updatedProfile));
+      window.dispatchEvent(new Event('forgex_studios_updated'));
+
+      // If user has a Firebase userId, sync to Firestore
+      if (updatedProfile.userId) {
+        firestoreStorageService.saveUserStudioProfile(updatedProfile.userId, updatedProfile);
+      }
+    } catch (e) {
+      console.error('Failed to save user studio profile', e);
+    }
+  },
+
+  hasUserStudioProfile(email?: string): boolean {
+    if (!email) return false;
+    const profile = this.getUserStudioProfile(email);
+    return Boolean(profile && profile.studioName && profile.studioName.trim().length > 0);
+  },
+
   // Custom User-Created Studios
-  getCustomStudios(): CustomStudio[] {
+  getCustomStudios(filterEmail?: string): CustomStudio[] {
+    let studios: CustomStudio[] = [];
     try {
       const stored = localStorage.getItem(STORAGE_CUSTOM_STUDIOS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          return parsed;
+          studios = parsed;
         }
       }
     } catch {
       // Ignore
     }
-    // Initial community/starter studios
-    this.saveAllCustomStudios(DEFAULT_COMMUNITY_STUDIOS);
-    return DEFAULT_COMMUNITY_STUDIOS;
+
+    if (studios.length === 0) {
+      // Initial community/starter studios
+      studios = DEFAULT_COMMUNITY_STUDIOS;
+      this.saveAllCustomStudios(DEFAULT_COMMUNITY_STUDIOS);
+    }
+
+    if (filterEmail) {
+      const cleanEmail = filterEmail.trim().toLowerCase();
+      return studios.filter((s) => s.creatorEmail && s.creatorEmail.trim().toLowerCase() === cleanEmail);
+    }
+
+    return studios;
   },
 
   saveAllCustomStudios(studios: CustomStudio[]): void {
@@ -332,6 +388,15 @@ export const studioService = {
   },
 
   saveCustomStudio(studio: CustomStudio): void {
+    // If the creator has a registered studio profile for their email, bind studioBrandName
+    if (studio.creatorEmail) {
+      const profile = this.getUserStudioProfile(studio.creatorEmail);
+      if (profile && profile.studioName) {
+        studio.studioBrandName = profile.studioName;
+        studio.creatorName = profile.studioName;
+      }
+    }
+
     const list = this.getCustomStudios();
     const existingIndex = list.findIndex((s) => s.id === studio.id);
     let updated: CustomStudio[];
@@ -344,6 +409,11 @@ export const studioService = {
     this.saveAllCustomStudios(updated);
     // Auto-add newly created studio to user's sidebar
     this.addStudioToSidebar(studio.id);
+
+    // Sync to Firestore if authenticated user ID is available
+    if (studio.creatorId) {
+      firestoreStorageService.saveUserCustomStudio(studio.creatorId, studio);
+    }
   },
 
   canDeleteStudio(
@@ -357,25 +427,20 @@ export const studioService = {
     if (!studio) return false;
 
     const normEmail = (currentUserEmail || '').trim().toLowerCase();
-    const normName = (currentUserName || '').trim().toLowerCase();
-    const normAuthor = (studio.creatorName || '').trim().toLowerCase();
     const studioEmail = (studio.creatorEmail || '').trim().toLowerCase();
 
-    // 1. Matched by creatorId (UID)
-    if (studio.creatorId && currentUserId && studio.creatorId === currentUserId) {
-      return true;
-    }
-    // 2. Matched by creatorEmail
+    // Strict email check: Only the email that created the studio can manage/delete it
     if (studioEmail && normEmail && studioEmail === normEmail) {
       return true;
     }
-    // 3. Matched by creatorName
-    if (normAuthor && normName && (normAuthor === normName || normName.includes(normAuthor))) {
+
+    // UID check
+    if (studio.creatorId && currentUserId && studio.creatorId === currentUserId) {
       return true;
     }
-    // 4. Default community seed studios (like custom_chess_pro, custom_prompt_crafter) created by "Panda" or "AlexDev"
-    // If the logged in user is Panda (e.g. tradewithpanda@gmail.com), allow Panda to manage them!
-    if (studio.creatorName === 'Panda' && (normEmail.includes('panda') || normName.includes('panda'))) {
+
+    // Seed community studios
+    if (studio.creatorName === 'Panda' && (normEmail.includes('panda') || (currentUserName && currentUserName.toLowerCase().includes('panda')))) {
       return true;
     }
 
@@ -389,35 +454,44 @@ export const studioService = {
     currentUserName?: string
   ): boolean {
     if (!this.canDeleteStudio(id, currentUserId, currentUserEmail, currentUserName)) {
-      console.warn('Unauthorized delete attempt: Only the creator can delete this studio');
+      console.warn('Unauthorized delete attempt: Only the creator email can delete this studio');
       return false;
     }
     const list = this.getCustomStudios().filter((s) => s.id !== id);
     this.saveAllCustomStudios(list);
     this.removeStudioFromSidebar(id);
+
+    // Sync deletion to Firestore
+    if (currentUserId) {
+      firestoreStorageService.deleteUserCustomStudio(currentUserId, id);
+    }
     return true;
   },
 
   getAllStudios(): StudioCatalogueItem[] {
-    const custom = this.getCustomStudios().map((c): StudioCatalogueItem => ({
-      id: c.id,
-      title: c.title,
-      category: c.category,
-      accentColor: c.accentColor || 'text-blue-400',
-      badge: c.badge || 'Custom',
-      description: c.description,
-      author: c.creatorName || 'Anonymous',
-      creatorId: c.creatorId,
-      creatorEmail: c.creatorEmail,
-      hasVerifiedTick: false, // Per spec: user studios show their name WITHOUT tick!
-      isOfficial: false,
-      iconName: c.iconName || 'Bot',
-      systemPrompt: c.systemPrompt,
-      starterPrompts: c.starterPrompts,
-      welcomeMessage: c.welcomeMessage,
-      uiTemplate: c.uiTemplate,
-      customHtml: c.customHtml,
-    }));
+    const custom = this.getCustomStudios().map((c): StudioCatalogueItem => {
+      const authorName = c.studioBrandName || c.creatorName || 'Anonymous';
+      return {
+        id: c.id,
+        title: c.title,
+        category: c.category,
+        accentColor: c.accentColor || 'text-blue-400',
+        badge: c.badge || 'Custom',
+        description: c.description,
+        author: authorName,
+        creatorId: c.creatorId,
+        creatorEmail: c.creatorEmail,
+        studioBrandName: c.studioBrandName || c.creatorName,
+        hasVerifiedTick: false, // User studios show their Studio Name without verified tick
+        isOfficial: false,
+        iconName: c.iconName || 'Bot',
+        systemPrompt: c.systemPrompt,
+        starterPrompts: c.starterPrompts,
+        welcomeMessage: c.welcomeMessage,
+        uiTemplate: c.uiTemplate,
+        customHtml: c.customHtml,
+      };
+    });
 
     return [...OFFICIAL_STUDIOS, ...custom];
   },

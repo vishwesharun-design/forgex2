@@ -89,16 +89,18 @@ export class ReactiveState<T extends Record<string, unknown>> {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Interactive Particle Network</title>
   <style>
-    * { margin: 0; padding: 0; }
-    body { background: #09090b; overflow: hidden; }
-    canvas { display: block; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #09090b; touch-action: none; }
+    canvas { display: block; width: 100%; height: 100%; }
     .badge {
-      position: absolute; top: 16px; left: 16px;
-      color: #f59e0b; font-family: monospace; font-size: 13px;
-      padding: 6px 12px; background: rgba(0,0,0,0.7);
+      position: absolute; top: 14px; left: 14px;
+      color: #f59e0b; font-family: monospace; font-size: 12px; font-weight: 600;
+      padding: 6px 14px; background: rgba(0,0,0,0.75);
       border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 99px;
+      backdrop-filter: blur(8px); pointer-events: none; z-index: 10;
     }
   </style>
 </head>
@@ -108,21 +110,41 @@ export class ReactiveState<T extends Record<string, unknown>> {
   <script>
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');
-    let w = canvas.width = window.innerWidth;
-    let h = canvas.height = window.innerHeight;
+    let w = 390, h = 600;
+    function resize() {
+      w = canvas.width = window.innerWidth || document.documentElement.clientWidth || 390;
+      h = canvas.height = window.innerHeight || document.documentElement.clientHeight || 600;
+      if (mouse.x === 0 && mouse.y === 0) {
+        mouse.x = w / 2;
+        mouse.y = h / 2;
+      }
+    }
+    resize();
+    setTimeout(resize, 50);
+    setTimeout(resize, 200);
+    window.addEventListener('resize', resize);
 
     const mouse = { x: w / 2, y: h / 2, radius: 120 };
-    window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-    window.addEventListener('resize', () => { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; });
+    function updatePointer(cx, cy) {
+      mouse.x = cx;
+      mouse.y = cy;
+    }
+    window.addEventListener('mousemove', e => updatePointer(e.clientX, e.clientY));
+    window.addEventListener('touchmove', e => {
+      if (e.touches && e.touches[0]) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    window.addEventListener('touchstart', e => {
+      if (e.touches && e.touches[0]) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
 
-    const dots = Array.from({ length: 60 }, () => ({
+    const dots = Array.from({ length: 65 }, () => ({
       x: Math.random() * w, y: Math.random() * h,
       vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5,
       r: Math.random() * 2 + 1.5
     }));
 
     function loop() {
-      ctx.fillStyle = 'rgba(9, 9, 11, 0.2)';
+      ctx.fillStyle = 'rgba(9, 9, 11, 0.22)';
       ctx.fillRect(0, 0, w, h);
 
       for (let i = 0; i < dots.length; i++) {
@@ -132,7 +154,7 @@ export class ReactiveState<T extends Record<string, unknown>> {
         if (d.y < 0 || d.y > h) d.vy *= -1;
 
         const dist = Math.hypot(mouse.x - d.x, mouse.y - d.y);
-        if (dist < mouse.radius) {
+        if (dist < mouse.radius && dist > 0) {
           const f = (mouse.radius - dist) / mouse.radius;
           d.x -= ((mouse.x - d.x) / dist) * f * 3;
           d.y -= ((mouse.y - d.y) / dist) * f * 3;
@@ -147,7 +169,7 @@ export class ReactiveState<T extends Record<string, unknown>> {
           const d2 = dots[j];
           const dist2 = Math.hypot(d.x - d2.x, d.y - d2.y);
           if (dist2 < 100) {
-            ctx.strokeStyle = \`rgba(245, 158, 11, \${1 - dist2 / 100})\`;
+            ctx.strokeStyle = 'rgba(245, 158, 11, ' + (1 - dist2 / 100) + ')';
             ctx.lineWidth = 0.8;
             ctx.beginPath();
             ctx.moveTo(d.x, d.y);

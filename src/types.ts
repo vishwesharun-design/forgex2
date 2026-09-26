@@ -76,12 +76,24 @@ export type ActiveWorkspace =
   | 'data_analysis'
   | (string & {});
 
+export interface UserStudioProfile {
+  studioName: string;
+  email: string;
+  userId?: string;
+  bio?: string;
+  iconName?: string;
+  accentColor?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
 export interface CustomStudio {
   id: string;
   title: string;
-  creatorName: string; // Shows below studio WITHOUT tick, e.g. "Panda"
+  creatorName: string; // Shows below studio WITHOUT tick, e.g. "Panda" or Studio Name
   creatorId?: string; // UID / ID of user who created the studio
-  creatorEmail?: string; // Email of user who created the studio
+  creatorEmail?: string; // Email of user who created the studio (locked to their logged-in email)
+  studioBrandName?: string; // Registered Studio Brand Name for this user's email
   description: string;
   category: 'creative' | 'intelligence' | 'productivity' | 'utility' | 'gaming';
   iconName: string;

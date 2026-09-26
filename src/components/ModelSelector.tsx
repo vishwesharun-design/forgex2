@@ -127,7 +127,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       {isOpen && (
         <div
           id="menu-model-selector"
-          className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} mt-2 w-72 sm:w-84 rounded-2xl border p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
+          className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} mt-2 w-72 sm:w-84 max-w-[calc(100vw-24px)] rounded-2xl border p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
             isDark
               ? 'bg-neutral-950/95 backdrop-blur-md border-neutral-800 text-white shadow-black/80'
               : 'bg-white/95 backdrop-blur-md border-neutral-200 text-neutral-900 shadow-neutral-300'

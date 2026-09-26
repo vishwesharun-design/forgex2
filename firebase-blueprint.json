@@ -119,12 +119,58 @@
         "timestamp": { "type": "number" }
       },
       "required": ["id", "userId", "prompt"]
+    },
+    "UserStudioProfile": {
+      "title": "UserStudioProfile",
+      "description": "Registered creator Studio Name associated with user's authenticated email",
+      "type": "object",
+      "properties": {
+        "studioName": { "type": "string" },
+        "email": { "type": "string" },
+        "userId": { "type": "string" },
+        "bio": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["studioName", "email"]
+    },
+    "CustomStudio": {
+      "title": "CustomStudio",
+      "description": "Custom AI studio uploaded under the user's registered Studio Name and email",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "creatorEmail": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "studioBrandName": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "iconName": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "badge": { "type": "string" },
+        "systemPrompt": { "type": "string" },
+        "welcomeMessage": { "type": "string" },
+        "starterPrompts": { "type": "array" },
+        "uiTemplate": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "creatorName", "creatorEmail", "systemPrompt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile with private credentials and storage metrics"
+    },
+    "/users/{userId}/studioProfile/current": {
+      "schema": "UserStudioProfile",
+      "description": "Registered creator studio name linked strictly to the user's email"
+    },
+    "/users/{userId}/customStudios/{studioId}": {
+      "schema": "CustomStudio",
+      "description": "Custom AI studios uploaded under the user's studio name and email"
     },
     "/users/{userId}/chats/{chatId}": {
       "schema": "ChatSession",
