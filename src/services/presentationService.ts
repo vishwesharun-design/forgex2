@@ -39,6 +39,11 @@ export const presentationService = {
     return list;
   },
 
+  clearAllDecks(): PresentationDeck[] {
+    this.saveDecks([]);
+    return [];
+  },
+
   async generateDeck(topic: string, slideCount: number = 6, themeStyle: any = 'dark-amber'): Promise<PresentationDeck> {
     const storedApiKey = localStorage.getItem('forgex_api_key') || '';
 

@@ -748,13 +748,14 @@ Creating and publishing your own custom AI Studio on ForgeX is straightforward. 
 * This opens the **Studio Hub & Store** modal, where you can browse official studios, community creations, and your own uploaded studios.
 
 #### 3. Register Your Unique Studio Name (First-Time Only)
-* Before uploading your first custom studio, you must register your unique **Studio Name** (e.g., *"Quantum Labs"*, *"Apex AI Studio"*, or *"Panda Creations"*).
+* **Creator Workspace Studio Name vs Studio App Title**: Before uploading or creating any custom studio apps, you must first register your creator **Studio Name** (your organization or creative studio brand, e.g., *"Quantum Labs"*, *"Apex AI"*, or *"Panda Creations"*).
+* **Global Uniqueness Rule**: Your Studio Name is globally unique across all creators. **Once a Studio Name is taken, it cannot be taken by others.**
+* **Email & Account Binding**: Your Studio Name is permanently bound to the authenticated email and UID you logged in with. Only your account has permissions to publish, update, or delete studios under that Studio Name.
 * Choose your **brand icon** (Sparkles, Building, Rocket, CPU, etc.) and an **accent color**.
-* **Email Binding**: Your Studio Name is permanently linked to the email you logged in with. Only your logged-in email will have permissions to publish, update, or delete studios under that Studio Name.
 
-#### 4. Configure & Upload Your Studio
-Click **"Upload Your Studio"** and fill in your studio's configuration:
-* **Studio Title**: Give your studio a clear, memorable name (e.g., *"Prompt Crafter Pro"* or *"Financial Modeling Copilot"*).
+#### 4. Configure & Upload Your Studio Apps
+Click **"Upload Your Studio"** and fill in your individual studio app's configuration:
+* **Studio App Title**: Give your individual studio app a clear, memorable name (e.g., *"Prompt Crafter Pro"* or *"Financial Modeling Copilot"*). Notice that individual apps are published under your unique registered Studio Name.
 * **Category**: Choose a category (*Creative*, *Intelligence*, *Productivity*, *Utility*, or *Gaming*).
 * **Short Description**: Explain what your studio does in 1–2 sentences.
 * **System Prompt / AI Logic**: Specify the core instructions, behavioral rules, and expertise your studio's AI model will follow.

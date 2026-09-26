@@ -405,7 +405,7 @@ export class VoiceController {
           }
         }
       } catch (transcribeErr) {
-        console.warn('Audio fallback transcription error:', transcribeErr);
+        console.log('Audio fallback transcription notice:', transcribeErr);
       }
     }
 

@@ -816,6 +816,30 @@ export default function App() {
         isDark={isDark}
         theme={settings.theme}
         selectedModelId={selectedModelId}
+        onSendToChat={(text) => {
+          setActiveWorkspace('chat');
+          setIsInWorkspace(true);
+          const currentSessions = chatService.getSessions();
+          let targetSession = currentSessions.find((s) => s.id === activeChatId);
+          if (!targetSession) {
+            targetSession = chatService.createSession(selectedModelId, text.slice(0, 32));
+          }
+          const userMsg = {
+            id: `msg-${Date.now()}`,
+            role: 'user' as const,
+            content: text,
+            timestamp: Date.now(),
+          };
+          const updatedSessions = currentSessions.map((s) =>
+            s.id === targetSession!.id ? { ...s, messages: [...s.messages, userMsg], updatedAt: Date.now() } : s
+          );
+          if (!currentSessions.some((s) => s.id === targetSession!.id)) {
+            updatedSessions.unshift({ ...targetSession, messages: [userMsg] });
+          }
+          chatService.saveSessions(updatedSessions);
+          setChatSessions(updatedSessions);
+          setActiveChatId(targetSession.id);
+        }}
       />
 
       {/* Explore & Add Studios Modal */}

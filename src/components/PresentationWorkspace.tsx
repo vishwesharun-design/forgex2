@@ -12,7 +12,8 @@ import {
   Palette,
   Layers,
   AlertCircle,
-  SlidersHorizontal
+  SlidersHorizontal,
+  X
 } from 'lucide-react';
 import { PresentationDeck, SlideItem, ForgeXModelId, ForgeXTheme } from '../types';
 import { presentationService } from '../services/presentationService';
@@ -39,6 +40,9 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
   const [themeStyle, setThemeStyle] = useState<'dark-amber' | 'obsidian' | 'cyber-blue' | 'light-minimal'>('dark-amber');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'config' | 'slides'>('slides');
+  const [deckToDelete, setDeckToDelete] = useState<PresentationDeck | null>(null);
+  const [showConfirmClearAllDecks, setShowConfirmClearAllDecks] = useState(false);
+  const [showConfirmDeleteAllSlides, setShowConfirmDeleteAllSlides] = useState(false);
 
   const isDark = theme === 'dark';
 
@@ -122,9 +126,11 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
 
   const handleDeleteAllSlides = () => {
     if (!activeDeck || activeDeck.slides.length === 0) return;
-    const confirmed = window.confirm(`Are you sure you want to delete all ${activeDeck.slides.length} slides in this deck?`);
-    if (!confirmed) return;
+    setShowConfirmDeleteAllSlides(true);
+  };
 
+  const confirmDeleteAllSlides = () => {
+    if (!activeDeck) return;
     const updatedDeck: PresentationDeck = {
       ...activeDeck,
       slides: [],
@@ -133,19 +139,32 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
     setActiveDeck(updatedDeck);
     setDecks(presentationService.getDecks());
     setActiveSlideIdx(0);
+    setShowConfirmDeleteAllSlides(false);
   };
 
-  const handleDeleteDeck = (deckId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const confirmed = window.confirm('Delete this presentation deck?');
-    if (!confirmed) return;
+  const handleDeleteDeck = (deck: PresentationDeck, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDeckToDelete(deck);
+  };
 
-    const updated = presentationService.deleteDeck(deckId);
+  const confirmDeleteDeck = () => {
+    if (!deckToDelete) return;
+    const targetId = deckToDelete.id;
+    const updated = presentationService.deleteDeck(targetId);
     setDecks(updated);
-    if (activeDeck?.id === deckId) {
-      setActiveDeck(updated[0] || null);
+    if (activeDeck?.id === targetId) {
+      setActiveDeck(updated.length > 0 ? updated[0] : null);
       setActiveSlideIdx(0);
     }
+    setDeckToDelete(null);
+  };
+
+  const confirmClearAllDecks = () => {
+    const updated = presentationService.clearAllDecks();
+    setDecks(updated);
+    setActiveDeck(null);
+    setActiveSlideIdx(0);
+    setShowConfirmClearAllDecks(false);
   };
 
   const handleExport = () => {
@@ -177,15 +196,29 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {activeDeck && activeDeck.slides.length > 0 && (
-            <button
-              type="button"
-              onClick={handleExport}
-              className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-neutral-700 hover:border-neutral-500 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Export HTML</span>
-            </button>
+          {activeDeck && (
+            <>
+              {activeDeck.slides.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-neutral-700 hover:border-neutral-500 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  title="Export deck as HTML"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Export HTML</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDeleteDeck(activeDeck)}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-red-500/30 hover:border-red-500/60 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                title="Delete this presentation deck"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Delete Deck</span>
+              </button>
+            </>
           )}
           <ModelSelector
             selectedModelId={selectedModelId}
@@ -329,9 +362,22 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
 
           {/* Saved Decks List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-1 ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-              Saved Decks ({decks.length})
-            </span>
+            <div className="flex items-center justify-between px-1">
+              <span className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                Saved Decks ({decks.length})
+              </span>
+              {decks.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmClearAllDecks(true)}
+                  className="text-[10px] font-semibold text-neutral-400 hover:text-red-400 flex items-center gap-1 transition-colors px-1 py-0.5 rounded hover:bg-red-500/10"
+                  title="Clear all saved presentation decks"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear All</span>
+                </button>
+              )}
+            </div>
 
             {decks.length === 0 && (
               <div className="p-4 text-center text-xs text-neutral-500">
@@ -361,9 +407,10 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                     <p className="text-xs font-bold truncate flex-1">{deck.title}</p>
                     <button
                       type="button"
-                      onClick={(e) => handleDeleteDeck(deck.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-400 transition-opacity"
+                      onClick={(e) => handleDeleteDeck(deck, e)}
+                      className="p-1 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/15 transition-all opacity-80 group-hover:opacity-100 shrink-0"
                       title="Delete deck"
+                      aria-label="Delete deck"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -574,6 +621,126 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
           )}
         </div>
       </div>
+
+      {/* In-App Confirmation Modal: Delete Single Deck */}
+      {deckToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className={`w-full max-w-sm rounded-2xl border p-5 shadow-2xl flex flex-col gap-4 ${
+            isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold tracking-tight">Delete Presentation Deck?</h3>
+                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  Are you sure you want to delete <span className="font-semibold text-amber-400">&ldquo;{deckToDelete.title}&rdquo;</span>? This will permanently remove this deck and its {deckToDelete.slides.length} slides.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800/40">
+              <button
+                type="button"
+                onClick={() => setDeckToDelete(null)}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
+                  isDark ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-300' : 'border-neutral-300 hover:bg-neutral-100 text-neutral-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteDeck}
+                className="px-3.5 py-1.5 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95"
+              >
+                Delete Deck
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal: Clear All Decks */}
+      {showConfirmClearAllDecks && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className={`w-full max-w-sm rounded-2xl border p-5 shadow-2xl flex flex-col gap-4 ${
+            isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold tracking-tight">Clear Saved Deck History?</h3>
+                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  Are you sure you want to delete all <span className="font-semibold text-amber-400">{decks.length} saved presentation decks</span>? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800/40">
+              <button
+                type="button"
+                onClick={() => setShowConfirmClearAllDecks(false)}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
+                  isDark ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-300' : 'border-neutral-300 hover:bg-neutral-100 text-neutral-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmClearAllDecks}
+                className="px-3.5 py-1.5 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95"
+              >
+                Clear All Decks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal: Delete All Slides */}
+      {showConfirmDeleteAllSlides && activeDeck && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className={`w-full max-w-sm rounded-2xl border p-5 shadow-2xl flex flex-col gap-4 ${
+            isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold tracking-tight">Delete All Slides?</h3>
+                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  Are you sure you want to remove all <span className="font-semibold text-amber-400">{activeDeck.slides.length} slides</span> from &ldquo;{activeDeck.title}&rdquo;?
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800/40">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDeleteAllSlides(false)}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
+                  isDark ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-300' : 'border-neutral-300 hover:bg-neutral-100 text-neutral-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteAllSlides}
+                className="px-3.5 py-1.5 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95"
+              >
+                Delete All Slides
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

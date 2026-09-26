@@ -171,6 +171,13 @@ export interface UserProfile {
   isGoogleUser?: boolean;
 }
 
+export interface GroundingSource {
+  title: string;
+  url: string;
+  snippet?: string;
+  sourceDomain?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -178,6 +185,9 @@ export interface ChatMessage {
   timestamp: number;
   modelUsed?: string;
   isStreaming?: boolean;
+  searchedWeb?: boolean;
+  searchQueries?: string[];
+  groundingSources?: GroundingSource[];
   attachments?: {
     type: 'image' | 'file';
     name: string;

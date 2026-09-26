@@ -134,6 +134,20 @@
       },
       "required": ["studioName", "email"]
     },
+    "StudioNameReservation": {
+      "title": "StudioNameReservation",
+      "description": "Global unique registry reservation for creator Studio Names. Once taken, it cannot be claimed by others.",
+      "type": "object",
+      "properties": {
+        "studioName": { "type": "string" },
+        "normalizedName": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["studioName", "normalizedName", "ownerEmail", "ownerUid"]
+    },
     "CustomStudio": {
       "title": "CustomStudio",
       "description": "Custom AI studio uploaded under the user's registered Studio Name and email",
@@ -167,6 +181,10 @@
     "/users/{userId}/studioProfile/current": {
       "schema": "UserStudioProfile",
       "description": "Registered creator studio name linked strictly to the user's email"
+    },
+    "/studioNames/{normalizedName}": {
+      "schema": "StudioNameReservation",
+      "description": "Globally unique registered Studio Names preventing duplicate studio names across users"
     },
     "/users/{userId}/customStudios/{studioId}": {
       "schema": "CustomStudio",

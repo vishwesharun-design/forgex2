@@ -152,18 +152,40 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             </td>
           ),
           // Links
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`underline underline-offset-2 transition-colors font-medium ${
-                isDark ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-800'
-              }`}
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const textStr = String(children).trim();
+            const isCitationBadge = /^\[?\d+\]?$/.test(textStr);
+            if (isCitationBadge) {
+              const num = textStr.replace(/[\[\]]/g, '');
+              return (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center justify-center min-w-4 h-4 px-1 -translate-y-1 mx-0.5 rounded-full text-[10px] font-mono font-bold transition-all border ${
+                    isDark
+                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/40 hover:bg-blue-500/35 hover:text-white'
+                      : 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200'
+                  }`}
+                  title={`View source [${num}]`}
+                >
+                  {num}
+                </a>
+              );
+            }
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`underline underline-offset-2 transition-colors font-medium ${
+                  isDark ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-800'
+                }`}
+              >
+                {children}
+              </a>
+            );
+          },
           // Horizontal rule
           hr: () => (
             <hr className={`my-3 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`} />

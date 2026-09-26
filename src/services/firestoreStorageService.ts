@@ -518,6 +518,98 @@ export const firestoreStorageService = {
   },
 
   // --- USER STUDIO PROFILE (STUDIO NAME & EMAIL LINK) ---
+  // --- GLOBALLY UNIQUE STUDIO NAMES REGISTRY ---
+  async checkStudioNameAvailabilityInFirestore(
+    normalizedName: string,
+    currentUserId?: string,
+    currentUserEmail?: string
+  ): Promise<{ available: boolean; isOwner: boolean; ownerEmail?: string }> {
+    if (!normalizedName) return { available: false, isOwner: false };
+    try {
+      const nameRef = doc(db, 'studioNames', normalizedName);
+      const snap = await getDoc(nameRef);
+      if (!snap.exists()) {
+        return { available: true, isOwner: false };
+      }
+      const data = snap.data();
+      const normUserEmail = (currentUserEmail || '').trim().toLowerCase();
+      const normOwnerEmail = (data.ownerEmail || '').trim().toLowerCase();
+      const isOwner = Boolean(
+        (currentUserId && data.ownerUid === currentUserId) ||
+        (normUserEmail && normOwnerEmail && normUserEmail === normOwnerEmail)
+      );
+      return {
+        available: isOwner,
+        isOwner,
+        ownerEmail: data.ownerEmail,
+      };
+    } catch (err) {
+      console.warn('Firestore checkStudioNameAvailabilityInFirestore notice:', err);
+      // Fallback to true if network/permission issue, studioService will enforce local checks
+      return { available: true, isOwner: false };
+    }
+  },
+
+  async reserveStudioNameInFirestore(
+    studioName: string,
+    normalizedName: string,
+    userId: string,
+    userEmail: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!studioName || !normalizedName || !userId || !userEmail) {
+      return { success: false, error: 'Missing required studio name or creator credentials' };
+    }
+    try {
+      const nameRef = doc(db, 'studioNames', normalizedName);
+      // Check existing document first
+      const snap = await getDoc(nameRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        const normUserEmail = userEmail.trim().toLowerCase();
+        const normOwnerEmail = (data.ownerEmail || '').trim().toLowerCase();
+        if (data.ownerUid !== userId && normOwnerEmail !== normUserEmail) {
+          return {
+            success: false,
+            error: `Studio name "${studioName}" is already taken by another creator. Once claimed, a studio name cannot be taken by others.`,
+          };
+        }
+      }
+
+      await setDoc(nameRef, {
+        studioName: studioName.trim(),
+        normalizedName,
+        ownerUid: userId,
+        ownerEmail: userEmail.trim().toLowerCase(),
+        updatedAt: Date.now(),
+        createdAt: snap.exists() ? (snap.data()?.createdAt || Date.now()) : Date.now(),
+      }, { merge: true });
+
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Firestore reserveStudioNameInFirestore notice:', err);
+      return {
+        success: false,
+        error: err?.message || `Failed to claim studio name "${studioName}".`,
+      };
+    }
+  },
+
+  async releaseStudioNameInFirestore(normalizedName: string, userId: string): Promise<boolean> {
+    if (!normalizedName || !userId) return false;
+    try {
+      const nameRef = doc(db, 'studioNames', normalizedName);
+      const snap = await getDoc(nameRef);
+      if (snap.exists() && snap.data()?.ownerUid === userId) {
+        await deleteDoc(nameRef);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('Firestore releaseStudioNameInFirestore notice:', err);
+      return false;
+    }
+  },
+
   async saveUserStudioProfile(userId: string, profile: any): Promise<void> {
     if (!userId || !profile || !profile.studioName || !isAuthorizedForUser(userId)) return;
     try {

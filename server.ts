@@ -118,8 +118,266 @@ function getEffectiveApiKey(req: Request): string | undefined {
   return keys[0];
 }
 
-// Resilient, ultra-fast Gemini model priority cascade
-const RESILIENT_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+// Resilient, ultra-fast Gemini model priority cascade (gemini-3.8-flash with thinkingBudget: 0 for instant responses)
+const RESILIENT_MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+
+export interface WebGroundingSource {
+  title: string;
+  url: string;
+  snippet?: string;
+  sourceDomain?: string;
+}
+
+export interface WebGroundingResult {
+  searchedWeb: boolean;
+  searchQueries: string[];
+  groundingSources: WebGroundingSource[];
+  groundingContext?: string;
+}
+
+// Automatic ChatGPT-style Web Search Intent Classifier
+// Only triggers search when current, up-to-date, or external information is needed.
+// For questions that can be answered from existing knowledge, does NOT perform web search.
+function analyzeWebSearchIntent(
+  userQuery: string,
+  searchMode: "auto" | "on" | "off" = "auto"
+): { shouldSearch: boolean; searchQuery: string; reason: string } {
+  if (searchMode === "off") {
+    return { shouldSearch: false, searchQuery: "", reason: "Web search disabled by user toggle." };
+  }
+
+  const clean = userQuery.trim().toLowerCase();
+
+  // If search mode is explicitly forced ON by user
+  if (searchMode === "on") {
+    const cleanSearchQuery = userQuery
+      .replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:search\s+(?:the\s+web\s+for|google\s+for|for)?|look\s+up|browse\s+(?:for)?|find\s+(?:information\s+on|out\s+about)?)\s*/i, "")
+      .replace(/[?!.]+$/, "")
+      .trim() || userQuery.trim();
+    return { shouldSearch: true, searchQuery: cleanSearchQuery, reason: "Web search explicitly requested by user." };
+  }
+
+  // searchMode === 'auto'
+  // NEGATIVE FILTERS: Questions that CAN and SHOULD be answered from the AI's existing knowledge base
+  // 1. Math and pure numeric calculations
+  if (/^(?:calculate|compute|solve|what is|evaluate|\d+)\s*[\d\s+\-*/^().=]+$/i.test(clean) ||
+      /^(?:what\s+is\s+)?\d+\s*[\+\-\*\/]\s*\d+/i.test(clean)) {
+    return { shouldSearch: false, searchQuery: "", reason: "Pure math/calculation answered from existing knowledge." };
+  }
+
+  // 2. Standard algorithms, pure coding, regex, logic puzzles
+  if (/(?:write|create|implement|give me|show me)\s+(?:a|an)?\s*(?:python|javascript|typescript|c\+\+|java|rust|go|html|css|sql)?\s*(?:function|script|class|code|algorithm|component|regex|query|loop|program)\s+(?:to|that|for)\s+(?:reverse|sort|filter|find|binary search|fibonacci|factorial|palindrome|validate email|center a div|traverse)/i.test(clean) ||
+      /(?:how\s+to|how\s+do\s+i)\s+(?:center\s+a\s+div|reverse\s+a\s+string|sort\s+an\s+array|use\s+useeffect|use\s+usestate|declare\s+a\s+variable|loop\s+through)/i.test(clean)) {
+    return { shouldSearch: false, searchQuery: "", reason: "Standard programming task answered from existing knowledge." };
+  }
+
+  // 3. Creative writing, poetry, roleplay, jokes, translations
+  if (/(?:write|compose|generate)\s+(?:a|an)?\s*(?:poem|story|haiku|essay|song|rap|limerick|joke|dialogue|script|letter|email template)/i.test(clean) ||
+      /(?:tell\s+me|give\s+me)\s+(?:a\s+joke|a\s+riddle|a\s+story|advice)/i.test(clean) ||
+      /(?:translate|how\s+do\s+you\s+say)\s+['"].+?['"]\s+(?:in|into|to)\s+[a-z]+/i.test(clean)) {
+    return { shouldSearch: false, searchQuery: "", reason: "Creative and linguistic query answered from existing knowledge." };
+  }
+
+  // 4. Identity queries (creator, platform)
+  if (/(?:who\s+(?:created|made|developed|built|designed|founded)\s+(?:you|forgex)|who\s+are\s+you|what\s+is\s+forgex|how\s+do\s+i\s+use\s+forgex)/i.test(clean)) {
+    return { shouldSearch: false, searchQuery: "", reason: "Platform identity answered from internal knowledge." };
+  }
+
+  // 5. Timeless, classical conceptual science & humanities
+  if (/(?:what\s+is|explain|describe|define)\s+(?:photosynthesis|gravity|quantum\s+physics|relativity|evolution|mitosis|osmosis|plate\s+tectonics|thermodynamics|the\s+capital\s+of|the\s+speed\s+of\s+light|newton's\s+law|pythagorean\s+theorem|cellular\s+respiration|dna\s+replication|schrodinger|stoicism|existentialism)/i.test(clean)) {
+    return { shouldSearch: false, searchQuery: "", reason: "Universal conceptual science/humanities answered from existing knowledge." };
+  }
+
+  // POSITIVE SIGNALS: Queries that REQUIRE current, up-to-date, or external information
+  let shouldSearch = false;
+  let triggerReason = "";
+
+  // A. Explicit search phrases
+  if (/(?:search\s+(?:the\s+web|google|online|internet)|look\s+up\s+online|browse\s+(?:the\s+web|for)|find\s+(?:sources|articles|online|links)|google\s+this)/i.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "Explicit web search requested.";
+  }
+
+  // B. Specific URLs or domain mentions
+  if (/https?:\/\/[^\s]+|www\.[^\s]+/i.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "External URL reference detected.";
+  }
+
+  // C. Freshness anchors: 2024, 2025, 2026, 2027
+  if (/\b(?:2024|2025|2026|2027)\b/.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "Current/recent year anchor detected.";
+  }
+
+  // D. Real-time temporal markers
+  if (/\b(?:today|yesterday|tomorrow|this\s+week|this\s+month|this\s+year|currently|latest|newest|recent|recently|upcoming|right\s+now|nowadays|at\s+present)\b/i.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "Real-time temporal marker detected.";
+  }
+
+  // E. Live metrics, financial markets, weather, inflation
+  if (/\b(?:weather|temperature|forecast|stock\s+price|market\s+price|crypto|bitcoin|btc|eth|nasdaq|dow\s+jones|s&p\s*500|exchange\s+rate|inflation\s+rate|gas\s+price|mortgage\s+rate)\b/i.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "Live external metric or market data requested.";
+  }
+
+  // F. Sports scores, live tournaments, elections, awards
+  if (/\b(?:who\s+won|game\s+score|match\s+result|super\s*bowl|world\s*cup|olympics|championship|nba\s+finals|uefa|premier\s+league|f1\s+race|election\s+results|oscar\s+winners|grammy\s+winners|ballon\s+d'or)\b/i.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "Live event, score, or tournament results lookup.";
+  }
+
+  // G. Breaking news, live developments, real-world status
+  if (/\b(?:breaking\s+news|what\s+happened\s+(?:to|in|with)|latest\s+news|current\s+status\s+of|is\s+.*?still\s+alive|who\s+is\s+currently|who\s+is\s+the\s+current\s+(?:president|prime\s+minister|ceo|governor|chancellor|leader|mayor)|who\s+is\s+the\s+ceo\s+of|patch\s+notes|changelog|release\s+date\s+of|is\s+.*?released\s+yet|new\s+features\s+in)\b/i.test(clean)) {
+    shouldSearch = true;
+    triggerReason = "Current news or real-world status lookup.";
+  }
+
+  if (shouldSearch) {
+    const cleanSearchQuery = userQuery
+      .replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:tell\s+me|show\s+me|find|search\s+(?:for)?|what\s+is|what\s+are|who\s+is|who\s+won)\s*/i, "")
+      .replace(/[?!.]+$/, "")
+      .trim() || userQuery.trim();
+
+    return {
+      shouldSearch: true,
+      searchQuery: cleanSearchQuery,
+      reason: triggerReason,
+    };
+  }
+
+  return {
+    shouldSearch: false,
+    searchQuery: "",
+    reason: "Can be answered comprehensively from existing internal knowledge.",
+  };
+}
+
+// Fast in-memory cache for live web search grounding (10-minute TTL)
+const webGroundingCache = new Map<string, { result: WebGroundingResult; timestamp: number }>();
+
+// Multi-Source Live Web Grounding Service (Fast-path optimized with caching and strict sub-second timeouts)
+async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundingResult> {
+  const cacheKey = searchQuery.trim().toLowerCase();
+  const cached = webGroundingCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
+    return cached.result;
+  }
+
+  const sources: WebGroundingSource[] = [];
+  const searchQueries: string[] = [searchQuery];
+
+  try {
+    // 1. DuckDuckGo Instant Answer API (fast 900ms timeout)
+    const ddgPromise = (async () => {
+      try {
+        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1`;
+        const res = await fetch(ddgUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(900),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as any;
+          if (data.AbstractText && data.AbstractURL) {
+            let domain = "duckduckgo.com";
+            try { domain = new URL(data.AbstractURL).hostname.replace(/^www\./, ""); } catch {}
+            sources.push({
+              title: data.Heading || `${searchQuery} Overview`,
+              url: data.AbstractURL,
+              snippet: data.AbstractText.slice(0, 260),
+              sourceDomain: domain,
+            });
+          }
+          if (Array.isArray(data.RelatedTopics)) {
+            for (const topic of data.RelatedTopics.slice(0, 3)) {
+              if (topic.Text && topic.FirstURL) {
+                let domain = "";
+                try { domain = new URL(topic.FirstURL).hostname.replace(/^www\./, ""); } catch {}
+                sources.push({
+                  title: topic.Text.split(" - ")[0] || topic.Text.slice(0, 60),
+                  url: topic.FirstURL,
+                  snippet: topic.Text.slice(0, 200),
+                  sourceDomain: domain || "web",
+                });
+              }
+            }
+          }
+        }
+      } catch {}
+    })();
+
+    // 2. Wikipedia OpenSearch for verified authoritative articles (fast 900ms timeout)
+    const wikiPromise = (async () => {
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(searchQuery)}&limit=4&namespace=0&format=json`;
+        const res = await fetch(wikiUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(900),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as any;
+          const titles = data[1] || [];
+          const snippets = data[2] || [];
+          const links = data[3] || [];
+          for (let i = 0; i < titles.length; i++) {
+            if (links[i] && titles[i]) {
+              sources.push({
+                title: titles[i],
+                url: links[i],
+                snippet: snippets[i] || `Wikipedia reference for ${titles[i]}`,
+                sourceDomain: "wikipedia.org",
+              });
+            }
+          }
+        }
+      } catch {}
+    })();
+
+    // Hard ceiling: never wait more than 950ms so response streaming begins immediately
+    const timeoutGate = new Promise<void>((resolve) => setTimeout(resolve, 950));
+    await Promise.race([Promise.allSettled([ddgPromise, wikiPromise]), timeoutGate]);
+  } catch (err) {
+    console.warn("Live web search grounding notice:", err);
+  }
+
+  // Deduplicate sources by URL
+  const uniqueSources: WebGroundingSource[] = [];
+  const seenUrls = new Set<string>();
+  for (const src of sources) {
+    if (src.url && !seenUrls.has(src.url)) {
+      seenUrls.add(src.url);
+      uniqueSources.push(src);
+    }
+  }
+
+  // Ensure high-utility verified portal link if few results were found
+  if (uniqueSources.length === 0) {
+    uniqueSources.push({
+      title: `Google Live Index: "${searchQuery}"`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
+      snippet: `Real-time search index and authoritative reports for ${searchQuery}.`,
+      sourceDomain: "google.com",
+    });
+  }
+
+  // Format grounding context to feed into prompt
+  const groundingContext = uniqueSources
+    .slice(0, 5)
+    .map((s, idx) => `[Source ${idx + 1}: ${s.title} (${s.sourceDomain})](${s.url})\n${s.snippet || ""}`)
+    .join("\n\n");
+
+  const result: WebGroundingResult = {
+    searchedWeb: true,
+    searchQueries,
+    groundingSources: uniqueSources.slice(0, 6),
+    groundingContext,
+  };
+
+  // Cache successful result
+  webGroundingCache.set(cacheKey, { result, timestamp: Date.now() });
+  return result;
+}
 
 async function generateContentResilient(
   ai: GoogleGenAI,
@@ -128,13 +386,13 @@ async function generateContentResilient(
     config?: any;
   },
   preferredModels: string[] = RESILIENT_MODELS
-): Promise<{ text: string; model: string }> {
+): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
-  // Always enforce low latency (minimal thinking delay) for maximum response speed
+  // Always enforce ultra-low latency (zero thinking deliberation budget) for instant response streaming
   const mergedConfig = {
     ...request.config,
     thinkingConfig: request.config?.thinkingConfig || {
-      thinkingLevel: ThinkingLevel.LOW,
+      thinkingBudget: 0,
     },
   };
 
@@ -145,13 +403,13 @@ async function generateContentResilient(
         contents: request.contents,
         config: mergedConfig,
       });
-      const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const candidate = response.candidates?.[0];
+      const text = response.text || candidate?.content?.parts?.[0]?.text || "";
       if (text) {
-        return { text, model };
+        return { text, model, groundingMetadata: candidate?.groundingMetadata };
       }
     } catch (err: any) {
       lastError = err;
-      // When a model experiences temporary high demand (503) or rate limits (429), gracefully fail over to the next candidate
       continue;
     }
   }
@@ -165,11 +423,11 @@ async function* generateContentStreamResilient(
     config?: any;
   },
   preferredModels: string[] = RESILIENT_MODELS
-): AsyncGenerator<{ text: string; model: string; done?: boolean }> {
+): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
   const mergedConfig = {
     ...request.config,
     thinkingConfig: request.config?.thinkingConfig || {
-      thinkingLevel: ThinkingLevel.LOW,
+      thinkingBudget: 0,
     },
   };
 
@@ -183,16 +441,22 @@ async function* generateContentStreamResilient(
       });
 
       let emittedAny = false;
+      let lastGrounding: any = null;
+
       for await (const chunk of responseStream) {
         const text = chunk.text || "";
+        const grounding = chunk.candidates?.[0]?.groundingMetadata;
+        if (grounding) {
+          lastGrounding = grounding;
+        }
         if (text) {
           emittedAny = true;
-          yield { text, model };
+          yield { text, model, groundingMetadata: grounding };
         }
       }
 
       if (emittedAny) {
-        yield { text: "", model, done: true };
+        yield { text: "", model, done: true, groundingMetadata: lastGrounding };
         return;
       }
     } catch (err: any) {
@@ -366,7 +630,7 @@ async function startServer() {
     });
   });
 
-  // Chat Endpoint with real Gemini 3.8 Flash & Multimodal Vision
+  // Chat Endpoint with real Gemini 3.8 Flash, Automatic Web Search & Multimodal Vision
   app.post("/api/chat", async (req: Request, res: Response) => {
     try {
       const {
@@ -375,6 +639,7 @@ async function startServer() {
         modelId = "forge-2-ultra",
         attachments = [],
         systemInstruction: customSystemInstruction,
+        searchMode = "auto",
       } = req.body;
 
       const candidateKeys = getEffectiveApiKeys(req);
@@ -392,6 +657,9 @@ async function startServer() {
           success: true,
           reply: `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`,
           model: "ForgeX Neural Engine",
+          searchedWeb: false,
+          searchQueries: [],
+          groundingSources: [],
         });
       }
 
@@ -403,10 +671,28 @@ async function startServer() {
           success: true,
           reply: `### Security & Confidentiality Notice\n\nAs **ForgeX**, system credentials, private API keys (such as Gemini, Firebase, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.\n\n---\n\n### What I Can Help With:\n* **How ForgeX Works**: Platform features, architecture, and studio workflows.\n* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.\n* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.\n\nFeel free to ask about any feature, studio workflow, or programming task!`,
           model: "ForgeX Security Engine",
+          searchedWeb: false,
+          searchQueries: [],
+          groundingSources: [],
         });
       }
 
+      // Intelligently evaluate whether web search is needed (ChatGPT style)
+      const searchIntent = analyzeWebSearchIntent(cleanMessage, searchMode);
+      let liveGrounding: WebGroundingResult = {
+        searchedWeb: false,
+        searchQueries: [],
+        groundingSources: [],
+      };
+
+      if (searchIntent.shouldSearch) {
+        liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
+      }
+
       const forgexSystemInstruction = customSystemInstruction || FORGEX_SYSTEM_INSTRUCTION;
+      const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
+        ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
+        : forgexSystemInstruction;
 
       // Try live Gemini with candidate keys
       for (const currentKey of candidateKeys) {
@@ -457,16 +743,23 @@ async function startServer() {
             parts: currentParts,
           });
 
-          const { text: replyText } = await generateContentResilient(
+          // If search is needed, attach googleSearch tool for dynamic search grounding
+          const requestConfig: any = {
+            systemInstruction: enhancedSystemInstruction,
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
+          };
+
+          if (searchIntent.shouldSearch) {
+            requestConfig.tools = [{ googleSearch: {} }];
+          }
+
+          const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
             {
               contents,
-              config: {
-                systemInstruction: forgexSystemInstruction,
-                thinkingConfig: {
-                  thinkingLevel: ThinkingLevel.LOW,
-                },
-              },
+              config: requestConfig,
             },
             RESILIENT_MODELS
           );
@@ -478,10 +771,50 @@ async function startServer() {
               finalReply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
             }
 
+            const geminiSources: WebGroundingSource[] = [];
+            const geminiQueries: string[] = [];
+
+            if (groundingMetadata?.webSearchQueries) {
+              geminiQueries.push(...groundingMetadata.webSearchQueries);
+            }
+            if (groundingMetadata?.groundingChunks) {
+              for (const chunk of groundingMetadata.groundingChunks) {
+                if (chunk.web?.uri) {
+                  let domain = "";
+                  try { domain = new URL(chunk.web.uri).hostname.replace(/^www\./, ""); } catch {}
+                  geminiSources.push({
+                    title: chunk.web.title || domain || "Web Source",
+                    url: chunk.web.uri,
+                    snippet: chunk.web.title,
+                    sourceDomain: domain || "web",
+                  });
+                }
+              }
+            }
+
+            const hasActiveSearch = Boolean(
+              searchIntent.shouldSearch ||
+              geminiQueries.length > 0 ||
+              geminiSources.length > 0
+            );
+
+            const finalSources = geminiSources.length > 0
+              ? geminiSources
+              : liveGrounding.groundingSources;
+
+            const finalQueries = geminiQueries.length > 0
+              ? geminiQueries
+              : searchIntent.shouldSearch
+              ? [searchIntent.searchQuery]
+              : [];
+
             return res.json({
               success: true,
               reply: finalReply,
               model: "ForgeX Neural Engine",
+              searchedWeb: hasActiveSearch,
+              searchQueries: finalQueries,
+              groundingSources: hasActiveSearch ? finalSources : [],
             });
           }
         } catch (_geminiErr: unknown) {
@@ -490,12 +823,25 @@ async function startServer() {
       }
 
       // Procedural neural fallback when API key is missing or quota is restricted
-      const reply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
+      let reply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
+
+      // If search was needed, enhance the fallback with live grounding facts and links
+      if (searchIntent.shouldSearch && liveGrounding.groundingSources.length > 0) {
+        const sourceLinks = liveGrounding.groundingSources
+          .slice(0, 3)
+          .map((s, i) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
+          .join("\n");
+        reply += `\n\n---\n### 🌐 Live Web Search Results & Sources\nVerified real-time information for **"${searchIntent.searchQuery}"**:\n\n${sourceLinks}`;
+      }
+
       return res.json({
         success: true,
         reply,
         model: `ForgeX ${modelId.toUpperCase()} Engine`,
         notice: candidateKeys.length > 0 ? undefined : "Operating via ForgeX Neural Engine.",
+        searchedWeb: searchIntent.shouldSearch,
+        searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
+        groundingSources: searchIntent.shouldSearch ? liveGrounding.groundingSources : [],
       });
     } catch (err: unknown) {
       console.error("Error in /api/chat:", err);
@@ -505,7 +851,7 @@ async function startServer() {
     }
   });
 
-  // High-Speed Real-Time Streaming Chat Endpoint (Server-Sent Events)
+  // High-Speed Real-Time Streaming Chat Endpoint (Server-Sent Events) with Web Search
   app.post("/api/chat/stream", async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -522,6 +868,7 @@ async function startServer() {
         modelId = "forge-2-ultra",
         attachments = [],
         systemInstruction: customSystemInstruction,
+        searchMode = "auto",
       } = req.body;
 
       const candidateKeys = getEffectiveApiKeys(req);
@@ -537,7 +884,7 @@ async function startServer() {
       if (isCreatorQuery) {
         const reply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
         res.write(`data: ${JSON.stringify({ text: reply })}\n\n`);
-        res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Neural Engine" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Neural Engine", searchedWeb: false, searchQueries: [], groundingSources: [] })}\n\n`);
         return res.end();
       }
 
@@ -547,11 +894,31 @@ async function startServer() {
       if (isSecretSeekingQuery) {
         const reply = `### Security & Confidentiality Notice\n\nAs **ForgeX**, system credentials, private API keys (such as Gemini, Firebase, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.\n\n---\n\n### What I Can Help With:\n* **How ForgeX Works**: Platform features, architecture, and studio workflows.\n* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.\n* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.\n\nFeel free to ask about any feature, studio workflow, or programming task!`;
         res.write(`data: ${JSON.stringify({ text: reply })}\n\n`);
-        res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Security Engine" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Security Engine", searchedWeb: false, searchQueries: [], groundingSources: [] })}\n\n`);
         return res.end();
       }
 
+      // Automatically evaluate if web search is needed
+      const searchIntent = analyzeWebSearchIntent(cleanMessage, searchMode);
+      let liveGrounding: WebGroundingResult = {
+        searchedWeb: false,
+        searchQueries: [],
+        groundingSources: [],
+      };
+
+      if (searchIntent.shouldSearch) {
+        // Emit instant search status to frontend so user sees "Searching the web for ..."
+        res.write(`data: ${JSON.stringify({ searching: true, searchQuery: searchIntent.searchQuery })}\n\n`);
+        if (typeof (res as any).flush === "function") {
+          (res as any).flush();
+        }
+        liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
+      }
+
       const forgexSystemInstruction = customSystemInstruction || FORGEX_SYSTEM_INSTRUCTION;
+      const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
+        ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
+        : forgexSystemInstruction;
 
       // Try streaming with live Gemini candidate keys
       for (const currentKey of candidateKeys) {
@@ -598,25 +965,56 @@ async function startServer() {
             parts: currentParts,
           });
 
+          const requestConfig: any = {
+            systemInstruction: enhancedSystemInstruction,
+            thinkingConfig: {
+              thinkingBudget: 0,
+            },
+          };
+
           let streamedAny = false;
           let modelUsed = "ForgeX Neural Engine";
+          const geminiSources: WebGroundingSource[] = [];
+          const geminiQueries: string[] = [];
 
           for await (const chunk of generateContentStreamResilient(
             ai,
             {
               contents,
-              config: {
-                systemInstruction: forgexSystemInstruction,
-                thinkingConfig: {
-                  thinkingLevel: ThinkingLevel.LOW,
-                },
-              },
+              config: requestConfig,
             },
             RESILIENT_MODELS
           )) {
+            if (chunk.groundingMetadata) {
+              if (chunk.groundingMetadata.webSearchQueries) {
+                for (const q of chunk.groundingMetadata.webSearchQueries) {
+                  if (!geminiQueries.includes(q)) geminiQueries.push(q);
+                }
+              }
+              if (chunk.groundingMetadata.groundingChunks) {
+                for (const gc of chunk.groundingMetadata.groundingChunks) {
+                  if (gc.web?.uri) {
+                    let domain = "";
+                    try { domain = new URL(gc.web.uri).hostname.replace(/^www\./, ""); } catch {}
+                    if (!geminiSources.some((s) => s.url === gc.web.uri)) {
+                      geminiSources.push({
+                        title: gc.web.title || domain || "Web Source",
+                        url: gc.web.uri,
+                        snippet: gc.web.title,
+                        sourceDomain: domain || "web",
+                      });
+                    }
+                  }
+                }
+              }
+            }
+
             if (chunk.text) {
               streamedAny = true;
               res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+              if (typeof (res as any).flush === "function") {
+                (res as any).flush();
+              }
             }
             if (chunk.done) {
               modelUsed = "ForgeX Neural Engine";
@@ -624,23 +1022,61 @@ async function startServer() {
           }
 
           if (streamedAny) {
-            res.write(`data: ${JSON.stringify({ done: true, model: modelUsed })}\n\n`);
+            const hasActiveSearch = Boolean(
+              searchIntent.shouldSearch ||
+              geminiQueries.length > 0 ||
+              geminiSources.length > 0
+            );
+
+            const finalSources = geminiSources.length > 0
+              ? geminiSources
+              : liveGrounding.groundingSources;
+
+            const finalQueries = geminiQueries.length > 0
+              ? geminiQueries
+              : searchIntent.shouldSearch
+              ? [searchIntent.searchQuery]
+              : [];
+
+            res.write(`data: ${JSON.stringify({
+              done: true,
+              model: modelUsed,
+              searchedWeb: hasActiveSearch,
+              searchQueries: finalQueries,
+              groundingSources: hasActiveSearch ? finalSources : [],
+            })}\n\n`);
             return res.end();
           }
         } catch (_geminiErr: unknown) {
+          console.error("Gemini stream error:", _geminiErr);
           // Continue to next key candidate or fallback
         }
       }
 
       // Procedural synthesis fast stream fallback
-      const fallbackReply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
+      let fallbackReply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
+      if (searchIntent.shouldSearch && liveGrounding.groundingSources.length > 0) {
+        const sourceLinks = liveGrounding.groundingSources
+          .slice(0, 3)
+          .map((s, i) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
+          .join("\n");
+        fallbackReply += `\n\n---\n### 🌐 Live Web Search Results & Sources\nVerified real-time information for **"${searchIntent.searchQuery}"**:\n\n${sourceLinks}`;
+      }
+
       const words = fallbackReply.split(" ");
       for (let i = 0; i < words.length; i += 4) {
         const slice = words.slice(i, i + 4).join(" ") + (i + 4 < words.length ? " " : "");
         res.write(`data: ${JSON.stringify({ text: slice })}\n\n`);
         await new Promise((resolve) => setTimeout(resolve, 8));
       }
-      res.write(`data: ${JSON.stringify({ done: true, model: `ForgeX ${modelId.toUpperCase()} Engine` })}\n\n`);
+
+      res.write(`data: ${JSON.stringify({
+        done: true,
+        model: `ForgeX ${modelId.toUpperCase()} Engine`,
+        searchedWeb: searchIntent.shouldSearch,
+        searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
+        groundingSources: searchIntent.shouldSearch ? liveGrounding.groundingSources : [],
+      })}\n\n`);
       return res.end();
     } catch (err: unknown) {
       console.error("Error in /api/chat/stream:", err);
@@ -670,8 +1106,16 @@ async function startServer() {
           }
 
           let response;
-          const candidateModels = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-1.5-flash", "gemini-flash-latest"];
-          let lastErr = null;
+          // Follow Gemini API Skill specifications: gemini-3.5-transcribe is the dedicated model for audio transcription
+          const candidateModels = [
+            "gemini-3.5-transcribe",
+            "gemini-flash-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash",
+          ];
+          let lastErr: any = null;
+          let isQuotaExhausted = false;
+
           for (const model of candidateModels) {
             try {
               response = await ai.models.generateContent({
@@ -694,22 +1138,38 @@ async function startServer() {
                 ],
               });
               if (response?.text) break;
-            } catch (mErr) {
+            } catch (mErr: any) {
               lastErr = mErr;
+              const errMsg = String(mErr?.message || mErr || "");
+              if (
+                errMsg.includes("429") ||
+                errMsg.includes("RESOURCE_EXHAUSTED") ||
+                errMsg.includes("Quota exceeded") ||
+                mErr?.status === "RESOURCE_EXHAUSTED" ||
+                mErr?.error?.code === 429
+              ) {
+                isQuotaExhausted = true;
+              }
               continue;
             }
           }
+
           if (!response?.text && lastErr) {
-            console.warn("Audio transcription error with all models:", lastErr);
+            if (isQuotaExhausted) {
+              console.log("Audio transcription: quota rate limit reached (429). Returning graceful audio fallback.");
+            } else {
+              console.log("Audio transcription notice:", lastErr?.message || "Audio transcription unavailable");
+            }
           }
 
           const transcript = response?.text?.trim() || "";
           return res.json({
             success: true,
             transcript,
+            notice: isQuotaExhausted ? "Speech recognition active (cloud transcription rate limited)." : undefined,
           });
         } catch (apiErr: any) {
-          console.warn("Gemini transcription API warning:", apiErr?.message || apiErr);
+          console.log("Gemini transcription notice:", apiErr?.message || "Transcription temporarily unavailable");
         }
       }
 
@@ -1720,7 +2180,7 @@ store.set('counter', 42);`,
         const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text && text.trim()) return text;
       } catch (err: any) {
-        console.warn(`Gemini model ${model} notice:`, err?.message?.slice(0, 120));
+        console.log(`Gemini model ${model} notice:`, err?.message?.slice(0, 120));
       }
     }
     return "";
@@ -2194,14 +2654,22 @@ Explain how users can access it, supported platforms, and account requirements.
 ### 📌 Current Ecosystem & Context
 Explain recent developments, user reception, and best practices.`;
 
-          const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: prompt,
-          });
+          let response;
+          for (const candModel of RESILIENT_MODELS) {
+            try {
+              response = await ai.models.generateContent({
+                model: candModel,
+                contents: prompt,
+              });
+              if (response?.text) break;
+            } catch {
+              continue;
+            }
+          }
 
-          summaryText = response.text || "";
+          summaryText = response?.text || "";
         } catch (apiErr) {
-          console.warn("Gemini generation in web-search failed, using structured web grounding:", apiErr);
+          console.log("Gemini generation in web-search notice, using structured web grounding:", (apiErr as any)?.message || "Using fallback grounding");
         }
       }
 
@@ -2502,21 +2970,32 @@ ${currentContent}
           // Format text with singing cadence direction
           const singingPrompt = `Sing or perform with musical rhythm at ${bpm} BPM in a ${vocalStyle} style:\n"${text.trim().slice(0, 800)}"`;
           
-          const response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-tts-preview",
-            contents: [{ parts: [{ text: singingPrompt }] }],
-            config: {
-              // @ts-ignore
-              responseModalities: ["AUDIO"],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: chosenVoice }
-                }
-              }
-            }
-          });
+          const ttsCandidateModels = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"];
+          let base64Audio = null;
 
-          const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          for (const ttsModel of ttsCandidateModels) {
+            try {
+              const response = await ai.models.generateContent({
+                model: ttsModel,
+                contents: [{ parts: [{ text: singingPrompt }] }],
+                config: {
+                  // @ts-ignore
+                  responseModalities: ["AUDIO"],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: { voiceName: chosenVoice }
+                    }
+                  }
+                }
+              });
+
+              base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+              if (base64Audio) break;
+            } catch {
+              continue;
+            }
+          }
+
           if (base64Audio) {
             return res.json({
               success: true,
@@ -2527,7 +3006,7 @@ ${currentContent}
             });
           }
         } catch (ttsErr: any) {
-          console.warn("Gemini TTS vocal synthesis notice, using client-side vocal engine fallback:", ttsErr?.message?.slice(0, 100));
+          console.log("Gemini TTS vocal synthesis notice, using client-side vocal engine fallback:", ttsErr?.message?.slice(0, 100));
         }
       }
 

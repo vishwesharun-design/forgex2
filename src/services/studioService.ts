@@ -369,6 +369,187 @@ export const studioService = {
     }
   },
 
+  // Normalizes studio names to alphanumeric lowercase for collision checking
+  normalizeStudioName(name: string): string {
+    return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  },
+
+  // Reserved official and system studio names that cannot be claimed
+  RESERVED_NAMES: new Set([
+    'forgex',
+    'forgexstudio',
+    'forgexstudios',
+    'forgexai',
+    'official',
+    'admin',
+    'administrator',
+    'system',
+    'root',
+    'support',
+    'staff',
+  ]),
+
+  /**
+   * Checks whether a Studio Name is available or already taken by another creator.
+   * "Once the name is taken, it cannot be taken by others."
+   */
+  async checkStudioNameAvailability(
+    rawName: string,
+    currentUserEmail?: string,
+    currentUserId?: string
+  ): Promise<{ available: boolean; isOwner: boolean; reason: string; normalizedName: string }> {
+    const trimmed = (rawName || '').trim();
+    const normalized = this.normalizeStudioName(trimmed);
+    const normUserEmail = (currentUserEmail || '').trim().toLowerCase();
+
+    if (!trimmed || trimmed.length < 2) {
+      return {
+        available: false,
+        isOwner: false,
+        reason: 'Studio name must be at least 2 characters.',
+        normalizedName: normalized,
+      };
+    }
+
+    if (this.RESERVED_NAMES.has(normalized)) {
+      return {
+        available: false,
+        isOwner: false,
+        reason: `"${trimmed}" is an official reserved platform name and cannot be claimed.`,
+        normalizedName: normalized,
+      };
+    }
+
+    // 1. Check local storage profiles across all users/emails
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(STORAGE_STUDIO_PROFILES_KEY)) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.studioName) {
+              const otherNorm = this.normalizeStudioName(parsed.studioName);
+              if (otherNorm === normalized) {
+                const parsedEmail = (parsed.email || '').trim().toLowerCase();
+                const isOwner = Boolean(
+                  (normUserEmail && parsedEmail === normUserEmail) ||
+                  (currentUserId && parsed.userId === currentUserId)
+                );
+                if (!isOwner) {
+                  return {
+                    available: false,
+                    isOwner: false,
+                    reason: `The studio name "${trimmed}" is already taken by another creator. Once taken, it cannot be claimed by others.`,
+                    normalizedName: normalized,
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Local storage scan fallback
+    }
+
+    // 2. Check default starter community creators (e.g. Panda, AlexDev)
+    for (const demo of DEFAULT_COMMUNITY_STUDIOS) {
+      if (demo.creatorName && this.normalizeStudioName(demo.creatorName) === normalized) {
+        if (!normUserEmail.includes(demo.creatorName.toLowerCase())) {
+          return {
+            available: false,
+            isOwner: false,
+            reason: `The studio name "${demo.creatorName}" is already claimed by another creator.`,
+            normalizedName: normalized,
+          };
+        }
+      }
+    }
+
+    // 3. Check Firestore global registry
+    try {
+      const cloudCheck = await firestoreStorageService.checkStudioNameAvailabilityInFirestore(
+        normalized,
+        currentUserId,
+        normUserEmail
+      );
+      if (!cloudCheck.available) {
+        return {
+          available: false,
+          isOwner: cloudCheck.isOwner,
+          reason: `The studio name "${trimmed}" is already registered by another creator. Once taken, it cannot be claimed by others.`,
+          normalizedName: normalized,
+        };
+      }
+      if (cloudCheck.isOwner) {
+        return {
+          available: true,
+          isOwner: true,
+          reason: `This is your current registered studio name.`,
+          normalizedName: normalized,
+        };
+      }
+    } catch (err) {
+      console.warn('Firestore studio name check notice:', err);
+    }
+
+    return {
+      available: true,
+      isOwner: false,
+      reason: `"${trimmed}" is available to claim!`,
+      normalizedName: normalized,
+    };
+  },
+
+  /**
+   * Atomically claims and saves a creator's unique Studio Name.
+   * Enforces global uniqueness: if taken by another user, rejects with an error.
+   */
+  async claimAndSaveUserStudioProfile(
+    profile: UserStudioProfile
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!profile.email || !profile.studioName?.trim()) {
+      return { success: false, error: 'Studio name and email are required.' };
+    }
+
+    const clean = profile.email.trim().toLowerCase();
+    const studioName = profile.studioName.trim();
+    const normalized = this.normalizeStudioName(studioName);
+
+    // Verify availability
+    const check = await this.checkStudioNameAvailability(studioName, clean, profile.userId);
+    if (!check.available) {
+      return { success: false, error: check.reason };
+    }
+
+    // If user previously had a different studio name, release the old one from Firestore
+    const existing = this.getUserStudioProfile(clean);
+    if (existing && existing.studioName && profile.userId && profile.userId !== 'guest') {
+      const oldNorm = this.normalizeStudioName(existing.studioName);
+      if (oldNorm && oldNorm !== normalized) {
+        firestoreStorageService.releaseStudioNameInFirestore(oldNorm, profile.userId).catch(() => {});
+      }
+    }
+
+    // Reserve in Firestore global registry if authenticated
+    if (profile.userId && profile.userId !== 'guest') {
+      const reserveRes = await firestoreStorageService.reserveStudioNameInFirestore(
+        studioName,
+        normalized,
+        profile.userId,
+        clean
+      );
+      if (!reserveRes.success) {
+        return { success: false, error: reserveRes.error };
+      }
+    }
+
+    // Save profile
+    this.saveUserStudioProfile(profile);
+    return { success: true };
+  },
+
   saveUserStudioProfile(profile: UserStudioProfile): void {
     if (!profile.email || !profile.studioName?.trim()) return;
     const clean = profile.email.trim().toLowerCase();

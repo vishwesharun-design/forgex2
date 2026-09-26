@@ -36,6 +36,8 @@ import {
   Mail,
   Edit3,
   LogIn,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { CustomStudio, ForgeXTheme, UserStudioProfile } from '../types';
 import { studioService, StudioCatalogueItem } from '../services/studioService';
@@ -117,6 +119,13 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
   const [regStudioIcon, setRegStudioIcon] = useState('Sparkles');
   const [regStudioColor, setRegStudioColor] = useState('text-amber-400');
   const [regError, setRegError] = useState('');
+  const [isCheckingName, setIsCheckingName] = useState(false);
+  const [nameAvailability, setNameAvailability] = useState<{
+    available: boolean;
+    isOwner: boolean;
+    reason: string;
+    normalizedName?: string;
+  } | null>(null);
   const [uploadSuccessToast, setUploadSuccessToast] = useState<string | null>(null);
 
   // Form State for creating a new Custom Studio
@@ -156,6 +165,30 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
       }
     }
   }, [isOpen, userEmail, userName]);
+
+  // Real-time debounced Studio Name availability checking (Ensures studio name cannot be taken by others)
+  useEffect(() => {
+    const trimmed = regStudioName.trim();
+    if (!trimmed || trimmed.length < 2) {
+      setNameAvailability(null);
+      setIsCheckingName(false);
+      return;
+    }
+
+    setIsCheckingName(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await studioService.checkStudioNameAvailability(trimmed, userEmail, userId);
+        setNameAvailability(res);
+      } catch {
+        setNameAvailability(null);
+      } finally {
+        setIsCheckingName(false);
+      }
+    }, 320);
+
+    return () => clearTimeout(timer);
+  }, [regStudioName, userEmail, userId]);
 
   const refreshStudios = () => {
     setActiveStudioIds(studioService.getActiveStudioIds());
@@ -203,8 +236,8 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
     setDeleteConfirmTarget(null);
   };
 
-  // Step 1: Register Studio Name (Bound to user's authenticated email)
-  const handleRegisterStudioName = (e: React.FormEvent) => {
+  // Step 1: Register Studio Name (Bound to user's authenticated email & globally unique)
+  const handleRegisterStudioName = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
 
@@ -219,6 +252,15 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
       return;
     }
 
+    setIsCheckingName(true);
+    // Real-time verification against global registry
+    const check = await studioService.checkStudioNameAvailability(cleanName, userEmail, userId);
+    if (!check.available && !check.isOwner) {
+      setIsCheckingName(false);
+      setRegError(check.reason || `The studio name "${cleanName}" is already taken by another creator. Once taken, it cannot be claimed by others.`);
+      return;
+    }
+
     const updatedProfile: UserStudioProfile = {
       studioName: cleanName,
       email: userEmail.trim().toLowerCase(),
@@ -230,10 +272,17 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
       updatedAt: Date.now(),
     };
 
-    studioService.saveUserStudioProfile(updatedProfile);
+    const claimRes = await studioService.claimAndSaveUserStudioProfile(updatedProfile);
+    setIsCheckingName(false);
+
+    if (!claimRes.success) {
+      setRegError(claimRes.error || `Studio name "${cleanName}" is already taken by another creator.`);
+      return;
+    }
+
     setStudioProfile(updatedProfile);
     setIsEditingStudioName(false);
-    setUploadSuccessToast(`Studio Name "${cleanName}" successfully registered for ${userEmail}!`);
+    setUploadSuccessToast(`Studio Name "${cleanName}" successfully claimed and registered for ${userEmail}!`);
     setTimeout(() => setUploadSuccessToast(null), 4000);
     refreshStudios();
   };
@@ -716,42 +765,106 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                         1
                       </div>
                       <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500">
+                            Creator Workspace
+                          </span>
+                        </div>
                         <h3 className="font-bold text-base flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-amber-500" />
-                          Step 1: Create & Register Your Studio Name
+                          Step 1: Create & Claim Your Unique Studio Name
                         </h3>
-                        <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                          Before uploading custom studios to ForgeX, you must first register your unique <strong>Studio Name</strong>. 
-                          All studios you publish will be permanently linked to your logged-in email (<strong>{userEmail}</strong>) under your Studio Name. Only this email will have permission to upload, edit, or delete studios for your Studio Name.
+                        <p className={`text-xs mt-1.5 leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                          Before uploading custom studios to ForgeX, you must first register your creator <strong>Studio Name</strong> (your organization or creative studio brand). 
                         </p>
+                        <div className={`mt-2.5 p-2.5 rounded-xl border text-[11.5px] leading-relaxed flex items-start gap-2 ${
+                          isDark ? 'bg-neutral-900/90 border-neutral-700 text-neutral-300' : 'bg-white border-neutral-200 text-neutral-800'
+                        }`}>
+                          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>Global Uniqueness:</strong> Unlike individual studio app names, your <strong>Studio Name</strong> is globally unique. 
+                            <strong> Once a Studio Name is taken, it cannot be taken by others.</strong> All studios you build will be published under this Studio Name and permanently tied to <strong>{userEmail}</strong>.
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {regError && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium">
-                      {regError}
+                    <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                      <span>{regError}</span>
                     </div>
                   )}
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold mb-1">
-                        Your Studio Name / Brand Name <span className="text-amber-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={regStudioName}
-                        onChange={(e) => setRegStudioName(e.target.value)}
-                        placeholder="e.g. Apex AI Studio, Quantum Labs, Panda Creations"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-medium border focus:outline-none focus:border-amber-500 ${
-                          isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'
-                        }`}
-                      />
-                      <p className={`text-[11px] mt-1 ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
-                        This name will be displayed as the creator/publisher on all studios you upload.
-                      </p>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold">
+                          Your Studio Name / Brand Name <span className="text-amber-500">*</span>
+                        </label>
+                        <span className="text-[11px] text-neutral-400 font-normal">
+                          (Distinct from individual studio app titles)
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          value={regStudioName}
+                          onChange={(e) => setRegStudioName(e.target.value)}
+                          placeholder="e.g. Apex AI, Quantum Labs, Panda Creations"
+                          className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-medium border focus:outline-none focus:border-amber-500 transition-colors pr-10 ${
+                            isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'
+                          } ${
+                            nameAvailability && !nameAvailability.available && !nameAvailability.isOwner
+                              ? 'border-red-500/80 focus:border-red-500'
+                              : nameAvailability?.available && !nameAvailability.isOwner
+                              ? 'border-emerald-500/80 focus:border-emerald-500'
+                              : ''
+                          }`}
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+                          {isCheckingName ? (
+                            <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                          ) : nameAvailability && !nameAvailability.available && !nameAvailability.isOwner ? (
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                          ) : nameAvailability?.available ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Live Real-Time Availability Indicator */}
+                      <div className="min-h-5 mt-1.5">
+                        {isCheckingName ? (
+                          <div className="flex items-center gap-1.5 text-xs text-amber-400/90 font-medium animate-pulse">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Checking studio name availability across creators...</span>
+                          </div>
+                        ) : nameAvailability ? (
+                          !nameAvailability.available && !nameAvailability.isOwner ? (
+                            <div className="flex items-center gap-1.5 text-xs text-red-400 font-semibold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/25">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{nameAvailability.reason}</span>
+                            </div>
+                          ) : nameAvailability.isOwner ? (
+                            <div className="flex items-center gap-1.5 text-xs text-sky-400 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>{nameAvailability.reason}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/25">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>"{regStudioName.trim()}" is available! Once claimed, no one else can take this studio name.</span>
+                            </div>
+                          )
+                        ) : (
+                          <p className={`text-[11px] ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                            This name represents your creator studio brand and will be displayed as the publisher on all your uploaded studios.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -863,10 +976,32 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                     )}
                     <button
                       type="submit"
-                      className="px-6 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md flex items-center gap-2 transition-all hover:scale-[1.01]"
+                      disabled={
+                        isCheckingName ||
+                        !regStudioName.trim() ||
+                        regStudioName.trim().length < 2 ||
+                        Boolean(nameAvailability && !nameAvailability.available && !nameAvailability.isOwner)
+                      }
+                      className={`px-6 py-2.5 rounded-xl text-xs font-bold shadow-md flex items-center gap-2 transition-all ${
+                        isCheckingName ||
+                        !regStudioName.trim() ||
+                        regStudioName.trim().length < 2 ||
+                        Boolean(nameAvailability && !nameAvailability.available && !nameAvailability.isOwner)
+                          ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                          : 'bg-amber-500 hover:bg-amber-400 text-black hover:scale-[1.01] cursor-pointer'
+                      }`}
                     >
-                      <Check className="w-4 h-4" />
-                      {studioProfile?.studioName ? 'Update Studio Name' : 'Register Studio Name & Continue'}
+                      {isCheckingName ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Verifying Studio Name...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          {studioProfile?.studioName ? 'Update Studio Name' : 'Claim Studio Name & Continue'}
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>

@@ -20,11 +20,16 @@ import {
   AudioLines,
   Plus,
   Headphones,
+  Globe,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { detectWebSearchIntent } from '../utils/searchIntent';
 
 interface ChatWorkspaceProps {
   currentSession: ChatSession | null;
@@ -53,6 +58,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchingQuery, setSearchingQuery] = useState<string | null>(null);
+  const [searchedForQueryDuringTurn, setSearchedForQueryDuringTurn] = useState<string | null>(null);
+  const [expandedDomainGroup, setExpandedDomainGroup] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<{ type: 'file' | 'image'; name: string; url?: string }[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -63,6 +71,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [streamingReply, setStreamingReply] = useState<{
     text: string;
     modelUsed?: string;
+    groundingSources?: any[];
   } | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -72,6 +81,134 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
+
+  // Group sources by domain for compact ChatGPT-style pills
+  const renderSourcePills = (sources: any[] | undefined, messageId: string) => {
+    if (!sources || sources.length === 0) return null;
+
+    const domainGroups: { domain: string; primary: any; items: any[] }[] = [];
+    const domainMap = new Map<string, { domain: string; primary: any; items: any[] }>();
+
+    for (const s of sources) {
+      let domain = s.sourceDomain || '';
+      if (!domain) {
+        try {
+          domain = new URL(s.url).hostname.replace(/^www\./, '');
+        } catch {
+          domain = 'web';
+        }
+      }
+      const key = domain.toLowerCase();
+      if (!domainMap.has(key)) {
+        const group = { domain, primary: s, items: [s] };
+        domainMap.set(key, group);
+        domainGroups.push(group);
+      } else {
+        domainMap.get(key)!.items.push(s);
+      }
+    }
+
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 pb-0.5">
+        {domainGroups.map((group) => {
+          const hasMultiple = group.items.length > 1;
+          const popoverKey = `${messageId}-${group.domain}`;
+          const isExpanded = expandedDomainGroup === popoverKey;
+
+          return (
+            <div key={group.domain} className="relative inline-flex items-center">
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-normal border transition-colors select-none ${
+                  isDark
+                    ? 'bg-neutral-800/90 hover:bg-neutral-700/90 border-neutral-700/80 text-neutral-200'
+                    : 'bg-neutral-100 hover:bg-neutral-200/80 border-neutral-200/90 text-neutral-800 shadow-2xs'
+                }`}
+              >
+                {/* Circular Favicon */}
+                <img
+                  src={`https://www.google.com/s2/favicons?domain=${group.domain}&sz=32`}
+                  alt=""
+                  className="w-3.5 h-3.5 rounded-full object-contain shrink-0"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+
+                {/* Primary Link / Title */}
+                <a
+                  href={group.primary.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`${group.primary.title}\n${group.primary.url}`}
+                  className="truncate max-w-[125px] sm:max-w-[155px] hover:underline"
+                >
+                  {group.primary.title || group.domain}
+                </a>
+
+                {/* +N multiple count pill badge if more than 1 source from this domain */}
+                {hasMultiple && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedDomainGroup(isExpanded ? null : popoverKey);
+                    }}
+                    title={`${group.items.length} sources from ${group.domain}`}
+                    className={`text-[10px] font-mono font-medium px-1 py-0.2 rounded-full cursor-pointer transition-colors ${
+                      isDark
+                        ? 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
+                        : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700'
+                    }`}
+                  >
+                    +{group.items.length - 1}
+                  </button>
+                )}
+              </div>
+
+              {/* Popover showing all sources in this cluster if +N is clicked */}
+              {isExpanded && (
+                <div
+                  className={`absolute left-0 bottom-full mb-2 z-50 w-64 p-2 rounded-xl border shadow-xl text-xs space-y-1.5 animate-in fade-in zoom-in-95 duration-150 ${
+                    isDark
+                      ? 'bg-neutral-900 border-neutral-700 text-neutral-200 shadow-black/60'
+                      : 'bg-white border-neutral-200 text-neutral-900 shadow-neutral-300/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between px-1 pb-1 border-b border-neutral-200/60 dark:border-neutral-800 text-[11px] font-medium text-neutral-500">
+                    <span>{group.domain} ({group.items.length} links)</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedDomainGroup(null)}
+                      className="hover:text-neutral-900 dark:hover:text-neutral-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {group.items.map((item, idx) => (
+                      <a
+                        key={idx}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`block p-1.5 rounded-lg transition-colors truncate ${
+                          isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-white' : 'hover:bg-neutral-100 text-neutral-700 hover:text-neutral-950'
+                        }`}
+                        title={item.title}
+                      >
+                        <div className="font-medium truncate">{item.title}</div>
+                        <div className="text-[10px] text-neutral-400 truncate">{item.url}</div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const displayMessages: ChatMessage[] = [
     ...(currentSession?.messages || []),
@@ -95,6 +232,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             timestamp: Date.now(),
             modelUsed: streamingReply.modelUsed || currentModel.name,
             isStreaming: true,
+            searchedWeb: Boolean(searchedForQueryDuringTurn || (streamingReply.groundingSources && streamingReply.groundingSources.length > 0)),
+            searchQueries: searchedForQueryDuringTurn ? [searchedForQueryDuringTurn] : undefined,
+            groundingSources: streamingReply.groundingSources,
           },
         ]
       : []),
@@ -253,6 +393,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     // Set optimistic message so user never sees input vanish without response
     setPendingUserTurn({ text, attachments: filesToAttach });
     setStreamingReply(null);
+
+    // Fast-path web search intent detection: Immediately activate the shiny web search UI
+    // for web search queries so the user NEVER sees "Thinking..." during web search
+    const localSearchIntent = detectWebSearchIntent(text);
+    if (localSearchIntent.shouldSearch) {
+      const q = localSearchIntent.searchQuery || text;
+      setSearchingQuery(q);
+      setSearchedForQueryDuringTurn(q);
+    } else {
+      setSearchingQuery(null);
+      setSearchedForQueryDuringTurn(null);
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -262,23 +415,40 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         text,
         selectedModelId,
         filesToAttach,
-        (streamedText) => {
+        (streamedText, modelName, sources) => {
           setStreamingReply({
             text: streamedText,
-            modelUsed: currentModel.name,
+            modelUsed: modelName || currentModel.name,
+            groundingSources: sources,
           });
+        },
+        'auto',
+        (isSearching, q) => {
+          if (isSearching) {
+            const query = q || localSearchIntent.searchQuery || text;
+            setSearchingQuery(query);
+            setSearchedForQueryDuringTurn(query);
+          } else {
+            setSearchingQuery(null);
+          }
         }
       );
       setStreamingReply(null);
+      setSearchingQuery(null);
+      setSearchedForQueryDuringTurn(null);
       setPendingUserTurn(null);
       onUpdateSession(updatedSession);
     } catch (error) {
       console.error('Failed to send message', error);
       setStreamingReply(null);
+      setSearchingQuery(null);
+      setSearchedForQueryDuringTurn(null);
       setPendingUserTurn(null);
     } finally {
       setIsSubmitting(false);
       setStreamingReply(null);
+      setSearchingQuery(null);
+      setSearchedForQueryDuringTurn(null);
       setPendingUserTurn(null);
     }
   };
@@ -673,7 +843,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
                       {/* User message text bubble: Clean light/white style for light theme, neutral dark for dark theme */}
                       <div
-                        className={`rounded-3xl p-4 sm:p-5 font-normal rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap font-sans transition-colors ${
+                        className={`rounded-2xl px-4 py-2.5 sm:px-4.5 sm:py-3 font-normal rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap font-sans transition-colors ${
                           isDark
                             ? 'bg-neutral-800 border border-neutral-700/70 text-neutral-100 shadow-md shadow-black/25'
                             : 'bg-neutral-100/95 border border-neutral-200/90 text-neutral-900 shadow-sm'
@@ -709,7 +879,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     </div>
                   ) : (
                     <div
-                      className={`relative max-w-[85%] sm:max-w-[78%] rounded-3xl p-4 sm:p-5 transition-all text-sm leading-relaxed ${
+                      className={`relative max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 sm:p-4 transition-all text-sm leading-relaxed ${
                         isDark
                           ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
                           : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm shadow-sm'
@@ -751,22 +921,41 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         )}
                       </div>
 
+                      {/* Web Search Sources Pills (ChatGPT Style — rendered at the bottom of the response) */}
+                      {message.groundingSources && message.groundingSources.length > 0 ? (
+                        renderSourcePills(message.groundingSources, message.id)
+                      ) : message.searchedWeb ? (
+                        <div className="flex items-center gap-1.5 pt-2 pb-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                          <Globe className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 shrink-0" />
+                          <span>Searched the web{message.searchQueries?.[0] ? ` for "${message.searchQueries[0]}"` : ''}</span>
+                        </div>
+                      ) : null}
+
                       {/* Model badge & copy action on assistant reply */}
-                      <div className={`mt-3 pt-2.5 border-t flex items-center justify-between text-xs ${
+                      <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-xs ${
                         isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
                       }`}>
-                        <span className={`text-[11px] font-mono inline-flex items-center gap-1 ${
-                          isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'
-                        }`}>
-                          <Zap className="w-3 h-3 shrink-0" />
-                          <span>
-                            {message.isStreaming 
-                              ? `${currentModel.name} is streaming...`
-                              : (message.modelUsed && !/gemini/i.test(message.modelUsed)
-                                  ? message.modelUsed
-                                  : currentModel.name || 'ForgeX Neural Engine')}
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-mono inline-flex items-center gap-1 ${
+                            isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'
+                          }`}>
+                            <Zap className="w-3 h-3 shrink-0" />
+                            <span>
+                              {message.isStreaming 
+                                ? `${currentModel.name} is streaming...`
+                                : (message.modelUsed && !/gemini/i.test(message.modelUsed)
+                                    ? message.modelUsed
+                                    : currentModel.name || 'ForgeX Neural Engine')}
+                            </span>
                           </span>
-                        </span>
+
+                          {message.searchedWeb && (
+                            <span className="text-[10px] text-blue-500 dark:text-blue-400 inline-flex items-center gap-1 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                              <Globe className="w-2.5 h-2.5" />
+                              <span>Web Search</span>
+                            </span>
+                          )}
+                        </div>
 
                         <div className="flex items-center gap-2">
                           <button
@@ -796,9 +985,26 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             })}
 
             {isSubmitting && !streamingReply && (
-              <div className="flex items-center gap-2.5 py-3 px-2 text-xs font-mono text-neutral-400 select-none animate-in fade-in duration-150">
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-400/80 border-t-transparent animate-spin shrink-0" />
-                <span className="text-neutral-500 dark:text-neutral-400 font-medium">Thinking...</span>
+              <div className="py-2 px-1 select-none animate-in fade-in duration-150">
+                {searchingQuery ? (
+                  /* Searching the Web — Minimal, clean inline style matching Screenshot 1 */
+                  <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+                    <Globe className="w-4 h-4 text-neutral-400 dark:text-neutral-500 animate-spin-slow shrink-0" />
+                    <span>Searching {searchingQuery ? searchingQuery : 'the web...'}</span>
+                  </div>
+                ) : (
+                  /* Thinking State — Classic Old Clean UI (No shiny animation, subtle clean pill) */
+                  <div
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+                      isDark
+                        ? 'bg-neutral-900/70 border-neutral-800 text-neutral-400'
+                        : 'bg-neutral-50 border-neutral-200 text-neutral-600'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500/85 dark:text-amber-400/85 animate-spin-slow" />
+                    <span>Thinking...</span>
+                  </div>
+                )}
               </div>
             )}
 

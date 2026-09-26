@@ -111,11 +111,9 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
 
   const handleClearAll = async () => {
     if (history.length === 0) return;
-    if (window.confirm('Are you sure you want to delete all your search history? This cannot be undone.')) {
-      await webSearchService.clearHistory();
-      setHistory([]);
-      setCurrentResult(null);
-    }
+    await webSearchService.clearHistory();
+    setHistory([]);
+    setCurrentResult(null);
   };
 
   const handleCopy = () => {

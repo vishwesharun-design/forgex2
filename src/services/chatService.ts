@@ -133,7 +133,9 @@ export const chatService = {
     userContent: string,
     modelId: ForgeXModelId,
     attachments?: ChatMessage['attachments'],
-    onStreamChunk?: (streamedText: string) => void
+    onStreamChunk?: (streamedText: string, modelName?: string, sources?: any[]) => void,
+    searchMode: 'auto' | 'on' | 'off' = 'auto',
+    onSearchStatus?: (searching: boolean, searchQuery?: string) => void
   ): Promise<{ updatedSession: ChatSession; assistantMessage: ChatMessage }> {
     let sessions = this.getSessions();
     let session = sessions.find((s) => s.id === sessionId);
@@ -172,6 +174,9 @@ export const chatService = {
     const modelMeta = FORGEX_MODELS.find((m) => m.id === modelId) || FORGEX_MODELS[4];
     let assistantReplyText = '';
     let modelUsedName = modelMeta.name;
+    let responseSearchedWeb = false;
+    let responseSearchQueries: string[] = [];
+    let responseGroundingSources: any[] = [];
 
     const isCreatorQuery = /(?:who\s+(?:created|made|developed|built|designed|programmed|coded|founded|invented)\s+(?:you|forgex|this\s+(?:app|ai|website|platform|software|system))|who\s+is\s+your\s+(?:creator|maker|developer|author|architect|father|founder|boss|programmer)|who\s+created\s+you|who\s+made\s+you|who\s+are\s+your\s+creators|who\s+owns\s+you|who\s+built\s+forgex|creator\s+of\s+forgex|who\s+is\s+vishwesh|who\s+is\s+vishweshvarman|what\s+is\s+the\s+creator(?:'s)?\s+name)/i.test(userContent);
 
@@ -195,6 +200,7 @@ export const chatService = {
           modelId,
           attachments,
           apiKey: geminiApiKey,
+          searchMode,
         }),
       });
 
@@ -218,14 +224,27 @@ export const chatService = {
             if (!payloadStr) continue;
             try {
               const data = JSON.parse(payloadStr);
-              if (data.text) {
-                accumulated += data.text;
-                if (onStreamChunk) {
-                  onStreamChunk(accumulated);
-                }
+              if (data.searching && onSearchStatus) {
+                onSearchStatus(true, data.searchQuery);
+              }
+              if (data.groundingSources && Array.isArray(data.groundingSources)) {
+                responseGroundingSources = data.groundingSources;
+              }
+              if (data.searchedWeb !== undefined) {
+                responseSearchedWeb = Boolean(data.searchedWeb);
+              }
+              if (Array.isArray(data.searchQueries)) {
+                responseSearchQueries = data.searchQueries;
               }
               if (data.model) {
                 modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+              }
+              if (data.text) {
+                if (onSearchStatus) onSearchStatus(false);
+                accumulated += data.text;
+                if (onStreamChunk) {
+                  onStreamChunk(accumulated, modelUsedName, responseGroundingSources);
+                }
               }
             } catch (_parseErr) {
               // Ignore partial chunk parsing
@@ -240,6 +259,8 @@ export const chatService = {
       }
     } catch (_streamErr) {
       // Fall through to non-streaming endpoint
+    } finally {
+      if (onSearchStatus) onSearchStatus(false);
     }
 
     // 2. Fallback to /api/chat if streaming was not available or produced no output
@@ -257,6 +278,7 @@ export const chatService = {
             modelId,
             attachments,
             apiKey: geminiApiKey,
+            searchMode,
           }),
         });
 
@@ -266,6 +288,15 @@ export const chatService = {
             assistantReplyText = data.reply;
             if (data.model) {
               modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+            }
+            if (data.searchedWeb !== undefined) {
+              responseSearchedWeb = Boolean(data.searchedWeb);
+            }
+            if (Array.isArray(data.searchQueries)) {
+              responseSearchQueries = data.searchQueries;
+            }
+            if (Array.isArray(data.groundingSources)) {
+              responseGroundingSources = data.groundingSources;
             }
           }
         }
@@ -290,6 +321,9 @@ export const chatService = {
       content: assistantReplyText,
       timestamp: Date.now(),
       modelUsed: modelUsedName,
+      searchedWeb: responseSearchedWeb,
+      searchQueries: responseSearchQueries,
+      groundingSources: responseGroundingSources,
     };
 
     session.messages.push(assistantMessage);
