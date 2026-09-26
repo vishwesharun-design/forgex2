@@ -327,7 +327,7 @@ Let me know if you would like this adapted for a specific language or framework!
 }
 
 // 3. Master Encyclopedic Knowledge Lookup
-export function generateExpertChatReply(prompt: string, _modelId = 'unreal-5'): string {
+export function generateExpertChatReply(prompt: string, _modelId = 'forge-2-ultra'): string {
   const clean = prompt.trim();
   const lower = clean.toLowerCase();
 
@@ -709,6 +709,40 @@ Historical transitions—from the **Agricultural Revolution** to the **Industria
 1. **Technological Breakthroughs**: New tools (steam engine, printing press, semiconductors) drastically expand human productivity.
 2. **Socio-Economic Reorganization**: Shifts in labor patterns, urbanization, and the rise of new institutions.
 3. **Long-Term Impact**: Fundamental restructuring of communication, governance, and daily human life.`;
+  }
+
+  // 12.5 Capabilities & What can you do
+  if (/(?:what\s+(?:can|do)\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+forgex\s+do|capabilities|features\s+of\s+forgex|how\s+can\s+you\s+help\s+me|tell\s+me\s+what\s+you\s+can\s+do)/i.test(clean)) {
+    return `### What ForgeX Can Do
+
+I am **ForgeX**, created by **VishweshVarman** as an all-in-one AI intelligence and creation platform. Here is an overview of everything I can do for you:
+
+---
+
+### 🎨 1. AI Creation Studios
+* **Images Studio**: Create high-fidelity photorealistic, anime, 3D render, watercolor, or cinematic images with custom aspect ratios, style presets, negative prompts, and seed controls.
+* **Make Song Studio**: Compose original music and songs powered by neural synthesis—complete with custom genres, moods, tempo, and generated lyrics.
+* **Music Player Studio**: Listen to your generated and featured tracks with audio waveform visualization, queue management, volume controls, and playback options.
+* **Deep Research Studio**: Conduct multi-source investigations, syntheses, technical deep dives, and structured analytical reports.
+* **Code Studio**: Generate, inspect, debug, and test code in Python, TypeScript, Rust, C++, Go, SQL, and more.
+
+---
+
+### 💬 2. Conversational Reasoning & Problem Solving
+* **Advanced Problem Solving**: Step-by-step reasoning for complex math, physics, logic, algorithms, and system architecture.
+* **Full-Stack Programming**: Write complete, production-grade applications, fix bugs, explain algorithms, and design REST/GraphQL APIs.
+* **Writing & Communication**: Draft essays, technical documentation, professional emails, research summaries, and creative stories.
+* **Multimodal Vision & Documents**: Attach images and files for instant OCR, visual scene analysis, diagram interpretation, and debugging.
+
+---
+
+### 🎙️ 3. Real-Time Audio & Voice
+* **Live Voice Mode**: Engage in real-time two-way voice conversations with low-latency spoken responses.
+* **Speech-to-Text Dictation**: Dictate prompts directly using the microphone button.
+
+---
+
+*What would you like to build, explore, or create today?*`;
   }
 
   // 13. General Greetings

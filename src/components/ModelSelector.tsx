@@ -7,6 +7,8 @@ interface ModelSelectorProps {
   onSelectModel: (modelId: ForgeXModelId) => void;
   theme: ForgeXTheme;
   compactRoundOnly?: boolean;
+  align?: 'left' | 'right';
+  variant?: 'chatgpt' | 'pill' | 'round';
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -14,12 +16,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onSelectModel,
   theme,
   compactRoundOnly = false,
+  align = 'left',
+  variant,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isDark = theme === 'dark';
 
-  const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
+  const normalizedId = 
+    selectedModelId === 'unreal-1' ? 'forge-1' :
+    selectedModelId === 'unreal-2' ? 'forge-1.5' :
+    selectedModelId === 'unreal-3' ? 'forge-2' :
+    selectedModelId === 'unreal-4' ? 'forge-2-pro' :
+    selectedModelId === 'unreal-5' ? 'forge-2-ultra' :
+    selectedModelId;
+
+  const currentModel = FORGEX_MODELS.find((m) => m.id === normalizedId) || FORGEX_MODELS[4];
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -35,10 +47,35 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     };
   }, [isOpen]);
 
+  const effectiveVariant = variant || (compactRoundOnly ? 'round' : 'chatgpt');
+
   return (
     <div ref={containerRef} className="relative inline-block text-left">
-      {/* Round / Compact Model Switcher Button */}
-      {compactRoundOnly ? (
+      {/* 1. ChatGPT-style Minimal Header Dropdown Button */}
+      {effectiveVariant === 'chatgpt' && (
+        <button
+          id="btn-model-switcher-chatgpt"
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-base sm:text-lg font-display font-semibold transition-all duration-150 ${
+            isDark
+              ? 'text-neutral-200 hover:text-white hover:bg-neutral-900/90'
+              : 'text-neutral-800 hover:text-neutral-950 hover:bg-neutral-100'
+          }`}
+        >
+          <span className="truncate max-w-[160px] sm:max-w-none">
+            {currentModel.name}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${
+              isOpen ? 'rotate-180 text-amber-500' : ''
+            }`}
+          />
+        </button>
+      )}
+
+      {/* 2. Round / Compact Model Switcher Button */}
+      {effectiveVariant === 'round' && (
         <button
           id="btn-model-switcher-round"
           type="button"
@@ -52,7 +89,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         >
           <span>{currentModel.badge}</span>
         </button>
-      ) : (
+      )}
+
+      {/* 3. Pill Switcher Button */}
+      {effectiveVariant === 'pill' && (
         <button
           id="btn-model-switcher"
           type="button"
@@ -75,9 +115,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       {isOpen && (
         <div
           id="menu-model-selector"
-          className={`absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
+          className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} mt-2 w-72 sm:w-84 rounded-2xl border p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
             isDark
-              ? 'bg-neutral-900/95 backdrop-blur-md border-neutral-800 text-white shadow-black/80'
+              ? 'bg-neutral-950/95 backdrop-blur-md border-neutral-800 text-white shadow-black/80'
               : 'bg-white/95 backdrop-blur-md border-neutral-200 text-neutral-900 shadow-neutral-300'
           }`}
         >

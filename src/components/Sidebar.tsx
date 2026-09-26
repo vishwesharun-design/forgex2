@@ -32,9 +32,12 @@ import {
   Cpu,
   Wrench,
   Sparkles as SparklesIcon,
-  Headphones
+  Headphones,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { ActiveWorkspace, ChatSession, ForgeXTheme, UserProfile } from '../types';
+import { ForgeXLogo } from './ForgeXLogo';
 
 interface SidebarProps {
   activeWorkspace: ActiveWorkspace;
@@ -244,7 +247,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenVoiceMode,
 }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<'studios' | 'chats'>('studios');
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
+  const [showAllStudios, setShowAllStudios] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<StudioCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({
@@ -324,39 +328,82 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* Top: ForgeX Brand & Toggle Buttons */}
         <div className={`p-3.5 flex items-center shrink-0 ${isCollapsed ? 'md:justify-center justify-between' : 'justify-between'} border-b ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`}>
-          <div
-            onClick={onReturnToLanding}
-            className="flex items-center gap-2.5 select-none cursor-pointer hover:opacity-90 transition-opacity"
-            title="Return to ForgeX Landing Page"
-          >
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-sm shadow-amber-500/10 shrink-0">
-              <Zap className="w-4 h-4 fill-amber-500 text-amber-500" />
-            </div>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Logo Button: turns into minimize button on hover; clicking maximizes when minimized */}
+            <button
+              type="button"
+              id="sidebar-logo-button"
+              onClick={() => {
+                if (isCollapsed) {
+                  onToggleCollapse?.();
+                } else if (onToggleCollapse) {
+                  onToggleCollapse();
+                } else if (onReturnToLanding) {
+                  onReturnToLanding();
+                }
+              }}
+              onMouseEnter={() => setIsLogoHovered(true)}
+              onMouseLeave={() => setIsLogoHovered(false)}
+              title={isCollapsed ? 'Maximize sidebar' : (isLogoHovered ? 'Minimize sidebar' : 'ForgeX')}
+              aria-label={isCollapsed ? 'Maximize sidebar' : 'ForgeX'}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150 cursor-pointer shrink-0 ${
+                isDark
+                  ? 'hover:bg-neutral-850 hover:text-amber-400 text-neutral-200'
+                  : 'hover:bg-neutral-200 hover:text-amber-600 text-neutral-800'
+              }`}
+            >
+              {isLogoHovered ? (
+                <PanelLeftClose className="w-5 h-5 text-amber-400 animate-in fade-in zoom-in-90 duration-150" />
+              ) : (
+                <ForgeXLogo className="w-5 h-5 text-neutral-950 dark:text-white transition-all duration-150" />
+              )}
+            </button>
+
             {!isCollapsed && (
-              <div className="flex flex-col">
-                <span className={`font-display font-bold text-lg tracking-tight leading-none flex items-center ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+              <div
+                onClick={onReturnToLanding}
+                className="flex flex-col select-none cursor-pointer hover:opacity-90 transition-opacity"
+                title="Return to ForgeX Landing Page"
+              >
+                <span className={`font-display font-bold text-base tracking-tight leading-none flex items-center ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                   Forge<span className={isDark ? 'text-amber-400' : 'text-amber-500'}>X</span>
                 </span>
-                <span className={`text-[10px] font-mono tracking-wider uppercase ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
-                  {STUDIOS.length} AI Studios
+                <span className={`text-[10px] font-mono tracking-wider uppercase ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                  Studio
                 </span>
               </div>
             )}
           </div>
 
-          {/* Mobile Close Button */}
-          <button
-            onClick={onCloseMobile}
-            className={`p-1.5 rounded-lg md:hidden ${
-              isDark ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
-            }`}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Desktop Collapse Button inside Sidebar top-right (ChatGPT style) - kept in left screen, disappears after minimizing */}
+            {onToggleCollapse && !isCollapsed && (
+              <button
+                id="btn-sidebar-minimize"
+                onClick={onToggleCollapse}
+                title="Minimize sidebar"
+                className={`p-1.5 rounded-lg hidden md:flex items-center justify-center transition-colors ${
+                  isDark ? 'hover:bg-neutral-850 text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-500 hover:text-neutral-900'
+                }`}
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Mobile Close Button */}
+            <button
+              onClick={onCloseMobile}
+              className={`p-1.5 rounded-lg md:hidden ${
+                isDark ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
+              }`}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Action: + New Chat button & Voice Mode */}
-        <div className={`p-3 pb-2 space-y-2 shrink-0 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+        {/* Action: + New Chat button */}
+        <div className={`p-3 pb-2 shrink-0 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
           <button
             id="sidebar-btn-new-chat"
             onClick={() => {
@@ -367,372 +414,174 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="New Chat Session"
             className={`${
               isCollapsed
-                ? 'w-11 h-11 rounded-xl p-0 flex items-center justify-center'
-                : 'w-full py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2'
-            } font-semibold text-xs bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 shadow-sm shadow-amber-500/20 active:scale-[0.98] transition-all`}
+                ? 'w-10 h-10 rounded-xl p-0 flex items-center justify-center'
+                : 'w-full py-2 px-3 rounded-xl flex items-center gap-2.5'
+            } font-medium text-sm transition-all duration-150 ${
+              isDark
+                ? 'hover:bg-neutral-900 text-neutral-200 hover:text-white border border-transparent hover:border-neutral-800'
+                : 'hover:bg-neutral-200/70 text-neutral-800 hover:text-neutral-950 border border-transparent hover:border-neutral-300'
+            }`}
           >
-            <Plus className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>New Chat</span>}
+            <Plus className="w-4 h-4 shrink-0 text-amber-500" />
+            {!isCollapsed && <span>New chat</span>}
           </button>
-
-          {onOpenVoiceMode && (
-            <button
-              id="sidebar-btn-voice-mode"
-              onClick={() => {
-                onOpenVoiceMode();
-                if (window.innerWidth < 768) onCloseMobile();
-              }}
-              title="Real-Time Voice Mode"
-              className={`${
-                isCollapsed
-                  ? 'w-11 h-11 rounded-xl p-0 flex items-center justify-center'
-                  : 'w-full py-1.5 px-3 rounded-xl flex items-center justify-center gap-2'
-              } text-xs font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all`}
-            >
-              <Mic className="w-3.5 h-3.5 shrink-0 animate-pulse text-amber-400" />
-              {!isCollapsed && <span>Live Voice Mode</span>}
-            </button>
-          )}
         </div>
 
-        {/* Studio / Chats Tab Navigation */}
-        {!isCollapsed && (
-          <div className="px-3 pt-1 pb-2 shrink-0">
-            <div className={`p-1 rounded-xl flex items-center gap-1 ${isDark ? 'bg-neutral-900 border border-neutral-850' : 'bg-neutral-200/70 border border-neutral-300'}`}>
-              <button
-                type="button"
-                onClick={() => setSidebarTab('studios')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  sidebarTab === 'studios'
-                    ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                    : isDark
-                      ? 'text-neutral-400 hover:text-white'
-                      : 'text-neutral-600 hover:text-neutral-950'
-                }`}
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Studios ({STUDIOS.length})</span>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => setSidebarTab('chats')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  sidebarTab === 'chats'
-                    ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                    : isDark
-                      ? 'text-neutral-400 hover:text-white'
-                      : 'text-neutral-600 hover:text-neutral-950'
-                }`}
-              >
-                <MessageSquare className="w-3 h-3" />
-                <span>Chats ({recentChats.length})</span>
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* Scrollable Middle Container: Never overflows or clips studios */}
-        <div className={`flex-1 min-h-0 overflow-y-auto px-2.5 py-1 space-y-3 custom-scrollbar ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+        {/* Scrollable Middle Container: Studios ABOVE Chat History */}
+        <div className={`flex-1 min-h-0 overflow-y-auto px-2.5 py-1 space-y-4 custom-scrollbar ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
           
-          {/* VIEW: STUDIOS TAB (OR ALWAYS IN COLLAPSED MODE) */}
-          {(sidebarTab === 'studios' || isCollapsed) && (
+          {/* Expanded Mode: Studios at top, then Chat History below */}
+          {!isCollapsed ? (
             <>
-              {/* Category Filter Pills (Expanded Mode) */}
-              {!isCollapsed && (
-                <div className="space-y-2 px-0.5">
-                  <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
-                    {(
-                      [
-                        { id: 'all', label: 'All', icon: Sparkles },
-                        { id: 'creative', label: 'Creative', icon: Palette },
-                        { id: 'intelligence', label: 'AI Intelligence', icon: Cpu },
-                        { id: 'productivity', label: 'Productivity', icon: Wrench },
-                      ] as const
-                    ).map((cat) => {
-                      const isSel = selectedCategory === cat.id;
-                      const CatIcon = cat.icon;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setSelectedCategory(cat.id as StudioCategory)}
-                          className={`text-[11px] whitespace-nowrap px-2.5 py-1 rounded-lg font-medium inline-flex items-center gap-1.5 transition-all ${
-                            isSel
-                              ? isDark
-                                ? 'bg-neutral-800 text-amber-400 border border-amber-500/40 shadow-sm'
-                                : 'bg-amber-100 text-amber-900 border border-amber-300 font-semibold shadow-sm'
-                              : isDark
-                                ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 border border-transparent'
-                                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/80 border border-transparent'
-                          }`}
-                        >
-                          <CatIcon className="w-3 h-3 shrink-0" />
-                          <span>{cat.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* 1. STUDIOS SECTION (ABOVE CHAT HISTORY) */}
+              <div className="space-y-1">
+                <div className="px-2 pt-1 pb-1 flex items-center justify-between">
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                    Studios
+                  </span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isDark ? 'bg-neutral-900 text-neutral-400' : 'bg-neutral-200 text-neutral-600'}`}>
+                    {STUDIOS.length}
+                  </span>
+                </div>
 
-                  {/* Quick Studio Filter Input */}
-                  <div className="relative">
-                    <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500" />
-                    <input
-                      type="text"
-                      placeholder="Find studio..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className={`w-full pl-7 pr-6 py-1 rounded-lg text-xs border focus:outline-none focus:border-amber-500 ${
-                        isDark 
-                          ? 'bg-neutral-900/60 border-neutral-800 text-neutral-200 placeholder-neutral-500' 
-                          : 'bg-white border-neutral-300 text-neutral-900 placeholder-neutral-500'
-                      }`}
-                    />
-                    {searchQuery && (
+                <div className="space-y-0.5">
+                  {(showAllStudios ? STUDIOS : STUDIOS.slice(0, 6)).map((studio) => {
+                    const Icon = studio.icon;
+                    const isSelected = activeWorkspace === studio.id;
+                    return (
                       <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded transition-colors ${
-                          isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900'
-                        }`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Grouped Studios List */}
-              {!isCollapsed ? (
-                <div className="space-y-3 pt-1">
-                  {(['creative', 'intelligence', 'productivity'] as const).map((catKey) => {
-                    const categoryStudios = filteredStudios.filter((s) => s.category === catKey);
-                    if (categoryStudios.length === 0) return null;
-
-                    const meta = CATEGORY_META[catKey];
-                    const CatIcon = meta.icon;
-                    const isFolded = collapsedCategories[catKey] && selectedCategory === 'all';
-
-                    return (
-                      <div key={catKey} className="space-y-1">
-                        {/* Section Header */}
-                        {selectedCategory === 'all' && (
-                          <button
-                            type="button"
-                            onClick={() => toggleCategoryFold(catKey)}
-                            className={`w-full flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                              isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-600 hover:text-neutral-900'
-                            }`}
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <CatIcon className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
-                              <span className="leading-none">{meta.label}</span>
-                              <span className={`text-[10px] font-mono font-normal leading-none ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
-                                ({categoryStudios.length})
-                              </span>
-                            </span>
-                            <ChevronDown
-                              className={`w-3 h-3 transition-transform duration-200 ${
-                                isFolded ? '-rotate-90' : ''
-                              }`}
-                            />
-                          </button>
-                        )}
-
-                        {/* Category Studios Items */}
-                        {!isFolded && (
-                          <div className="space-y-0.5">
-                            {categoryStudios.map((studio) => {
-                              const Icon = studio.icon;
-                              const isSelected = activeWorkspace === studio.id;
-
-                              return (
-                                <button
-                                  key={studio.id}
-                                  id={`nav-workspace-${studio.id}`}
-                                  onClick={() => handleSelectStudio(studio.id)}
-                                  title={studio.description}
-                                  className={`w-full px-2.5 py-2 rounded-xl text-left flex items-center gap-2.5 transition-all group ${
-                                    isSelected
-                                      ? isDark
-                                        ? 'bg-neutral-800 text-white font-semibold shadow-sm border border-neutral-700/80 ring-1 ring-amber-500/20'
-                                        : 'bg-white text-neutral-950 font-semibold shadow-sm border border-amber-300/80 ring-1 ring-amber-500/30'
-                                      : isDark
-                                        ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/70 border border-transparent'
-                                        : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-transparent'
-                                  }`}
-                                >
-                                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                                    isSelected 
-                                      ? 'bg-amber-500/15 border border-amber-500/30' 
-                                      : isDark 
-                                        ? 'bg-neutral-900 border border-neutral-800' 
-                                        : 'bg-white border border-neutral-200 shadow-xs'
-                                  }`}>
-                                    <Icon className={`w-3.5 h-3.5 ${studio.accentColor}`} />
-                                  </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-1">
-                                      <span className="text-xs truncate">{studio.title}</span>
-                                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono shrink-0 ${
-                                        isSelected
-                                          ? isDark
-                                            ? 'bg-amber-500/20 text-amber-400 font-semibold'
-                                            : 'bg-amber-100 text-amber-800 font-bold'
-                                          : isDark
-                                            ? 'text-neutral-500 bg-neutral-900'
-                                            : 'text-neutral-600 bg-neutral-200/80'
-                                      }`}>
-                                        {studio.badge}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* Collapsed Mode: Clean icon list with tooltips */
-                <div className="flex flex-col items-center gap-1.5 py-1 w-full">
-                  {(['creative', 'intelligence', 'productivity'] as const).map((catKey, idx) => {
-                    const categoryStudios = STUDIOS.filter((s) => s.category === catKey);
-                    return (
-                      <React.Fragment key={catKey}>
-                        {idx > 0 && (
-                          <div className={`w-6 h-px my-1 ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`} />
-                        )}
-                        {categoryStudios.map((studio) => {
-                          const Icon = studio.icon;
-                          const isSelected = activeWorkspace === studio.id;
-                          return (
-                            <button
-                              key={studio.id}
-                              id={`nav-workspace-${studio.id}`}
-                              onClick={() => handleSelectStudio(studio.id)}
-                              title={`${studio.title} — ${studio.description}`}
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
-                                isSelected
-                                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm'
-                                  : isDark
-                                    ? 'text-neutral-400 hover:text-white hover:bg-neutral-900'
-                                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
-                              }`}
-                            >
-                              <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : studio.accentColor}`} />
-                            </button>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Bottom Quick Link to Chats when in Studios Tab */}
-              {!isCollapsed && recentChats.length > 0 && (
-                <div className="pt-2">
-                  <div className={`border-t pt-2 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`}>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab('chats')}
-                      className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition-colors ${
-                        isDark ? 'text-neutral-400 hover:text-amber-400 hover:bg-neutral-900/50' : 'text-neutral-600 hover:text-amber-700 hover:bg-neutral-200/60'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Recent Chats</span>
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-200 text-neutral-700 font-semibold'}`}>
-                        {recentChats.length}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* VIEW: CHATS TAB (Expanded Mode) */}
-          {sidebarTab === 'chats' && !isCollapsed && (
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center justify-between px-1">
-                <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
-                  Chat Sessions
-                </span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-800'}`}>
-                  {recentChats.length}
-                </span>
-              </div>
-
-              {recentChats.length === 0 ? (
-                <div className="px-3 py-8 text-center space-y-2">
-                  <MessageSquare className="w-8 h-8 text-neutral-600 mx-auto opacity-50" />
-                  <p className="text-xs text-neutral-500">No active conversations yet.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onNewChat();
-                      onSelectWorkspace('chat');
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-neutral-950 hover:bg-amber-400 transition-colors inline-block"
-                  >
-                    Start a New Chat
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {recentChats.map((chat) => {
-                    const isSelected = activeWorkspace === 'chat' && activeChatId === chat.id;
-                    return (
-                      <div
-                        key={chat.id}
-                        className={`group relative flex items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-all ${
+                        key={studio.id}
+                        id={`nav-workspace-${studio.id}`}
+                        onClick={() => handleSelectStudio(studio.id)}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
                           isSelected
                             ? isDark
-                              ? 'bg-neutral-800 text-amber-400 font-medium border border-neutral-700/80 shadow-sm'
-                              : 'bg-white text-neutral-950 font-semibold border border-amber-300 shadow-sm ring-1 ring-amber-500/20'
+                              ? 'bg-neutral-900 text-amber-400 font-semibold border border-neutral-800 shadow-sm'
+                              : 'bg-white text-neutral-950 font-semibold border border-amber-300/80 shadow-sm'
                             : isDark
                               ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/60'
                               : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200/70'
                         }`}
                       >
-                        <button
-                          onClick={() => {
-                            onSelectChat(chat.id);
-                            onSelectWorkspace('chat');
-                            if (window.innerWidth < 768) onCloseMobile();
-                          }}
-                          className="flex-1 text-left truncate pr-2 flex items-center gap-2"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                          <span className="truncate">{chat.title || 'Untitled Chat'}</span>
-                        </button>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteChat(chat.id);
-                          }}
-                          title="Delete chat"
-                          className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity ${
-                            isDark ? 'hover:text-red-400 text-neutral-400' : 'hover:text-red-600 text-neutral-500'
-                          }`}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
+                        <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-500' : studio.accentColor}`} />
+                        <span className="truncate flex-1 text-left">{studio.title}</span>
+                        <span className={`text-[10px] font-mono opacity-60 px-1 py-0.2 rounded ${isSelected ? 'opacity-100 text-amber-400 font-bold' : ''}`}>
+                          {studio.badge}
+                        </span>
+                      </button>
                     );
                   })}
+
+                  {/* Expand / Collapse toggle for remaining studios */}
+                  {STUDIOS.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllStudios((prev) => !prev)}
+                      className={`w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium transition-colors rounded-lg ${
+                        isDark ? 'text-neutral-400 hover:text-amber-400 hover:bg-neutral-900/50' : 'text-neutral-600 hover:text-amber-800 hover:bg-neutral-200/50'
+                      }`}
+                    >
+                      <span>{showAllStudios ? 'Show fewer studios' : `+ ${STUDIOS.length - 6} more studios`}</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showAllStudios ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* 2. RECENT CHATS (DIRECTLY BELOW STUDIOS) */}
+              <div className={`pt-3 border-t space-y-1 ${isDark ? 'border-neutral-850' : 'border-neutral-200'}`}>
+                <div className="px-2 pt-0.5 pb-1 flex items-center justify-between">
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                    Recent Chats
+                  </span>
+                  {recentChats.length > 0 && (
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isDark ? 'bg-neutral-900 text-neutral-400' : 'bg-neutral-200 text-neutral-600'}`}>
+                      {recentChats.length}
+                    </span>
+                  )}
+                </div>
+
+                {recentChats.length === 0 ? (
+                  <div className="px-3 py-6 text-center">
+                    <MessageSquare className="w-6 h-6 text-neutral-600 mx-auto opacity-40 mb-1.5" />
+                    <p className={`text-xs ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                      No previous chats
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    {recentChats.map((chat) => {
+                      const isSelected = activeWorkspace === 'chat' && activeChatId === chat.id;
+                      return (
+                        <div
+                          key={chat.id}
+                          className={`group relative flex items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-all ${
+                            isSelected
+                              ? isDark
+                                ? 'bg-neutral-850 text-amber-400 font-semibold border border-neutral-700/80 shadow-sm'
+                                : 'bg-white text-neutral-950 font-semibold border border-amber-300 shadow-sm ring-1 ring-amber-500/20'
+                              : isDark
+                                ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/60'
+                                : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200/70'
+                          }`}
+                        >
+                          <button
+                            onClick={() => {
+                              onSelectChat(chat.id);
+                              onSelectWorkspace('chat');
+                              if (window.innerWidth < 768) onCloseMobile();
+                            }}
+                            className="flex-1 text-left truncate pr-2 flex items-center gap-2"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                            <span className="truncate">{chat.title || 'New conversation'}</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteChat(chat.id);
+                            }}
+                            title="Delete chat"
+                            className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity ${
+                              isDark ? 'hover:text-red-400 text-neutral-400' : 'hover:text-red-600 text-neutral-500'
+                            }`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Collapsed Mode: Clean icon list with tooltips */
+            <div className="flex flex-col items-center gap-1.5 py-1 w-full">
+              {STUDIOS.map((studio) => {
+                const Icon = studio.icon;
+                const isSelected = activeWorkspace === studio.id;
+                return (
+                  <button
+                    key={studio.id}
+                    id={`nav-workspace-${studio.id}`}
+                    onClick={() => handleSelectStudio(studio.id)}
+                    title={`${studio.title} — ${studio.description}`}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
+                      isSelected
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm'
+                        : isDark
+                          ? 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                          : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : studio.accentColor}`} />
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

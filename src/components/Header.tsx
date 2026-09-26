@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Bell, Heart, Sun, Moon, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu, Sun, Moon } from 'lucide-react';
 import { ActiveWorkspace, ForgeXModelId, ForgeXTheme, FORGEX_MODELS, ThemeEffectType } from '../types';
 import { ModelSelector } from './ModelSelector';
 import { ThemeEffectDropdown } from './ThemeEffectDropdown';
@@ -14,8 +14,8 @@ interface HeaderProps {
   onToggleTheme: () => void;
   onToggleMobileNav: () => void;
   onOpenSearch?: () => void;
-  onOpenNotifications: () => void;
-  onOpenFavorites: () => void;
+  onOpenNotifications?: () => void;
+  onOpenFavorites?: () => void;
   onOpenApiKey?: () => void;
   unreadNotificationsCount?: number;
   isSidebarCollapsed?: boolean;
@@ -32,9 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme,
   onToggleMobileNav,
   onOpenSearch,
-  onOpenNotifications,
-  onOpenFavorites,
-  unreadNotificationsCount = 2,
   isSidebarCollapsed = false,
   onToggleSidebarCollapse,
 }) => {
@@ -43,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   const getWorkspaceInfo = () => {
     switch (activeWorkspace) {
       case 'chat':
-        return { title: 'ForgeX Chat', category: 'Intelligence' };
+        return { title: 'ForgeX', category: 'Studio' };
       case 'image':
         return { title: 'Image Studio', category: 'Creative' };
       case 'music':
@@ -77,19 +74,17 @@ export const Header: React.FC<HeaderProps> = ({
 
   const workspaceInfo = getWorkspaceInfo();
 
-  const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
-
   return (
     <header
       id="forgex-app-header"
-      className={`sticky top-0 z-30 h-16 px-4 sm:px-6 flex items-center justify-between border-b backdrop-blur-md transition-colors ${
+      className={`sticky top-0 z-30 h-14 px-3 sm:px-5 flex items-center justify-between border-b backdrop-blur-md transition-colors ${
         isDark
           ? 'bg-neutral-950/85 border-neutral-850 text-white'
           : 'bg-white/85 border-neutral-200 text-neutral-900'
       }`}
     >
-      {/* Left: Mobile menu button / Desktop collapse toggle + Workspace title */}
-      <div className="flex items-center gap-2.5 sm:gap-3">
+      {/* Left: Mobile menu toggle + Desktop sidebar minimize toggle + Model Switching right near the left */}
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Mobile menu button */}
         <button
           id="btn-mobile-nav-toggle"
@@ -103,72 +98,45 @@ export const Header: React.FC<HeaderProps> = ({
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Desktop Sidebar Minimize / Expand toggle button */}
-        {onToggleSidebarCollapse && (
-          <button
-            id="btn-desktop-sidebar-toggle"
-            onClick={onToggleSidebarCollapse}
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
-            className={`p-2 rounded-xl hidden md:flex items-center justify-center border transition-colors ${
-              isDark
-                ? 'border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-900'
-                : 'border-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-            }`}
-          >
-            {isSidebarCollapsed ? (
-              <PanelLeftOpen className="w-4 h-4 text-amber-400" />
-            ) : (
-              <PanelLeftClose className="w-4 h-4" />
-            )}
-          </button>
+        {/* Model Switching: Placed on the left */}
+        {activeWorkspace === 'chat' ? (
+          <div className="flex items-center">
+            <ModelSelector
+              selectedModelId={selectedModelId}
+              onSelectModel={onSelectModel}
+              theme={theme}
+              variant="chatgpt"
+              align="left"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 id="header-workspace-title" className="font-display font-semibold text-base sm:text-lg tracking-tight truncate max-w-[140px] sm:max-w-none">
+              {workspaceInfo.title}
+            </h1>
+            <span className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
+              isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-800 border-amber-300'
+            }`}>
+              {workspaceInfo.category}
+            </span>
+          </div>
         )}
-
-        <div className="flex items-center gap-2 min-w-0">
-          <h1 id="header-workspace-title" className="font-display font-bold text-base sm:text-xl tracking-tight truncate max-w-[130px] sm:max-w-none">
-            {workspaceInfo.title}
-          </h1>
-          <span className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
-            isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-800 border-amber-300'
-          }`}>
-            {workspaceInfo.category}
-          </span>
-        </div>
       </div>
 
-      {/* Right: Notifications, Favorites, Theme, and Round Model Switcher */}
-      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-        {/* Favorites trigger - hidden on smallest mobile to prevent overcrowding */}
-        <button
-          id="btn-open-favorites"
-          onClick={onOpenFavorites}
-          title="Saved Favorites"
-          className={`p-2 rounded-xl border transition-colors hidden sm:flex ${
-            isDark
-              ? 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-red-400 hover:border-neutral-700'
-              : 'bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-red-500 hover:border-neutral-300'
-          }`}
-        >
-          <Heart className="w-4 h-4" />
-        </button>
-
-        {/* Notifications trigger */}
-        <button
-          id="btn-open-notifications"
-          onClick={onOpenNotifications}
-          title="Notifications"
-          className={`relative p-2 rounded-xl border transition-colors ${
-            isDark
-              ? 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
-              : 'bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-neutral-900 hover:border-neutral-300'
-          }`}
-        >
-          <Bell className="w-4 h-4" />
-          {unreadNotificationsCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-neutral-950 font-bold text-[10px] flex items-center justify-center">
-              {unreadNotificationsCount}
-            </span>
-          )}
-        </button>
+      {/* Right: Clean & minimal (Favorites and Notifications removed per user request) */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* If in non-chat workspace, show model switch pill on right if helpful */}
+        {activeWorkspace !== 'chat' && (
+          <div className="hidden sm:flex items-center mr-1">
+            <ModelSelector
+              selectedModelId={selectedModelId}
+              onSelectModel={onSelectModel}
+              theme={theme}
+              variant="pill"
+              align="right"
+            />
+          </div>
+        )}
 
         {/* Theme Effect quick switcher - visible on sm+ screens */}
         {onSelectThemeEffect && (
@@ -195,17 +163,8 @@ export const Header: React.FC<HeaderProps> = ({
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
-
-        {/* Round Model Switcher button as specified in Section 8 & 9 */}
-        <div className="ml-0.5 sm:ml-1 flex items-center">
-          <ModelSelector
-            selectedModelId={selectedModelId}
-            onSelectModel={onSelectModel}
-            theme={theme}
-            compactRoundOnly={true}
-          />
-        </div>
       </div>
     </header>
   );
 };
+

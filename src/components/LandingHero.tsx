@@ -1,6 +1,7 @@
 import React from 'react';
 import { Zap, ArrowRight, Sparkles, MessageSquare, Image as ImageIcon, Code2, BookOpen } from 'lucide-react';
 import { ForgeXTheme, ActiveWorkspace, ForgeXModelId, FORGEX_MODELS } from '../types';
+import { ForgeXLogo } from './ForgeXLogo';
 
 interface LandingHeroProps {
   theme: ForgeXTheme;
@@ -17,7 +18,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
   onGetStarted,
   onLaunchStudio,
   onExplore,
-  selectedModelId = 'unreal-5',
+  selectedModelId = 'forge-2-ultra',
   onSelectModel,
   isAuthenticated = false,
 }) => {
@@ -48,7 +49,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                 : 'bg-white/90 border-amber-500/30 text-amber-500 shadow-amber-500/15'
             }`}
           >
-            <Zap className="w-14 h-14 sm:w-16 sm:h-16 fill-amber-400 text-amber-400 glow-lightning animate-pulse" />
+            <ForgeXLogo className="w-14 h-14 sm:w-16 sm:h-16 text-neutral-900 dark:text-white" />
           </div>
         </div>
 
@@ -80,7 +81,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
           One powerful AI workspace for conversations, images, code, and music.
         </p>
 
-        {/* Unreal Engine Model Selection Badges */}
+        {/* Forge Model Selection Badges */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
           {FORGEX_MODELS.map((model) => (
             <button
@@ -146,7 +147,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
               <span className="font-display font-semibold text-sm">ForgeX Chat</span>
             </div>
             <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Multi-model reasoning and coding intelligence. Click to learn how it works.
+              Conversational reasoning and coding intelligence. Click to learn how it works.
             </p>
           </div>
 

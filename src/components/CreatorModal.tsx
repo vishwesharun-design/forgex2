@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, ArrowLeft, User, Compass, Sparkles, Target, Zap } from 'lucide-react';
+import { X, ArrowLeft, User, Compass, Sparkles, Target } from 'lucide-react';
 import { ForgeXTheme } from '../types';
+import { ForgeXLogo } from './ForgeXLogo';
 
 interface CreatorModalProps {
   isOpen: boolean;
@@ -40,7 +41,7 @@ export const CreatorModal: React.FC<CreatorModalProps> = ({
         {/* Title */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Zap className="w-5 h-5 fill-amber-400 text-amber-400 glow-lightning" />
+            <ForgeXLogo className="w-5 h-5 text-neutral-900 dark:text-white" />
           </div>
           <div>
             <h2 id="creator-title" className="font-display font-bold text-2xl sm:text-3xl">

@@ -63,7 +63,7 @@ export default function App() {
 
   // Workspace View State
   const [activeWorkspace, setActiveWorkspace] = useState<ActiveWorkspace>('chat');
-  const [selectedModelId, setSelectedModelId] = useState<ForgeXModelId>('unreal-5');
+  const [selectedModelId, setSelectedModelId] = useState<ForgeXModelId>('forge-2-ultra');
 
   // App Settings & Theme
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -136,7 +136,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
       id: 'notif-1',
-      title: 'Unreal Engine 5 Online',
+      title: 'Forge 2 Ultra Online',
       message: 'ForgeX flagship multimodal engine is running at peak capability.',
       timestamp: Date.now() - 1000 * 60 * 12,
       read: false,
@@ -445,20 +445,8 @@ export default function App() {
               onToggleTheme={handleToggleTheme}
               onToggleMobileNav={() => setIsMobileNavOpen((prev) => !prev)}
               onOpenSearch={() => setIsSearchOpen(true)}
-              onOpenNotifications={() => setIsNotificationsOpen((prev) => !prev)}
-              onOpenFavorites={() => setIsFavoritesOpen(true)}
-              unreadNotificationsCount={unreadNotifCount}
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebarCollapse={handleToggleSidebarCollapse}
-            />
-
-            {/* Notifications Popover */}
-            <NotificationsPopover
-              isOpen={isNotificationsOpen}
-              onClose={() => setIsNotificationsOpen(false)}
-              notifications={notifications}
-              onMarkAllRead={handleMarkAllNotificationsRead}
-              theme={settings.theme}
             />
 
             {/* Workspace Core Views */}
@@ -473,6 +461,7 @@ export default function App() {
                   theme={settings.theme}
                   onNavigateToImage={() => setActiveWorkspace('image')}
                   onNavigateToMusic={() => setActiveWorkspace('music')}
+                  onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
                 />
               )}
 

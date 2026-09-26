@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, 
   Music, 
   ArrowLeft, 
-  Zap, 
+  Zap,
   Sparkles, 
   Cpu, 
   ShieldCheck, 
@@ -23,6 +23,7 @@ import {
   Film
 } from 'lucide-react';
 import { ForgeXTheme, FORGEX_MODELS, ActiveWorkspace } from '../types';
+import { ForgeXLogo } from './ForgeXLogo';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -59,8 +60,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({
         {/* Modal Header */}
         <div className="p-6 sm:p-8 pb-4 flex items-start justify-between border-b border-neutral-800/40 shrink-0">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-md shadow-amber-500/10">
-              <Zap className="w-6 h-6 fill-amber-400 text-amber-400 glow-lightning" />
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-md shadow-amber-500/10">
+              <ForgeXLogo className="w-6 h-6 text-neutral-900 dark:text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -97,7 +98,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             { id: 'chat', label: 'AI Chat', icon: MessageSquare },
             { id: 'image', label: 'Image Studio', icon: ImageIcon },
             { id: 'music', label: 'Make Song', icon: Music },
-            { id: 'models', label: 'Unreal Models', icon: Cpu },
+            { id: 'models', label: 'Forge Models', icon: Cpu },
             { id: 'auth', label: 'Real Auth & Credits', icon: ShieldCheck },
           ].map((tab) => {
             const isActive = activeSection === tab.id;
@@ -241,10 +242,10 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
                   <h4 className="font-semibold text-sm mb-1 flex items-center gap-1.5 text-amber-400">
                     <CheckCircle2 className="w-4 h-4" />
-                    Unreal Engine Tier Selection
+                    Forge Model Tier Selection
                   </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    Switch on the fly between Unreal Engine 1 (ultra-fast responses) through Unreal Engine 5 (deep reasoning).
+                    Switch on the fly between Forge 1 (ultra-fast responses) through Forge 2 Ultra (deep multimodal reasoning).
                   </p>
                 </div>
 
@@ -391,7 +392,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             </div>
           )}
 
-          {/* TAB 5: UNREAL ENGINE MODELS */}
+          {/* TAB 5: FORGE MODELS */}
           {activeSection === 'models' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="flex items-center gap-3">
@@ -400,10 +401,10 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </div>
                 <div>
                   <h3 className="font-display font-bold text-xl text-amber-400">
-                    Unreal Engine 1 through 5
+                    Forge 1 through Forge 2 Ultra
                   </h3>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                    Five distinct intelligence tiers tailored for every creative workflow
+                    Five distinct capability tiers tailored for every creative workflow
                   </p>
                 </div>
               </div>

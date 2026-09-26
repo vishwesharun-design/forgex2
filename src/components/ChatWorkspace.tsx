@@ -9,13 +9,17 @@ import {
   Copy, 
   Check, 
   CornerDownLeft, 
-  X,
-  FileText,
-  StopCircle,
-  ArrowRight,
-  AlertCircle,
-  Trash2,
-  RotateCcw
+  X, 
+  FileText, 
+  StopCircle, 
+  ArrowRight, 
+  ArrowUp,
+  AlertCircle, 
+  Trash2, 
+  RotateCcw,
+  AudioLines,
+  Plus,
+  Headphones,
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
@@ -32,6 +36,7 @@ interface ChatWorkspaceProps {
   onNavigateToImage: () => void;
   onNavigateToVideo?: () => void;
   onNavigateToMusic?: () => void;
+  onOpenVoiceMode?: () => void;
 }
 
 export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
@@ -44,10 +49,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   onNavigateToImage,
   onNavigateToVideo,
   onNavigateToMusic,
+  onOpenVoiceMode,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<{ type: 'file' | 'image'; name: string; url?: string }[]>([]);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [pendingUserTurn, setPendingUserTurn] = useState<{
     text: string;
@@ -232,6 +239,217 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
+
+  const renderChatInput = () => {
+    const hasContent = Boolean(inputText.trim() || attachedFiles.length > 0);
+
+    return (
+      <div className="w-full relative">
+        {/* Attached files preview */}
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2 px-1">
+            {attachedFiles.map((file, idx) => (
+              <div
+                key={idx}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs border ${
+                  isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'
+                }`}
+              >
+                {file.type === 'image' && file.url ? (
+                  <img src={file.url} alt={file.name} className="w-5 h-5 rounded object-cover border border-amber-500/40" />
+                ) : file.type === 'image' ? (
+                  <ImageIcon className="w-3.5 h-3.5" />
+                ) : (
+                  <Paperclip className="w-3.5 h-3.5" />
+                )}
+                <span className="truncate max-w-[140px]">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                  className={`${isDark ? 'hover:text-white' : 'hover:text-neutral-900'} ml-1`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ChatGPT Style Rounded Capsule Input Container */}
+        <div
+          id="chat-input-container"
+          className={`relative rounded-3xl p-2 sm:p-2.5 border transition-all duration-200 shadow-sm flex items-center gap-2 ${
+            isDark
+              ? 'bg-neutral-900/90 border-neutral-800 focus-within:border-neutral-700 shadow-black/40'
+              : 'bg-white border-neutral-300 focus-within:border-neutral-400 shadow-neutral-200/60'
+          }`}
+        >
+          {/* Plus Attach Button on Left */}
+          <div className="relative shrink-0">
+            <button
+              id="btn-chat-attach"
+              type="button"
+              onClick={() => setAttachMenuOpen(!attachMenuOpen)}
+              title="Attach files or images"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                isDark
+                  ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
+                  : 'hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
+            {/* Attach Dropdown Menu */}
+            {attachMenuOpen && (
+              <div
+                className={`absolute bottom-full left-0 mb-2 w-48 rounded-2xl border p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                  isDark
+                    ? 'bg-neutral-900 border-neutral-800 text-white'
+                    : 'bg-white border-neutral-200 text-neutral-900'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    imageInputRef.current?.click();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4 text-amber-500" />
+                  <span>Upload Image</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-blue-500" />
+                  <span>Upload Document</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Text Area */}
+          <div className="flex-1 min-w-0 flex items-center">
+            <textarea
+              ref={textareaRef}
+              id="chat-textarea"
+              rows={1}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask ForgeX"
+              className={`w-full bg-transparent px-2 py-1 text-sm sm:text-base resize-none outline-none max-h-36 leading-normal ${
+                isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-500'
+              }`}
+            />
+          </div>
+
+          {/* Action buttons on Right */}
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Dictation Mic Button */}
+            <button
+              id="btn-voice-input"
+              type="button"
+              onClick={toggleListening}
+              title={isListening ? 'Stop recording & transcribe' : 'Dictate voice input'}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                isListening
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                  : isProcessing
+                  ? 'bg-amber-500/20 text-amber-400 animate-pulse'
+                  : isDark
+                  ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
+                  : 'hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              {isListening ? (
+                <StopCircle className="w-4 h-4 text-red-400 animate-pulse" />
+              ) : isProcessing ? (
+                <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+              ) : (
+                <Mic className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Live Voice Mode Button (near mic icon with distinct audio lines / sound wave icon) */}
+            {onOpenVoiceMode && (
+              <button
+                id="btn-live-voice-mode"
+                type="button"
+                onClick={onOpenVoiceMode}
+                title="Live Voice Mode (real-time voice conversation)"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                  isDark
+                    ? 'hover:bg-neutral-800 text-neutral-400 hover:text-amber-400'
+                    : 'hover:bg-neutral-100 text-neutral-600 hover:text-amber-600'
+                }`}
+              >
+                <AudioLines className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Circular Send Button with Up Arrow (ChatGPT style) */}
+            <button
+              id="btn-chat-send"
+              type="button"
+              disabled={!hasContent || isSubmitting}
+              onClick={() => handleSendMessage()}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                hasContent
+                  ? isDark
+                    ? 'bg-white text-neutral-950 hover:bg-neutral-200 active:scale-95 shadow-sm'
+                    : 'bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95 shadow-sm'
+                  : isDark
+                  ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                  : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+              }`}
+            >
+              <ArrowUp className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Listening Indicator if active */}
+        {isListening && (
+          <div className="flex items-center justify-center gap-2 mt-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs mx-auto w-fit">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
+            <span className="text-[11px] font-mono font-bold">
+              00:{durationSeconds < 10 ? '0' : ''}{durationSeconds}
+            </span>
+            <div className="flex items-center gap-0.5 h-3">
+              <span className="w-0.5 bg-red-400 rounded-full" style={{ height: `${Math.max(3, (audioLevel / 100) * 12)}px` }} />
+              <span className="w-0.5 bg-red-400 rounded-full" style={{ height: `${Math.max(4, (audioLevel / 100) * 16)}px` }} />
+              <span className="w-0.5 bg-red-400 rounded-full" style={{ height: `${Math.max(3, (audioLevel / 100) * 10)}px` }} />
+            </div>
+            <span className="text-[11px] font-medium">Listening... Speak now</span>
+          </div>
+        )}
+
+        {/* Voice error notice */}
+        {voiceError && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs my-1.5 mx-auto max-w-md">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-[11px] truncate flex-1">{voiceError}</span>
+            <button type="button" onClick={clearVoiceError} className="hover:text-red-200">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 relative overflow-hidden">
       {/* Hidden file inputs */}
@@ -252,82 +470,30 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
         {!hasMessages ? (
-          /* Empty Initial State */
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-8 sm:py-12 select-none animate-in fade-in duration-300">
-            {/* How can ForgeX help you today? */}
-            <h2 id="chat-empty-title" className="font-display font-bold text-2xl sm:text-4xl tracking-tight mb-2">
-              How can ForgeX help you today?
+          /* Empty Initial State: Centered ChatGPT Style */
+          <div className="flex-1 flex flex-col items-center justify-center text-center max-w-2xl mx-auto w-full px-2 py-8 select-none animate-in fade-in duration-300">
+            <h2 id="chat-empty-title" className="font-display font-medium text-3xl sm:text-4xl tracking-tight mb-8 text-neutral-900 dark:text-white">
+              Where should we begin?
             </h2>
 
-            {/* Clean subtitle without video reference */}
-            <p className={`text-sm sm:text-lg mb-6 sm:mb-8 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Chat, create images, or explore ideas.
-            </p>
+            {/* Centered Input Container */}
+            <div className="w-full mb-4">
+              {renderChatInput()}
+            </div>
 
-            {/* Suggested Prompts */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full text-left">
+            {/* What can you do? Button */}
+            <div className="flex flex-col items-center gap-3 w-full">
               <button
-                id="prompt-btn-explain"
-                onClick={() => handleSendMessage('Explain how transformer neural networks process attention mechanisms.')}
-                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
+                type="button"
+                id="btn-what-can-you-do"
+                onClick={() => handleSendMessage('What can you do?')}
+                className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium border transition-colors ${
                   isDark
-                    ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
+                    ? 'border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800 text-neutral-300 hover:text-white'
+                    : 'border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 shadow-sm'
                 }`}
               >
-                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Concept</span>
-                <p className="font-semibold text-sm">Explain something</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  Deep dive into complex technical mechanisms
-                </p>
-              </button>
-
-              <button
-                id="prompt-btn-image"
-                onClick={() => handleSendMessage('Create a prompt for a photorealistic cybernetic sanctuary in 8k.')}
-                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
-                  isDark
-                    ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
-                }`}
-              >
-                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Visual</span>
-                <p className="font-semibold text-sm">Create an image</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  Craft hyper-detailed prompts for Image Studio
-                </p>
-              </button>
-
-              <button
-                id="prompt-btn-music"
-                onClick={() => handleSendMessage('Compose lyrics and chord progression for an atmospheric synth track.')}
-                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
-                  isDark
-                    ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
-                }`}
-              >
-                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Audio & Song</span>
-                <p className="font-semibold text-sm">Compose a song</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  Structure rhythm, BPM, vocal style, and lyrics
-                </p>
-              </button>
-
-              <button
-                id="prompt-btn-brainstorm"
-                onClick={() => handleSendMessage('Brainstorm 4 innovative features for an AI creative suite.')}
-                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
-                  isDark
-                    ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
-                }`}
-              >
-                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Ideation</span>
-                <p className="font-semibold text-sm">Brainstorm an idea</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  Generate out-of-the-box creative perspectives
-                </p>
+                What can you do?
               </button>
             </div>
           </div>
@@ -400,7 +566,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                                 <img
                                   src={att.url}
                                   alt={att.name}
-                                  className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
+                                  className={`max-h-48 max-w-xs rounded-xl object-cover border shadow-sm ${
+                                    isDark ? 'border-neutral-700' : 'border-neutral-200'
+                                  }`}
                                 />
                               )}
                               <div
@@ -416,12 +584,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         </div>
                       )}
 
-                      {/* User message text bubble: Orange background ONLY for the text */}
-                      <div className="rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-amber-500 to-amber-600 text-neutral-950 font-medium rounded-tr-sm shadow-md shadow-amber-500/15 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                      {/* User message text bubble: Clean light/white style for light theme, neutral dark for dark theme */}
+                      <div
+                        className={`rounded-3xl p-4 sm:p-5 font-normal rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap font-sans transition-colors ${
+                          isDark
+                            ? 'bg-neutral-800 border border-neutral-700/70 text-neutral-100 shadow-md shadow-black/25'
+                            : 'bg-neutral-100/95 border border-neutral-200/90 text-neutral-900 shadow-sm'
+                        }`}
+                      >
                         {message.content}
                       </div>
 
-                      {/* Action Bar for User Messages: Outside orange bubble, NO orange background */}
+                      {/* Action Bar for User Messages */}
                       <div className="mt-1 flex items-center justify-end px-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => copyToClipboard(message.content, message.id)}
@@ -555,244 +729,17 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         )}
       </div>
 
-      {/* Bottom Area: Quick Actions & Large Rounded Chat Input */}
-      <div className="px-3 sm:px-6 pt-0 pb-2 sm:pb-4 max-w-3xl w-full mx-auto shrink-0">
-        {/* Quick Actions (Section 12) */}
-        <div className="flex items-center gap-2 mb-2.5 overflow-x-auto pb-1 no-scrollbar">
-          <button
-            id="quick-action-image"
-            onClick={onNavigateToImage}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all shrink-0 ${
-              isDark
-                ? 'bg-neutral-900/80 hover:bg-neutral-800 border-neutral-800 text-amber-400 hover:border-amber-500/40'
-                : 'bg-white hover:bg-neutral-100 border-neutral-200 text-amber-700 hover:border-amber-300 shadow-sm'
-            }`}
-          >
-            <span>+ Image</span>
-          </button>
-
-          {onNavigateToMusic && (
-            <button
-              id="quick-action-music"
-              onClick={onNavigateToMusic}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all shrink-0 ${
-                isDark
-                  ? 'bg-neutral-900/80 hover:bg-neutral-800 border-neutral-800 text-amber-400 hover:border-amber-500/40'
-                  : 'bg-white hover:bg-neutral-100 border-neutral-200 text-amber-700 hover:border-amber-300 shadow-sm'
-              }`}
-            >
-              <span>+ Song</span>
-            </button>
-          )}
-
-          <button
-            id="quick-action-analyze"
-            onClick={() => handleSendMessage('Analyze the technical trade-offs of latent diffusion vs auto-regressive transformers.')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all shrink-0 ${
-              isDark
-                ? 'bg-neutral-900/80 hover:bg-neutral-800 border-neutral-800 text-neutral-300 hover:text-white'
-                : 'bg-white hover:bg-neutral-100 border-neutral-200 text-neutral-700 shadow-sm'
-            }`}
-          >
-            <span>Analyze</span>
-          </button>
-
-          <button
-            id="quick-action-write"
-            onClick={() => handleSendMessage('Write a compelling product script for the launch of ForgeX Studio.')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all shrink-0 ${
-              isDark
-                ? 'bg-neutral-900/80 hover:bg-neutral-800 border-neutral-800 text-neutral-300 hover:text-white'
-                : 'bg-white hover:bg-neutral-100 border-neutral-200 text-neutral-700 shadow-sm'
-            }`}
-          >
-            <span>Write</span>
-          </button>
+      {/* When messages exist: Bottom pinned input container */}
+      {hasMessages && (
+        <div className="px-3 sm:px-6 pt-0 pb-2 max-w-2xl w-full mx-auto shrink-0">
+          {renderChatInput()}
         </div>
+      )}
 
-        {/* Attached files preview */}
-        {attachedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
-            {attachedFiles.map((file, idx) => (
-              <div
-                key={idx}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs border ${
-                  isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'
-                }`}
-              >
-                {file.type === 'image' && file.url ? (
-                  <img src={file.url} alt={file.name} className="w-5 h-5 rounded object-cover border border-amber-500/40" />
-                ) : file.type === 'image' ? (
-                  <ImageIcon className="w-3.5 h-3.5" />
-                ) : (
-                  <Paperclip className="w-3.5 h-3.5" />
-                )}
-                <span className="truncate max-w-[140px]">{file.name}</span>
-                <button
-                  onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
-                  className={`${isDark ? 'hover:text-white' : 'hover:text-neutral-900'} ml-1`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Large Rounded Chat Input (Section 11) */}
-        <div
-          id="chat-input-container"
-          className={`relative rounded-3xl p-3 border transition-all duration-200 shadow-xl ${
-            isDark
-              ? 'bg-neutral-900/90 border-neutral-800 focus-within:border-amber-500/60 shadow-black/50'
-              : 'bg-white border-neutral-300 focus-within:border-amber-500 shadow-neutral-200/80'
-          }`}
-        >
-          <textarea
-            ref={textareaRef}
-            id="chat-textarea"
-            rows={1}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask ForgeX anything..."
-            className={`w-full bg-transparent px-3 py-1.5 text-sm resize-none outline-none max-h-48 leading-relaxed ${
-              isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-500'
-            }`}
-          />
-
-          {/* Action toolbar inside input bottom */}
-          <div className={`flex items-center justify-between pt-2 border-t px-1 ${
-            isDark ? 'border-neutral-800/40' : 'border-neutral-200'
-          }`}>
-            <div className="flex items-center gap-1">
-              {/* Attach File Button */}
-              <button
-                id="btn-attach-file"
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title="Attach file"
-                className={`p-2 rounded-xl transition-colors ${
-                  isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
-                }`}
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
-
-              {/* Image Attachment Button */}
-              <button
-                id="btn-attach-image"
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                title="Attach image"
-                className={`p-2 rounded-xl transition-colors ${
-                  isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4" />
-              </button>
-
-              {/* Voice Button */}
-              <button
-                id="btn-voice-input"
-                type="button"
-                onClick={toggleListening}
-                title={isListening ? 'Stop recording & transcribe' : 'Voice input (Speak to ForgeX)'}
-                className={`p-2 rounded-xl transition-all ${
-                  isListening
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-sm shadow-red-500/20'
-                    : isProcessing
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse'
-                    : isDark
-                      ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
-                      : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
-                }`}
-              >
-                {isListening ? (
-                  <StopCircle className="w-4 h-4 text-red-400 animate-pulse" />
-                ) : isProcessing ? (
-                  <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
-                ) : (
-                  <Mic className="w-4 h-4" />
-                )}
-              </button>
-
-              {/* Active Audio Visualizer & State Badge */}
-              {isListening && (
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
-                  <span className="text-[11px] font-mono font-bold">
-                    00:{durationSeconds < 10 ? '0' : ''}{durationSeconds}
-                  </span>
-                  {/* Dynamic Sound Wave Bars */}
-                  <div className="flex items-center gap-0.5 h-3">
-                    <span
-                      className="w-0.5 bg-red-400 rounded-full transition-all duration-75"
-                      style={{ height: `${Math.max(3, (audioLevel / 100) * 12)}px` }}
-                    />
-                    <span
-                      className="w-0.5 bg-red-400 rounded-full transition-all duration-75"
-                      style={{ height: `${Math.max(4, (audioLevel / 100) * 16)}px` }}
-                    />
-                    <span
-                      className="w-0.5 bg-red-400 rounded-full transition-all duration-75"
-                      style={{ height: `${Math.max(3, (audioLevel / 100) * 10)}px` }}
-                    />
-                  </div>
-                  <span className="text-[10px] hidden sm:inline font-medium text-neutral-300">
-                    Listening...
-                  </span>
-                </div>
-              )}
-
-              {isProcessing && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                  <span className="text-[11px] font-medium">Processing voice input...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Voice Error Banner */}
-            {voiceError && (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs my-1">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-[11px] truncate flex-1">{voiceError}</span>
-                <button
-                  type="button"
-                  onClick={clearVoiceError}
-                  className="hover:text-red-200"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <span className={`text-[11px] hidden sm:inline ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                Enter to send
-              </span>
-
-              {/* Send Button */}
-              <button
-                id="btn-chat-send"
-                type="button"
-                disabled={(!inputText.trim() && attachedFiles.length === 0) || isSubmitting}
-                onClick={() => handleSendMessage()}
-                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${
-                  inputText.trim() || attachedFiles.length > 0
-                    ? 'bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-md shadow-amber-500/25 active:scale-95'
-                    : isDark
-                      ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Footer disclaimer */}
+      <p className="text-[11px] text-center text-neutral-400 dark:text-neutral-600 pb-2 select-none shrink-0">
+        ForgeX can make mistakes. Check important info.
+      </p>
     </div>
   );
 };

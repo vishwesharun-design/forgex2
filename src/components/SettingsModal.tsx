@@ -442,7 +442,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <h4 className="font-display font-bold text-lg mb-1">AI Models & Preferences</h4>
                 <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  Configure default Unreal Engine model tier and response style
+                  Configure default Forge model tier and response style
                 </p>
               </div>
 

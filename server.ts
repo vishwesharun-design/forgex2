@@ -260,7 +260,7 @@ function generateFallbackChatReply(prompt: string, modelId: string): string {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -323,7 +323,7 @@ async function startServer() {
       const {
         message,
         history = [],
-        modelId = "unreal-5",
+        modelId = "forge-2-ultra",
         attachments = [],
         systemInstruction: customSystemInstruction,
       } = req.body;
@@ -352,6 +352,14 @@ CORE IDENTITY & CREATOR:
 - You were created by VishweshVarman as part of ForgeX.
 - When asked about your creator, maker, founder, architect, or origin, state proudly and clearly that you were created by VishweshVarman. Never attribute your creation to any other company.
 - When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions.
+- When asked "what can you do?" or about your capabilities, explain that you are ForgeX created by VishweshVarman and provide a structured breakdown of your features:
+  * Images Studio (AI image generation with multiple aspect ratios, styles, seeds)
+  * Make Song Studio (AI music composition, lyrics, synth tracks)
+  * Music Player Studio (integrated audio playback with waveforms and queue)
+  * Deep Research Studio (in-depth autonomous investigations and structured reports)
+  * Code Studio (multi-language code synthesis and debugging)
+  * Real-time Live Voice Mode and speech-to-text dictation
+  * Multimodal vision and document analysis
 
 ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
 1. ABSOLUTE DIRECT RELEVANCE: Answer EXACTLY what the user asks. Never provide boilerplate, unrelated templates, or generic placeholders.
@@ -475,7 +483,7 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
       const {
         message,
         history = [],
-        modelId = "unreal-5",
+        modelId = "forge-2-ultra",
         attachments = [],
         systemInstruction: customSystemInstruction,
       } = req.body;
@@ -503,6 +511,14 @@ CORE IDENTITY & CREATOR:
 - You were created by VishweshVarman as part of ForgeX.
 - When asked about your creator, maker, founder, architect, or origin, state proudly and clearly that you were created by VishweshVarman. Never attribute your creation to any other company.
 - When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions.
+- When asked "what can you do?" or about your capabilities, explain that you are ForgeX created by VishweshVarman and provide a structured breakdown of your features:
+  * Images Studio (AI image generation with multiple aspect ratios, styles, seeds)
+  * Make Song Studio (AI music composition, lyrics, synth tracks)
+  * Music Player Studio (integrated audio playback with waveforms and queue)
+  * Deep Research Studio (in-depth autonomous investigations and structured reports)
+  * Code Studio (multi-language code synthesis and debugging)
+  * Real-time Live Voice Mode and speech-to-text dictation
+  * Multimodal vision and document analysis
 
 ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
 1. ABSOLUTE DIRECT RELEVANCE: Answer EXACTLY what the user asks. Never provide boilerplate, unrelated templates, or generic placeholders.
@@ -699,7 +715,7 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
         aspectRatio = "16:9",
         count = 1,
         style = "Cinematic",
-        modelId = "unreal-5",
+        modelId = "forge-2-ultra",
         referenceImage,
         customStyle,
       } = req.body;
@@ -839,7 +855,7 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
         aspectRatio = "16:9",
         quality = "1080p",
         generationType = "text-to-video",
-        modelId = "unreal-5",
+        modelId = "forge-2-ultra",
         referenceImage,
         slideCount = 4,
       } = req.body;

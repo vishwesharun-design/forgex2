@@ -1,7 +1,8 @@
 import React from 'react';
-import { Zap, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { ForgeXTheme, ThemeEffectType } from '../types';
 import { ThemeEffectDropdown } from './ThemeEffectDropdown';
+import { ForgeXLogo } from './ForgeXLogo';
 
 interface LandingNavProps {
   theme: ForgeXTheme;
@@ -37,12 +38,12 @@ export const LandingNav: React.FC<LandingNavProps> = ({
         }`}
       >
         {/* Left: Brand */}
-        <div className="flex items-center gap-2 select-none cursor-pointer group shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:border-amber-400/60 transition-all duration-300 shadow-sm shadow-amber-500/10">
-            <Zap className="w-4 h-4 fill-amber-400 text-amber-400 glow-lightning" />
+        <div className="flex items-center gap-2.5 select-none cursor-pointer group shrink-0">
+          <div className="w-8 h-8 flex items-center justify-center shrink-0">
+            <ForgeXLogo className="w-6 h-6 text-neutral-900 dark:text-white" />
           </div>
           <span className="font-display font-bold text-lg sm:text-xl tracking-tight flex items-center">
-            Forge<span className="text-amber-400">X</span>
+            Forge<span className="text-amber-500">X</span>
           </span>
         </div>
 

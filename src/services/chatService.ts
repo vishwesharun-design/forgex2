@@ -69,7 +69,7 @@ export const chatService = {
     }
   },
 
-  createSession(modelId: ForgeXModelId = 'unreal-5', initialTitle = 'New Chat'): ChatSession {
+  createSession(modelId: ForgeXModelId = 'forge-2-ultra', initialTitle = 'New Chat'): ChatSession {
     const sessions = this.getSessions();
     const newSession: ChatSession = {
       id: 'chat_' + Date.now(),
@@ -88,7 +88,7 @@ export const chatService = {
     return newSession;
   },
 
-  createNewSession(modelId: ForgeXModelId = 'unreal-5'): ChatSession {
+  createNewSession(modelId: ForgeXModelId = 'forge-2-ultra'): ChatSession {
     return this.createSession(modelId, 'New Chat');
   },
 

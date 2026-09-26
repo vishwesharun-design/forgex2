@@ -1,6 +1,11 @@
 export type ForgeXTheme = 'dark' | 'light';
 
 export type ForgeXModelId = 
+  | 'forge-1'
+  | 'forge-1.5'
+  | 'forge-2'
+  | 'forge-2-pro'
+  | 'forge-2-ultra'
   | 'unreal-1' 
   | 'unreal-2' 
   | 'unreal-3' 
@@ -10,45 +15,45 @@ export type ForgeXModelId =
 export interface ForgeXModel {
   id: ForgeXModelId;
   name: string;
-  badge: string; // e.g. 'U1', 'U5'
+  badge: string; // e.g. 'F1', 'F2 Ultra'
   description: string;
   capabilityLevel: number;
 }
 
 export const FORGEX_MODELS: ForgeXModel[] = [
   {
-    id: 'unreal-1',
-    name: 'Unreal Engine 1',
-    badge: 'U1',
-    description: 'Basic AI',
+    id: 'forge-1',
+    name: 'Forge 1',
+    badge: 'F1',
+    description: 'Ultra-fast basic AI',
     capabilityLevel: 1,
   },
   {
-    id: 'unreal-2',
-    name: 'Unreal Engine 2',
-    badge: 'U2',
-    description: 'Improved reasoning',
+    id: 'forge-1.5',
+    name: 'Forge 1.5',
+    badge: 'F1.5',
+    description: 'Fast balanced reasoning',
     capabilityLevel: 2,
   },
   {
-    id: 'unreal-3',
-    name: 'Unreal Engine 3',
-    badge: 'U3',
-    description: 'Advanced responses',
+    id: 'forge-2',
+    name: 'Forge 2',
+    badge: 'F2',
+    description: 'Advanced responses & logic',
     capabilityLevel: 3,
   },
   {
-    id: 'unreal-4',
-    name: 'Unreal Engine 4',
-    badge: 'U4',
-    description: 'Advanced creative intelligence',
+    id: 'forge-2-pro',
+    name: 'Forge 2 Pro',
+    badge: 'F2 Pro',
+    description: 'Advanced creative precision',
     capabilityLevel: 4,
   },
   {
-    id: 'unreal-5',
-    name: 'Unreal Engine 5',
-    badge: 'U5',
-    description: 'Highest capability',
+    id: 'forge-2-ultra',
+    name: 'Forge 2 Ultra',
+    badge: 'F2 Ultra',
+    description: 'Highest capability flagship',
     capabilityLevel: 5,
   },
 ];
@@ -281,7 +286,7 @@ export interface NotificationItem {
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'light',
-  defaultModel: 'unreal-5',
+  defaultModel: 'forge-2-ultra',
   responsePreference: 'Balanced',
   defaultImageRatio: '16:9',
   defaultVideoDuration: '10s',
