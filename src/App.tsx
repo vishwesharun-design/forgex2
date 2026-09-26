@@ -52,6 +52,7 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { StudioStoreModal } from './components/StudioStoreModal';
 import { CustomStudioWorkspace } from './components/CustomStudioWorkspace';
 import { studioService } from './services/studioService';
+import { Lock } from 'lucide-react';
 
 export default function App() {
   // State: View Mode (Landing Page vs In-Workspace)
@@ -196,6 +197,7 @@ export default function App() {
       }).catch(() => {});
 
       musicService.syncWithFirestore().catch(() => {});
+      studioService.syncWithFirestore(user.id, user.email || '').catch(() => {});
     }
   }, [user?.id, user?.email]);
 
@@ -244,6 +246,10 @@ export default function App() {
 
   // Handlers for Navigation
   const handleLaunchStudio = (initialWorkspace?: ActiveWorkspace) => {
+    if (initialWorkspace && initialWorkspace !== 'chat' && !user) {
+      setIsAuthOpen(true);
+      return;
+    }
     if (initialWorkspace) {
       setActiveWorkspace(initialWorkspace);
     }
@@ -456,6 +462,38 @@ export default function App() {
 
             {/* Workspace Core Views */}
             <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+              {activeWorkspace !== 'chat' && !user ? (
+                <div className={`flex-1 flex flex-col items-center justify-center p-6 text-center ${
+                  isDark ? 'bg-neutral-950 text-white' : 'bg-neutral-50 text-neutral-900'
+                }`}>
+                  <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 mb-4 shadow-xl">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <h2 className="font-display font-bold text-xl sm:text-2xl mb-2">
+                    Sign In Required
+                  </h2>
+                  <p className={`text-sm max-w-md mb-6 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                    Access to specialized ForgeX Studios and Studio Making requires an authenticated account. Sign in with your Google or email account to continue and store your generation history separately in Firebase.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setActiveWorkspace('chat')}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-semibold ${
+                        isDark ? 'hover:bg-neutral-850 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
+                      }`}
+                    >
+                      Return to Chat
+                    </button>
+                    <button
+                      onClick={() => setIsAuthOpen(true)}
+                      className="px-6 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20 transition-transform hover:scale-105 active:scale-95"
+                    >
+                      Sign In / Create Account
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
               {activeWorkspace === 'chat' && (
                 <ChatWorkspace
                   currentSession={currentChatSession}
@@ -618,6 +656,8 @@ export default function App() {
                   />
                 );
               })()}
+                </>
+              )}
             </main>
 
             {/* Mobile Bottom Navigation Bar (md:hidden) */}

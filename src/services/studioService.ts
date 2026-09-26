@@ -314,7 +314,10 @@ export const studioService = {
     try {
       const raw = localStorage.getItem(`${STORAGE_STUDIO_PROFILES_KEY}_${clean}`);
       if (raw) {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.studioName && parsed.studioName.trim().length > 0) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.error('Failed to get studio profile from localStorage', e);
@@ -322,21 +325,88 @@ export const studioService = {
     return null;
   },
 
+  async syncWithFirestore(userId: string, email: string): Promise<void> {
+    if (!userId || userId === 'guest' || !email) return;
+    const cleanEmail = email.trim().toLowerCase();
+
+    try {
+      // 1. Sync Studio Profile from Firestore
+      const cloudProfile = await firestoreStorageService.loadUserStudioProfile(userId);
+      if (cloudProfile && cloudProfile.studioName) {
+        localStorage.setItem(
+          `${STORAGE_STUDIO_PROFILES_KEY}_${cleanEmail}`,
+          JSON.stringify({ ...cloudProfile, email: cleanEmail, userId })
+        );
+      } else {
+        // If local profile exists, push it up to Firestore
+        const localProfile = this.getUserStudioProfile(cleanEmail);
+        if (localProfile && localProfile.studioName) {
+          await firestoreStorageService.saveUserStudioProfile(userId, {
+            ...localProfile,
+            userId,
+            email: cleanEmail,
+          });
+        }
+      }
+
+      // 2. Sync Custom Studios from Firestore
+      const cloudStudios = await firestoreStorageService.loadUserCustomStudios(userId);
+      if (cloudStudios && cloudStudios.length > 0) {
+        const allCustom = this.getCustomStudios();
+        const studioMap = new Map<string, CustomStudio>();
+        allCustom.forEach((s) => studioMap.set(s.id, s));
+        cloudStudios.forEach((cs) => {
+          if (cs && cs.id) {
+            studioMap.set(cs.id, cs as CustomStudio);
+          }
+        });
+        const merged = Array.from(studioMap.values());
+        this.saveAllCustomStudios(merged);
+      }
+      window.dispatchEvent(new Event('forgex_studios_updated'));
+    } catch (err) {
+      console.warn('Error syncing studioService with Firestore:', err);
+    }
+  },
+
   saveUserStudioProfile(profile: UserStudioProfile): void {
-    if (!profile.email) return;
+    if (!profile.email || !profile.studioName?.trim()) return;
     const clean = profile.email.trim().toLowerCase();
+    const studioName = profile.studioName.trim();
     const updatedProfile: UserStudioProfile = {
       ...profile,
+      studioName,
       email: clean,
       updatedAt: Date.now(),
     };
+
     try {
       localStorage.setItem(`${STORAGE_STUDIO_PROFILES_KEY}_${clean}`, JSON.stringify(updatedProfile));
-      window.dispatchEvent(new Event('forgex_studios_updated'));
+
+      // Update all existing custom studios belonging to this email to reflect the newly registered studio name
+      const customStudios = this.getCustomStudios();
+      let hasChanges = false;
+      const updatedStudios = customStudios.map((s) => {
+        if (s.creatorEmail && s.creatorEmail.trim().toLowerCase() === clean) {
+          hasChanges = true;
+          return {
+            ...s,
+            studioBrandName: studioName,
+            creatorName: studioName,
+          };
+        }
+        return s;
+      });
+
+      if (hasChanges) {
+        this.saveAllCustomStudios(updatedStudios);
+      } else {
+        window.dispatchEvent(new Event('forgex_studios_updated'));
+      }
 
       // If user has a Firebase userId, sync to Firestore
-      if (updatedProfile.userId) {
-        firestoreStorageService.saveUserStudioProfile(updatedProfile.userId, updatedProfile);
+      if (updatedProfile.userId && updatedProfile.userId !== 'guest') {
+        firestoreStorageService.saveUserStudioProfile(updatedProfile.userId, updatedProfile).catch(() => {});
       }
     } catch (e) {
       console.error('Failed to save user studio profile', e);
@@ -346,7 +416,7 @@ export const studioService = {
   hasUserStudioProfile(email?: string): boolean {
     if (!email) return false;
     const profile = this.getUserStudioProfile(email);
-    return Boolean(profile && profile.studioName && profile.studioName.trim().length > 0);
+    return Boolean(profile && profile.studioName && profile.studioName.trim().length >= 2);
   },
 
   // Custom User-Created Studios
@@ -411,7 +481,7 @@ export const studioService = {
     this.addStudioToSidebar(studio.id);
 
     // Sync to Firestore if authenticated user ID is available
-    if (studio.creatorId) {
+    if (studio.creatorId && studio.creatorId !== 'guest') {
       firestoreStorageService.saveUserCustomStudio(studio.creatorId, studio);
     }
   },

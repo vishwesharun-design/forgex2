@@ -297,6 +297,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [accountMenuOpen]);
 
   const handleSelectStudio = (ws: ActiveWorkspace) => {
+    if (ws !== 'chat' && !user) {
+      if (onOpenAuth) onOpenAuth();
+      return;
+    }
     onSelectWorkspace(ws);
     if (window.innerWidth < 768) onCloseMobile();
   };
@@ -507,6 +511,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     id="sidebar-btn-add-studio"
                     onClick={() => {
+                      if (!user && onOpenAuth) {
+                        onOpenAuth();
+                        return;
+                      }
                       if (onOpenStudioStore) onOpenStudioStore();
                     }}
                     className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold border border-dashed transition-all mt-1 ${
@@ -634,6 +642,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  if (!user && onOpenAuth) {
+                    onOpenAuth();
+                    return;
+                  }
                   if (onOpenStudioStore) onOpenStudioStore();
                 }}
                 title="Add Studio"
