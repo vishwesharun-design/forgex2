@@ -385,11 +385,16 @@ export interface DocQAMessage {
 }
 
 // ==========================================
-// 2. AI AGENTS TYPES
+// 2. AI AGENTS & AGENT LAB TYPES
 // ==========================================
 export type AgentCategory = 
+  | 'Email Agent'
+  | 'File Manager Agent'
+  | 'Browser Agent'
   | 'Research Agent'
   | 'Coding Agent'
+  | 'Computer Agent'
+  | 'General Assistant'
   | 'Marketing Agent'
   | 'Data Analyst'
   | 'Study Agent'
@@ -398,10 +403,39 @@ export type AgentCategory =
 
 export type AgentToolType = 
   | 'web_search'
+  | 'browser_open'
+  | 'browser_read'
+  | 'browser_search'
+  | 'browser_click'
+  | 'browser_type'
+  | 'browser_scroll'
+  | 'file_list'
+  | 'file_read'
+  | 'file_create'
+  | 'file_move'
+  | 'file_rename'
+  | 'file_delete'
+  | 'folder_create'
+  | 'file_organize'
+  | 'email_search'
+  | 'email_read'
+  | 'email_draft'
+  | 'email_send'
+  | 'code_execute'
+  | 'computer_action'
   | 'code_executor'
   | 'data_cruncher'
   | 'doc_reader'
   | 'visual_designer';
+
+export interface AgentPermissions {
+  browser: boolean;
+  webSearch: boolean;
+  files: boolean;
+  email: boolean;
+  computerControl: boolean;
+  codeExecution: boolean;
+}
 
 export interface AIAgent {
   id: string;
@@ -410,11 +444,16 @@ export interface AIAgent {
   description: string;
   avatarIcon: string;
   systemPrompt: string;
-  enabledTools: AgentToolType[];
+  enabledTools: string[];
+  permissions: AgentPermissions;
   temperature: number;
+  modelId?: ForgeXModelId;
+  memory?: string;
+  isActive: boolean;
   isCustom?: boolean;
   capabilities: string[];
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface AgentStep {
@@ -422,17 +461,49 @@ export interface AgentStep {
   title: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'not_configured';
   detail?: string;
-  toolUsed?: AgentToolType;
+  toolUsed?: string;
   output?: string;
+  actionLog?: string;
+  durationMs?: number;
+}
+
+export interface ActionConfirmationRequest {
+  actionId: string;
+  agentId: string;
+  toolName: string;
+  title: string;
+  description: string;
+  parameters: Record<string, any>;
+  riskLevel: 'low' | 'medium' | 'high';
+}
+
+export interface AgentChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  toolCalls?: {
+    name: string;
+    args: Record<string, any>;
+    result?: any;
+    status: 'pending' | 'executing' | 'completed' | 'failed' | 'requires_confirmation';
+    durationMs?: number;
+  }[];
+  actionLogs?: string[];
+  requiresConfirmation?: ActionConfirmationRequest;
+  openBrowser?: boolean;
+  browserUrl?: string;
 }
 
 export interface AgentExecution {
   id: string;
   agentId: string;
   taskPrompt: string;
-  status: 'idle' | 'running' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'completed' | 'error' | 'awaiting_confirmation';
   steps: AgentStep[];
+  actionLogs?: string[];
   finalResponse?: string;
+  requiresConfirmation?: ActionConfirmationRequest;
   timestamp: number;
 }
 

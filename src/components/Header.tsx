@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'files':
         return { title: 'Document AI', category: 'Productivity' };
       case 'agents':
-        return { title: 'AI Agents', category: 'Intelligence' };
+        return { title: 'AI Agents', category: 'beta' };
       case 'search':
         return { title: 'Live Web Search', category: 'Intelligence' };
       case 'writing':
@@ -111,14 +111,23 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         ) : (
           <div className="flex items-center gap-2 min-w-0">
-            <h1 id="header-workspace-title" className="font-display font-semibold text-base sm:text-lg tracking-tight truncate max-w-[140px] sm:max-w-none">
+            <h1 id="header-workspace-title" className="font-display font-semibold text-base sm:text-lg tracking-tight truncate max-w-[140px] sm:max-w-none flex items-center gap-1.5">
               {workspaceInfo.title}
+              {activeWorkspace === 'agents' && (
+                <span className={`text-xs font-mono font-medium lowercase ${
+                  isDark ? 'text-neutral-400' : 'text-neutral-500'
+                }`}>
+                  beta
+                </span>
+              )}
             </h1>
-            <span className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
-              isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-800 border-amber-300'
-            }`}>
-              {workspaceInfo.category}
-            </span>
+            {activeWorkspace !== 'agents' && (
+              <span className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
+                isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-800 border-amber-300'
+              }`}>
+                {workspaceInfo.category}
+              </span>
+            )}
           </div>
         )}
       </div>

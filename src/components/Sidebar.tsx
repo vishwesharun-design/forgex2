@@ -144,9 +144,9 @@ const STUDIOS: StudioDefinition[] = [
     title: 'AI Agents',
     category: 'intelligence',
     icon: Bot,
-    accentColor: 'text-teal-400',
-    badge: 'Autonomous',
-    description: 'Multi-agent goal swarms & tool orchestration',
+    accentColor: 'text-amber-400',
+    badge: 'beta',
+    description: 'Autonomous tool-using bots, laptop browser launch & terminal logistics',
   },
   {
     id: 'data_analysis',
@@ -483,7 +483,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         >
                           <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-500' : studio.accentColor}`} />
                           <span className="truncate flex-1 text-left">{studio.title}</span>
-                          <span className={`text-[10px] font-mono opacity-60 px-1 py-0.2 rounded ${isSelected ? 'opacity-100 text-amber-400 font-bold' : ''}`}>
+                          <span className={`text-[10px] font-mono lowercase ${
+                            studio.id === 'agents'
+                              ? isDark ? 'text-neutral-400 font-medium' : 'text-neutral-500 font-medium'
+                              : isSelected ? 'opacity-100 text-amber-400 font-bold' : 'opacity-60'
+                          }`}>
                             {studio.badge}
                           </span>
                         </button>
