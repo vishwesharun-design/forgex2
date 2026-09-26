@@ -235,7 +235,9 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                       {proj.tags?.map((t) => (
                         <span
                           key={t}
-                          className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300"
+                          className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                            isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-200 text-neutral-700'
+                          }`}
                         >
                           #{t}
                         </span>
@@ -254,12 +256,12 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
         }`}>
           {!activeProject ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8 space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
                 <FolderKanban className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-neutral-200">No Projects Created Yet</h3>
-                <p className="text-xs text-neutral-400 max-w-sm mt-1">
+                <h3 className={`text-base font-bold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>No Projects Created Yet</h3>
+                <p className={`text-xs max-w-sm mt-1 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   Create a custom project workspace to hold your code snippets, generated media, research queries, and persistent memory context.
                 </p>
               </div>
@@ -283,11 +285,11 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                       CURRENT CONTEXT
                     </span>
                   </div>
-                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                     {activeProject.description}
                   </p>
-                  <div className="flex items-center gap-3 mt-3 text-[11px] text-neutral-500">
-                    <span>Category: <strong className="text-neutral-300">{activeProject.category}</strong></span>
+                  <div className={`flex items-center gap-3 mt-3 text-[11px] ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                    <span>Category: <strong className={isDark ? 'text-neutral-300' : 'text-neutral-900'}>{activeProject.category}</strong></span>
                     <span>•</span>
                     <span>Created: {new Date(activeProject.createdTime).toLocaleDateString()}</span>
                   </div>
@@ -390,22 +392,22 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold mb-1 text-neutral-400">Project Name</label>
+                <label className={`block font-semibold mb-1 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>Project Name</label>
                 <input
                   type="text"
                   placeholder="e.g. NextGen SaaS Platform, Mobile App, Research Thesis"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
+                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300 text-neutral-900'}`}
                 />
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-neutral-400">Category</label>
+                <label className={`block font-semibold mb-1 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>Category</label>
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
+                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300 text-neutral-900'}`}
                 >
                   <option value="Web Development">Web Development</option>
                   <option value="Game Development">Game Development</option>
@@ -417,35 +419,35 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-neutral-400">Short Description</label>
+                <label className={`block font-semibold mb-1 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>Short Description</label>
                 <input
                   type="text"
                   placeholder="Brief summary of the goals and deliverables..."
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
-                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
+                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300 text-neutral-900'}`}
                 />
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-neutral-400">Initial Context Notes / Rules</label>
+                <label className={`block font-semibold mb-1 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>Initial Context Notes / Rules</label>
                 <textarea
                   rows={3}
                   placeholder="Rules, technologies, preferred frameworks, target audience..."
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
-                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
+                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300 text-neutral-900'}`}
                 />
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-neutral-400">Tags (comma-separated)</label>
+                <label className={`block font-semibold mb-1 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>Tags (comma-separated)</label>
                 <input
                   type="text"
                   placeholder="e.g. React, Full-stack, API, Production"
                   value={newTagInput}
                   onChange={(e) => setNewTagInput(e.target.value)}
-                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}
+                  className={`w-full p-2.5 rounded-xl border focus:outline-none focus:border-amber-500 ${isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-white border-neutral-300 text-neutral-900'}`}
                 />
               </div>
             </div>

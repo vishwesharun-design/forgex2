@@ -112,32 +112,34 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               {item.prompt}
             </p>
 
-            <div className="space-y-2 text-xs text-neutral-400 border-t border-neutral-800/40 pt-4 mb-6">
+            <div className={`space-y-2 text-xs border-t pt-4 mb-6 ${
+              isDark ? 'border-neutral-800/60 text-neutral-400' : 'border-neutral-200 text-neutral-600'
+            }`}>
               <div className="flex justify-between">
                 <span>Aspect Ratio</span>
-                <span className="font-mono text-neutral-200">{item.aspectRatio}</span>
+                <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{item.aspectRatio}</span>
               </div>
               {type === 'image' && (
                 <div className="flex justify-between">
                   <span>Style Preset</span>
-                  <span className="font-mono text-neutral-200">{(item as GeneratedImage).style}</span>
+                  <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{(item as GeneratedImage).style}</span>
                 </div>
               )}
               {type === 'video' && (
                 <>
                   <div className="flex justify-between">
                     <span>Duration</span>
-                    <span className="font-mono text-neutral-200">{(item as GeneratedVideo).duration}</span>
+                    <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{(item as GeneratedVideo).duration}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Quality</span>
-                    <span className="font-mono text-neutral-200">{(item as GeneratedVideo).quality}</span>
+                    <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{(item as GeneratedVideo).quality}</span>
                   </div>
                 </>
               )}
               <div className="flex justify-between">
                 <span>Created</span>
-                <span className="font-mono text-neutral-200">{new Date(item.createdAt).toLocaleDateString()}</span>
+                <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{new Date(item.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           </div>

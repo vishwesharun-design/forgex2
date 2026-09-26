@@ -53,22 +53,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           },
           // Headings
           h1: ({ children }) => (
-            <h1 className="text-xl font-bold tracking-tight mt-4 mb-2 pb-1 border-b border-neutral-800/40 font-display">
+            <h1 className={`text-xl font-bold tracking-tight mt-4 mb-2 pb-1 border-b font-display ${
+              isDark ? 'text-neutral-100 border-neutral-800/60' : 'text-neutral-900 border-neutral-200'
+            }`}>
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-lg font-bold tracking-tight mt-3 mb-2 font-display text-amber-400">
+            <h2 className={`text-lg font-bold tracking-tight mt-3 mb-2 font-display ${
+              isDark ? 'text-amber-400' : 'text-amber-700'
+            }`}>
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-base font-semibold tracking-tight mt-2.5 mb-1.5 font-display">
+            <h3 className={`text-base font-semibold tracking-tight mt-2.5 mb-1.5 font-display ${
+              isDark ? 'text-neutral-200' : 'text-neutral-900'
+            }`}>
               {children}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 className="text-sm font-semibold tracking-tight mt-2 mb-1">
+            <h4 className={`text-sm font-semibold tracking-tight mt-2 mb-1 ${
+              isDark ? 'text-neutral-200' : 'text-neutral-900'
+            }`}>
               {children}
             </h4>
           ),
@@ -80,12 +88,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           ),
           // Lists
           ul: ({ children }) => (
-            <ul className="list-disc pl-5 my-2 space-y-1">
+            <ul className="list-disc pl-5 my-2 space-y-1 text-inherit">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal pl-5 my-2 space-y-1">
+            <ol className="list-decimal pl-5 my-2 space-y-1 text-inherit">
               {children}
             </ol>
           ),
@@ -97,8 +105,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           // Blockquotes
           blockquote: ({ children }) => (
             <blockquote
-              className={`border-l-2 border-amber-500/80 pl-3.5 py-1 my-2 rounded-r-lg italic text-xs leading-relaxed ${
-                isDark ? 'bg-amber-500/5 text-neutral-300' : 'bg-amber-50 text-neutral-700'
+              className={`border-l-2 pl-3.5 py-1.5 my-2 rounded-r-lg italic text-xs leading-relaxed ${
+                isDark 
+                  ? 'border-amber-500/80 bg-amber-500/5 text-neutral-300' 
+                  : 'border-amber-500 bg-amber-50/80 text-neutral-800'
               }`}
             >
               {children}
@@ -106,7 +116,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           ),
           // Tables
           table: ({ children }) => (
-            <div className="overflow-x-auto my-3 rounded-xl border border-neutral-800/60 shadow-sm">
+            <div className={`overflow-x-auto my-3 rounded-xl border shadow-sm ${
+              isDark ? 'border-neutral-800/80' : 'border-neutral-200'
+            }`}>
               <table className="min-w-full text-xs text-left">
                 {children}
               </table>
@@ -118,7 +130,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             </thead>
           ),
           tbody: ({ children }) => (
-            <tbody className="divide-y divide-neutral-800/40">
+            <tbody className={isDark ? 'divide-y divide-neutral-800/60' : 'divide-y divide-neutral-200'}>
               {children}
             </tbody>
           ),
@@ -128,7 +140,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             </tr>
           ),
           th: ({ children }) => (
-            <th className="px-3.5 py-2.5 font-semibold text-neutral-400 font-mono text-[11px] uppercase tracking-wider">
+            <th className={`px-3.5 py-2.5 font-semibold font-mono text-[11px] uppercase tracking-wider ${
+              isDark ? 'text-neutral-400' : 'text-neutral-600'
+            }`}>
               {children}
             </th>
           ),
@@ -143,14 +157,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-amber-400 underline underline-offset-2 hover:text-amber-300 transition-colors"
+              className={`underline underline-offset-2 transition-colors font-medium ${
+                isDark ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-800'
+              }`}
             >
               {children}
             </a>
           ),
           // Horizontal rule
           hr: () => (
-            <hr className="my-3 border-neutral-800/60" />
+            <hr className={`my-3 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`} />
           ),
         }}
       >

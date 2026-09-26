@@ -323,21 +323,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         {/* Top: ForgeX Brand & Toggle Buttons */}
-        <div className={`p-3.5 flex items-center shrink-0 ${isCollapsed ? 'md:justify-center justify-between' : 'justify-between'} border-b border-neutral-800/30`}>
+        <div className={`p-3.5 flex items-center shrink-0 ${isCollapsed ? 'md:justify-center justify-between' : 'justify-between'} border-b ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`}>
           <div
             onClick={onReturnToLanding}
             className="flex items-center gap-2.5 select-none cursor-pointer hover:opacity-90 transition-opacity"
             title="Return to ForgeX Landing Page"
           >
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-sm shadow-amber-500/10 shrink-0">
-              <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-sm shadow-amber-500/10 shrink-0">
+              <Zap className="w-4 h-4 fill-amber-500 text-amber-500" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
-                <span className="font-display font-bold text-lg tracking-tight leading-none flex items-center">
-                  Forge<span className="text-amber-400">X</span>
+                <span className={`font-display font-bold text-lg tracking-tight leading-none flex items-center ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                  Forge<span className={isDark ? 'text-amber-400' : 'text-amber-500'}>X</span>
                 </span>
-                <span className="text-[10px] text-neutral-500 font-mono tracking-wider uppercase">
+                <span className={`text-[10px] font-mono tracking-wider uppercase ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
                   {STUDIOS.length} AI Studios
                 </span>
               </div>
@@ -459,10 +459,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           onClick={() => setSelectedCategory(cat.id as StudioCategory)}
                           className={`text-[11px] whitespace-nowrap px-2.5 py-1 rounded-lg font-medium inline-flex items-center gap-1.5 transition-all ${
                             isSel
-                              ? 'bg-neutral-800 text-amber-400 border border-amber-500/40 shadow-sm'
+                              ? isDark
+                                ? 'bg-neutral-800 text-amber-400 border border-amber-500/40 shadow-sm'
+                                : 'bg-amber-100 text-amber-900 border border-amber-300 font-semibold shadow-sm'
                               : isDark
                                 ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 border border-transparent'
-                                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200 border border-transparent'
+                                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/80 border border-transparent'
                           }`}
                         >
                           <CatIcon className="w-3 h-3 shrink-0" />
@@ -483,14 +485,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className={`w-full pl-7 pr-6 py-1 rounded-lg text-xs border focus:outline-none focus:border-amber-500 ${
                         isDark 
                           ? 'bg-neutral-900/60 border-neutral-800 text-neutral-200 placeholder-neutral-500' 
-                          : 'bg-white border-neutral-200 text-neutral-900 placeholder-neutral-400'
+                          : 'bg-white border-neutral-300 text-neutral-900 placeholder-neutral-500'
                       }`}
                     />
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={() => setSearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white"
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded transition-colors ${
+                          isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900'
+                        }`}
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -517,12 +521,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <button
                             type="button"
                             onClick={() => toggleCategoryFold(catKey)}
-                            className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300 transition-colors"
+                            className={`w-full flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                              isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-600 hover:text-neutral-900'
+                            }`}
                           >
                             <span className="flex items-center gap-1.5">
-                              <CatIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <CatIcon className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                               <span className="leading-none">{meta.label}</span>
-                              <span className="text-[10px] text-neutral-500 font-mono font-normal leading-none">
+                              <span className={`text-[10px] font-mono font-normal leading-none ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
                                 ({categoryStudios.length})
                               </span>
                             </span>
@@ -551,7 +557,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     isSelected
                                       ? isDark
                                         ? 'bg-neutral-800 text-white font-semibold shadow-sm border border-neutral-700/80 ring-1 ring-amber-500/20'
-                                        : 'bg-neutral-200 text-neutral-950 font-semibold shadow-sm border border-neutral-300'
+                                        : 'bg-white text-neutral-950 font-semibold shadow-sm border border-amber-300/80 ring-1 ring-amber-500/30'
                                       : isDark
                                         ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/70 border border-transparent'
                                         : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 border border-transparent'
@@ -562,7 +568,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                       ? 'bg-amber-500/15 border border-amber-500/30' 
                                       : isDark 
                                         ? 'bg-neutral-900 border border-neutral-800' 
-                                        : 'bg-neutral-200 border border-neutral-300'
+                                        : 'bg-white border border-neutral-200 shadow-xs'
                                   }`}>
                                     <Icon className={`w-3.5 h-3.5 ${studio.accentColor}`} />
                                   </div>
@@ -572,10 +578,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                       <span className="text-xs truncate">{studio.title}</span>
                                       <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono shrink-0 ${
                                         isSelected
-                                          ? 'bg-amber-500/20 text-amber-400 font-semibold'
+                                          ? isDark
+                                            ? 'bg-amber-500/20 text-amber-400 font-semibold'
+                                            : 'bg-amber-100 text-amber-800 font-bold'
                                           : isDark
                                             ? 'text-neutral-500 bg-neutral-900'
-                                            : 'text-neutral-500 bg-neutral-200'
+                                            : 'text-neutral-600 bg-neutral-200/80'
                                       }`}>
                                         {studio.badge}
                                       </span>
@@ -598,7 +606,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     return (
                       <React.Fragment key={catKey}>
                         {idx > 0 && (
-                          <div className="w-6 h-px bg-neutral-800 my-1" />
+                          <div className={`w-6 h-px my-1 ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`} />
                         )}
                         {categoryStudios.map((studio) => {
                           const Icon = studio.icon;
@@ -630,17 +638,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* Bottom Quick Link to Chats when in Studios Tab */}
               {!isCollapsed && recentChats.length > 0 && (
                 <div className="pt-2">
-                  <div className="border-t border-neutral-800/40 pt-2">
+                  <div className={`border-t pt-2 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`}>
                     <button
                       type="button"
                       onClick={() => setSidebarTab('chats')}
-                      className="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs text-neutral-400 hover:text-amber-400 hover:bg-neutral-900/50 transition-colors"
+                      className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition-colors ${
+                        isDark ? 'text-neutral-400 hover:text-amber-400 hover:bg-neutral-900/50' : 'text-neutral-600 hover:text-amber-700 hover:bg-neutral-200/60'
+                      }`}
                     >
                       <span className="flex items-center gap-1.5">
                         <MessageSquare className="w-3.5 h-3.5" />
                         <span>Recent Chats</span>
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 font-mono">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-200 text-neutral-700 font-semibold'}`}>
                         {recentChats.length}
                       </span>
                     </button>
@@ -654,10 +664,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {sidebarTab === 'chats' && !isCollapsed && (
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
                   Chat Sessions
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-800'}`}>
                   {recentChats.length}
                 </span>
               </div>
@@ -688,10 +698,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           isSelected
                             ? isDark
                               ? 'bg-neutral-800 text-amber-400 font-medium border border-neutral-700/80 shadow-sm'
-                              : 'bg-neutral-200 text-amber-700 font-medium border border-neutral-300 shadow-sm'
+                              : 'bg-white text-neutral-950 font-semibold border border-amber-300 shadow-sm ring-1 ring-amber-500/20'
                             : isDark
                               ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/60'
-                              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+                              : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200/70'
                         }`}
                       >
                         <button
@@ -712,7 +722,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onDeleteChat(chat.id);
                           }}
                           title="Delete chat"
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-red-400 transition-opacity"
+                          className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity ${
+                            isDark ? 'hover:text-red-400 text-neutral-400' : 'hover:text-red-600 text-neutral-500'
+                          }`}
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -770,58 +782,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                   {!isCollapsed && (
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold truncate leading-tight">
-                        {user.name}
-                      </p>
-                      <p className={`text-[10px] truncate ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                        {user.email}
-                      </p>
-                    </div>
+                       <p className="text-xs font-semibold truncate leading-tight">
+                         {user.name}
+                       </p>
+                       <p className={`text-[10px] truncate ${isDark ? 'text-neutral-500' : 'text-neutral-600 font-medium'}`}>
+                         {user.email}
+                       </p>
+                     </div>
                   )}
-                </div>
-                {!isCollapsed && (
-                  <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${accountMenuOpen ? 'rotate-90' : ''}`} />
-                )}
-              </button>
+                 </div>
+                 {!isCollapsed && (
+                   <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${accountMenuOpen ? 'rotate-90' : ''}`} />
+                 )}
+               </button>
 
-              {/* Account Popover Menu */}
-              {accountMenuOpen && (
-                <div
-                  id="menu-account-popover"
-                  className={`absolute bottom-full left-0 mb-2 w-64 rounded-2xl border p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
-                    isDark
-                      ? 'bg-neutral-900 border-neutral-800 text-white shadow-black/80'
-                      : 'bg-white border-neutral-200 text-neutral-900 shadow-neutral-300'
-                  }`}
-                >
-                  {/* AI Usage Indicator Component */}
-                  <div
-                    className={`p-3 rounded-xl border mb-2 ${
-                      isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="font-semibold text-amber-400 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        AI Studio Usage
-                      </span>
-                      <span className="font-mono text-[11px] text-neutral-400">
-                        {user.creditsUsed} / {user.creditsLimit}
-                      </span>
-                    </div>
+               {/* Account Popover Menu */}
+               {accountMenuOpen && (
+                 <div
+                   id="menu-account-popover"
+                   className={`absolute bottom-full left-0 mb-2 w-64 rounded-2xl border p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
+                     isDark
+                       ? 'bg-neutral-900 border-neutral-800 text-white shadow-black/80'
+                       : 'bg-white border-neutral-200 text-neutral-900 shadow-neutral-300'
+                   }`}
+                 >
+                   {/* AI Usage Indicator Component */}
+                   <div
+                     className={`p-3 rounded-xl border mb-2 ${
+                       isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
+                     }`}
+                   >
+                     <div className="flex items-center justify-between text-xs mb-1.5">
+                       <span className={`font-semibold flex items-center gap-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                         <Sparkles className="w-3 h-3" />
+                         AI Studio Usage
+                       </span>
+                       <span className={`font-mono text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
+                         {user.creditsUsed} / {user.creditsLimit}
+                       </span>
+                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="w-full h-2 rounded-full bg-neutral-800 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
-                        style={{ width: `${usagePercentage}%` }}
-                      />
-                    </div>
+                     {/* Progress Bar */}
+                     <div className={`w-full h-2 rounded-full overflow-hidden ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}>
+                       <div
+                         className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
+                         style={{ width: `${usagePercentage}%` }}
+                       />
+                     </div>
 
-                    <p className="text-[10px] text-neutral-500 mt-1.5 text-right font-mono">
-                      {Math.round((user.creditsUsed / user.creditsLimit) * 100)}% monthly quota
-                    </p>
-                  </div>
+                     <p className={`text-[10px] mt-1.5 text-right font-mono ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
+                       {Math.round((user.creditsUsed / user.creditsLimit) * 100)}% monthly quota
+                     </p>
+                   </div>
 
                   <div className="space-y-0.5 text-xs">
                     <button

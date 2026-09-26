@@ -187,7 +187,9 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                 <span>Voice: {song.voiceProfile || 'Zephyr'}</span>
               </span>
             )}
-            <span className="text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 h-6 sm:h-7 rounded-full bg-neutral-800/90 text-neutral-200 border border-neutral-700/60 inline-flex items-center leading-none">
+            <span className={`text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 h-6 sm:h-7 rounded-full border inline-flex items-center leading-none ${
+              isDark ? 'bg-neutral-800/90 text-neutral-200 border-neutral-700/60' : 'bg-neutral-100 text-neutral-800 border-neutral-200'
+            }`}>
               {song.genre}
             </span>
             <span className={`text-[11px] sm:text-xs font-medium px-2 sm:px-2.5 h-6 sm:h-7 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800/60 text-neutral-300 border-neutral-700/40' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
@@ -270,7 +272,9 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                     {song.title}
                   </h3>
                   {song.isRealLifeHit && (
-                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
+                    <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 inline-flex items-center leading-none ${
+                      isDark ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-amber-100 text-amber-800 border-amber-300'
+                    }`}>
                       ⭐ Real Hit
                     </span>
                   )}
@@ -434,8 +438,8 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
               )}
 
               <div className="flex items-center gap-1.5 shrink-0" title="Instrumental Beat Level">
-                <Music className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-[10px] font-mono text-amber-300 leading-none">Beat</span>
+                <Music className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className={`text-[10px] font-mono leading-none ${isDark ? 'text-amber-300' : 'text-amber-800 font-semibold'}`}>Beat</span>
                 <input
                   type="range"
                   min="0"
@@ -671,10 +675,16 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                         key={idx}
                         onClick={() => onSeek && onSeek(song, sec.startTimeSec)}
                         style={{ width: `${100 / sections.length}%` }}
-                        className={`h-full border-r border-neutral-800 flex flex-col items-center justify-center text-[10px] font-mono cursor-pointer transition-colors ${
+                        className={`h-full border-r flex flex-col items-center justify-center text-[10px] font-mono cursor-pointer transition-colors ${
+                          isDark ? 'border-neutral-800' : 'border-neutral-200'
+                        } ${
                           isSecActive
-                            ? 'bg-amber-500/25 text-amber-300 font-bold'
-                            : 'hover:bg-neutral-800/40 text-neutral-400'
+                            ? isDark
+                              ? 'bg-amber-500/25 text-amber-300 font-bold'
+                              : 'bg-amber-100 text-amber-800 font-bold'
+                            : isDark
+                            ? 'hover:bg-neutral-800/40 text-neutral-400'
+                            : 'hover:bg-neutral-200/50 text-neutral-600'
                         }`}
                       >
                         <span className="truncate px-1 text-[9px] sm:text-[10px]">{sec.tag}</span>
@@ -701,17 +711,19 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-5 h-5 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center font-mono text-[10px] shrink-0">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center font-mono text-[10px] shrink-0 ${
+                        isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-200 text-neutral-800 font-semibold'
+                      }`}>
                         {idx + 1}
                       </span>
                       <div className="min-w-0">
                         <span className="font-semibold truncate block">{sec.title}</span>
-                        <p className="text-[10px] text-neutral-500 truncate">
+                        <p className={`text-[10px] truncate ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
                           {sec.lines.length} phrases • 4/4 timing
                         </p>
                       </div>
                     </div>
-                    <span className="font-mono text-[10px] text-amber-400 shrink-0 ml-2">
+                    <span className={`font-mono text-[10px] shrink-0 ml-2 ${isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'}`}>
                       {formatTime(sec.startTimeSec)} – {formatTime(sec.endTimeSec)}
                     </span>
                   </div>
@@ -729,16 +741,16 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                   isDark ? 'bg-neutral-950/40 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
-                <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
+                <div className={`flex items-center justify-between text-xs mb-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   <span className="font-semibold uppercase tracking-wider text-[10px]">
                     Harmonic Progression
                   </span>
-                  <span className="text-[10px] font-mono text-amber-400">{chordData.key}</span>
+                  <span className={`text-[10px] font-mono ${isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'}`}>{chordData.key}</span>
                 </div>
-                <div className="font-mono text-xs sm:text-sm font-bold text-amber-300 mb-1.5">
+                <div className={`font-mono text-xs sm:text-sm font-bold mb-1.5 ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>
                   {chordData.chordsText}
                 </div>
-                <p className="text-xs text-neutral-400 leading-relaxed">
+                <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   {chordData.description}
                 </p>
               </div>
@@ -749,21 +761,23 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
                   isDark ? 'bg-neutral-950/40 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
-                <span className="block font-semibold uppercase tracking-wider text-[10px] text-neutral-400 mb-2.5">
+                <span className={`block font-semibold uppercase tracking-wider text-[10px] mb-2.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   Synthesized Sound Stems
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   {chordData.instrumentStems.map((stem, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-2 p-2 sm:p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs"
+                      className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border text-xs ${
+                        isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-200 shadow-xs'
+                      }`}
                     >
                       <div
                         className={`w-2 h-2 rounded-full shrink-0 ${
-                          isPlaying ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-600'
+                          isPlaying ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
                         }`}
                       />
-                      <span className="font-medium truncate text-neutral-200 text-[11px] sm:text-xs">{stem}</span>
+                      <span className={`font-medium truncate text-[11px] sm:text-xs ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>{stem}</span>
                     </div>
                   ))}
                 </div>

@@ -127,7 +127,9 @@ export const Header: React.FC<HeaderProps> = ({
           <h1 id="header-workspace-title" className="font-display font-bold text-base sm:text-xl tracking-tight truncate max-w-[130px] sm:max-w-none">
             {workspaceInfo.title}
           </h1>
-          <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+          <span className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
+            isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-800 border-amber-300'
+          }`}>
             {workspaceInfo.category}
           </span>
         </div>

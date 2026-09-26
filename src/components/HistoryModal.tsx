@@ -111,8 +111,12 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               <div className="flex items-center gap-2">
                 <h3 className="font-display font-bold text-xl">Generation History</h3>
                 {currentUserEmail && (
-                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-1">
-                    <Mail className="w-3 h-3 text-amber-400" />
+                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                    isDark
+                      ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                      : 'bg-amber-100 border border-amber-300 text-amber-800 font-medium'
+                  }`}>
+                    <Mail className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                     <span>{currentUserEmail}</span>
                   </span>
                 )}
@@ -134,7 +138,9 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-neutral-800/40 flex-wrap">
+        <div className={`flex items-center gap-2 mb-4 pb-2 border-b flex-wrap ${
+          isDark ? 'border-neutral-800/40' : 'border-neutral-200'
+        }`}>
           {(['all', 'chats', 'songs', 'images', 'videos'] as const).map((cat) => (
             <button
               key={cat}
@@ -183,22 +189,30 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       className="w-12 h-12 rounded-xl object-cover shrink-0 border border-neutral-800"
                     />
                   ) : item.type === 'song' ? (
-                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${
+                      isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-700 border-amber-300'
+                    }`}>
                       <Music className="w-5 h-5" />
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                      isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-700'
+                    }`}>
                       <MessageSquare className="w-5 h-5" />
                     </div>
                   )}
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold bg-neutral-800 text-neutral-300">
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-semibold ${
+                        isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-200 text-neutral-800'
+                      }`}>
                         {item.type}
                       </span>
                       {item.subtitle && (
-                        <span className="text-[10px] font-medium text-amber-400/90 truncate max-w-[150px]">
+                        <span className={`text-[10px] truncate max-w-[150px] ${
+                          isDark ? 'text-amber-400/90 font-medium' : 'text-amber-700 font-semibold'
+                        }`}>
                           {item.subtitle}
                         </span>
                       )}

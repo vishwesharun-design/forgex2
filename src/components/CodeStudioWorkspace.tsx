@@ -605,10 +605,14 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             <button
               id="code-revert-button"
               onClick={handleRevert}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700"
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
+                isDark 
+                  ? 'bg-neutral-800 text-neutral-300 hover:text-white border-neutral-700' 
+                  : 'bg-white text-neutral-700 hover:text-neutral-900 border-neutral-300 shadow-xs'
+              }`}
               title="Revert to code before last AI alteration"
             >
-              <RotateCcw className="w-3 h-3 text-amber-400" />
+              <RotateCcw className="w-3 h-3 text-amber-500" />
               <span className="hidden sm:inline">Undo AI</span>
             </button>
           )}
@@ -653,25 +657,33 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             <span className={isDark ? 'text-neutral-500' : 'text-neutral-400'}>Templates:</span>
             <button
               onClick={() => loadTemplate('html')}
-              className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700"
+              className={`px-2 py-0.5 rounded border transition-colors ${
+                isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-neutral-700' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+              }`}
             >
               Interactive Canvas
             </button>
             <button
               onClick={() => loadTemplate('typescript')}
-              className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700"
+              className={`px-2 py-0.5 rounded border transition-colors ${
+                isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-neutral-700' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+              }`}
             >
               TS Reactive Store
             </button>
             <button
               onClick={() => loadTemplate('python')}
-              className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700"
+              className={`px-2 py-0.5 rounded border transition-colors ${
+                isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-neutral-700' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+              }`}
             >
               Python LRU Cache
             </button>
             <button
               onClick={() => loadTemplate('sql')}
-              className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700"
+              className={`px-2 py-0.5 rounded border transition-colors ${
+                isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-neutral-700' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+              }`}
             >
               SQL Analytics
             </button>
@@ -726,9 +738,13 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 id="btn-alter-correct"
                 onClick={() => handleAIAlterOrCorrect('correct')}
                 disabled={isProcessing}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all ${
+                  isDark
+                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    : 'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300'
+                }`}
               >
-                <Bug className="w-3 h-3 text-amber-400" />
+                <Bug className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                 <span>Auto-Correct Bugs & Syntax</span>
               </button>
 
@@ -736,9 +752,13 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 id="btn-alter-refactor"
                 onClick={() => handleAIAlterOrCorrect('refactor')}
                 disabled={isProcessing}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 transition-all"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                  isDark
+                    ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-neutral-700'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+                }`}
               >
-                <Layers className="w-3 h-3 text-amber-400" />
+                <Layers className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                 <span>Refactor & Clean Architecture</span>
               </button>
 
@@ -746,9 +766,13 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 id="btn-alter-optimize"
                 onClick={() => handleAIAlterOrCorrect('optimize')}
                 disabled={isProcessing}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 transition-all"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                  isDark
+                    ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-neutral-700'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+                }`}
               >
-                <Zap className="w-3 h-3 text-amber-400" />
+                <Zap className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                 <span>Optimize Performance</span>
               </button>
 
@@ -756,9 +780,13 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 id="btn-alter-types"
                 onClick={() => handleAIAlterOrCorrect('types')}
                 disabled={isProcessing}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 transition-all"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                  isDark
+                    ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-neutral-700'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+                }`}
               >
-                <FileCode className="w-3 h-3 text-amber-400" />
+                <FileCode className={`w-3 h-3 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                 <span>Add Strict Types & JSDoc</span>
               </button>
             </div>
@@ -782,7 +810,11 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 id="code-alter-submit"
                 onClick={() => handleAIAlterOrCorrect('custom', alterPrompt)}
                 disabled={isProcessing || !alterPrompt.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-400 font-semibold border border-amber-500/30 disabled:opacity-50 transition-all shrink-0"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border disabled:opacity-50 transition-all shrink-0 ${
+                  isDark
+                    ? 'bg-neutral-800 hover:bg-neutral-700 text-amber-400 border-amber-500/30'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-amber-700 border-neutral-300'
+                }`}
               >
                 <ArrowRight className="w-3 h-3" />
                 <span>Alter Code</span>
@@ -1295,10 +1327,10 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                     }`}
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold truncate text-white">
+                      <p className={`text-xs font-semibold truncate ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                         {snip.title}
                       </p>
-                      <p className="text-[10px] text-neutral-400 mt-0.5">
+                      <p className={`text-[10px] mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                         {snip.language.toUpperCase()} • {new Date(snip.updatedAt).toLocaleDateString()}
                       </p>
                     </div>

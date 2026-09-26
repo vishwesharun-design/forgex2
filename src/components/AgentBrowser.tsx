@@ -478,8 +478,8 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
           {/* Browser Tab Header & Security Status */}
           <div className={`px-4 py-2 border-b flex items-center justify-between text-xs ${isDark ? 'border-neutral-850 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-neutral-50 text-neutral-500'}`}>
             <div className="flex items-center gap-2 truncate">
-              <Globe className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="font-semibold text-neutral-200 truncate">{pageContent?.title || currentUrl}</span>
+              <Globe className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className={`font-semibold truncate ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>{pageContent?.title || currentUrl}</span>
             </div>
             <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
               <span className="flex items-center gap-1 text-emerald-400">
@@ -509,8 +509,10 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
                 <p className="text-[11px] text-neutral-500 font-mono">{currentUrl}</p>
               </div>
             ) : viewMode === 'live_iframe' ? (
-              <div className="w-full h-full min-h-[500px] flex flex-col rounded-2xl border border-neutral-800 overflow-hidden bg-white">
-                <div className="p-2 bg-neutral-900 text-neutral-300 text-[11px] flex items-center justify-between px-4 border-b border-neutral-800">
+              <div className={`w-full h-full min-h-[500px] flex flex-col rounded-2xl border overflow-hidden ${isDark ? 'border-neutral-800 bg-neutral-950' : 'border-neutral-200 bg-white'}`}>
+                <div className={`p-2 text-[11px] flex items-center justify-between px-4 border-b ${
+                  isDark ? 'bg-neutral-900 text-neutral-300 border-neutral-800' : 'bg-neutral-100 text-neutral-700 border-neutral-200'
+                }`}>
                   <span className="truncate font-mono">{currentUrl}</span>
                   <div className="flex items-center gap-2">
                     <button
@@ -597,11 +599,11 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
                     </button>
                   </div>
 
-                  <h1 className="text-xl font-display font-bold text-amber-400 tracking-tight">
+                  <h1 className={`text-xl font-display font-bold tracking-tight ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
                     {pageContent.title}
                   </h1>
 
-                  <div className="mt-3 text-xs leading-relaxed text-neutral-300 font-sans whitespace-pre-wrap">
+                  <div className={`mt-3 text-xs leading-relaxed font-sans whitespace-pre-wrap ${isDark ? 'text-neutral-300' : 'text-neutral-800'}`}>
                     {pageContent.snippet}
                   </div>
                 </div>
@@ -614,16 +616,16 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
                       isDark ? 'bg-neutral-900/30 border-neutral-850' : 'bg-white border-neutral-200 shadow-sm'
                     }`}
                   >
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400/90">{sec.heading}</h3>
-                    <p className="text-xs text-neutral-300 leading-relaxed font-mono">{sec.body}</p>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-amber-400/90' : 'text-amber-700'}`}>{sec.heading}</h3>
+                    <p className={`text-xs leading-relaxed font-mono ${isDark ? 'text-neutral-300' : 'text-neutral-800'}`}>{sec.body}</p>
                   </div>
                 ))}
 
                 {/* Grounded Live Sources & Links */}
                 {pageContent.sources && pageContent.sources.length > 0 && (
                   <div className="space-y-3 pt-2">
-                    <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+                    <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      <ExternalLink className={`w-3.5 h-3.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                       <span>Interactive Grounded Sources ({pageContent.sources.length})</span>
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -637,7 +639,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
                               : 'border-neutral-200 hover:border-amber-500/40 bg-neutral-50'
                           }`}
                         >
-                          <p className="text-xs font-bold text-amber-300 truncate">{src.title}</p>
+                          <p className={`text-xs font-bold truncate ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>{src.title}</p>
                           <p className="text-[10px] text-neutral-500 font-mono truncate mt-0.5">{src.url}</p>
                         </div>
                       ))}
@@ -677,10 +679,14 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
                   type="button"
                   disabled={isAgentTyping}
                   onClick={() => handleAgentAutoType(act.query)}
-                  className="w-full text-left p-2 rounded-xl border border-neutral-800/80 hover:border-amber-500/40 bg-neutral-900/40 text-xs text-neutral-300 hover:text-amber-300 flex items-center justify-between transition-colors disabled:opacity-40"
+                  className={`w-full text-left p-2 rounded-xl border text-xs flex items-center justify-between transition-colors disabled:opacity-40 ${
+                    isDark
+                      ? 'border-neutral-800/80 hover:border-amber-500/40 bg-neutral-900/40 text-neutral-300 hover:text-amber-300'
+                      : 'border-neutral-200 hover:border-amber-500/40 bg-white text-neutral-700 hover:text-amber-700 shadow-xs'
+                  }`}
                 >
                   <span className="truncate">{act.title}</span>
-                  <MousePointerClick className="w-3 h-3 text-amber-400 shrink-0 ml-1" />
+                  <MousePointerClick className="w-3 h-3 text-amber-500 shrink-0 ml-1" />
                 </button>
               ))}
             </div>
@@ -691,7 +697,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
             {agentLogs.map((log, i) => (
               <div key={i} className="leading-relaxed">
                 <span className="text-neutral-500">[{log.time}]</span>{' '}
-                <span className={log.text.includes('typing') ? 'text-amber-300 font-bold' : isDark ? 'text-neutral-300' : 'text-neutral-700'}>
+                <span className={log.text.includes('typing') ? isDark ? 'text-amber-300 font-bold' : 'text-amber-700 font-bold' : isDark ? 'text-neutral-300' : 'text-neutral-700'}>
                   {log.text}
                 </span>
               </div>

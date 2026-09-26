@@ -58,7 +58,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         }`}
       >
         {/* Search Input Header */}
-        <div className="flex items-center gap-3 p-4 border-b border-neutral-800/40">
+        <div className={`flex items-center gap-3 p-4 border-b ${isDark ? 'border-neutral-800/40' : 'border-neutral-200'}`}>
           <Search className="w-5 h-5 text-neutral-400 shrink-0 ml-1" />
           <input
             ref={inputRef}
@@ -67,10 +67,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search conversations, images, and video creations..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-500"
+            className={`flex-1 bg-transparent text-sm outline-none ${isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-500'}`}
           />
           {query && (
-            <button onClick={() => setQuery('')} className="text-neutral-500 hover:text-white p-1">
+            <button
+              onClick={() => setQuery('')}
+              className={`p-1 transition-colors ${isDark ? 'text-neutral-500 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'}`}
+            >
               <X className="w-4 h-4" />
             </button>
           )}

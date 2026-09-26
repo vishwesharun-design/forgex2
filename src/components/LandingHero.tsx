@@ -57,14 +57,14 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
           id="hero-brand-heading"
           className="font-display font-extrabold text-4xl sm:text-7xl md:text-8xl tracking-tight mb-3"
         >
-          Forge<span className="text-amber-400">X</span>
+          Forge<span className={isDark ? 'text-amber-400' : 'text-amber-500'}>X</span>
         </h1>
 
         {/* Tagline */}
         <h2 
           id="hero-tagline"
           className={`font-display font-semibold text-xl sm:text-3xl md:text-4xl tracking-tight mb-3 sm:mb-4 ${
-            isDark ? 'text-neutral-200' : 'text-neutral-800'
+            isDark ? 'text-neutral-200' : 'text-neutral-900'
           }`}
         >
           Create. Imagine. Generate.
@@ -91,10 +91,10 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                   ? 'bg-amber-500 text-neutral-950 font-bold border-amber-500 shadow-sm'
                   : isDark
                     ? 'bg-neutral-900/60 border-neutral-800 text-neutral-400 hover:border-neutral-700 hover:text-white'
-                    : 'bg-white/80 border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                    : 'bg-white border-neutral-300 text-neutral-700 hover:border-neutral-400 shadow-xs'
               }`}
             >
-              <Zap className="w-3 h-3 text-amber-400 mr-1 shrink-0" />
+              <Zap className={`w-3 h-3 mr-1 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
               <span>{model.name}</span>
             </button>
           ))}
@@ -120,10 +120,10 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             className={`w-full sm:w-auto px-7 py-3.5 rounded-2xl text-base font-medium border flex items-center justify-center gap-2 transition-all duration-200 ${
               isDark
                 ? 'bg-neutral-900/60 hover:bg-neutral-800/80 border-neutral-800 text-neutral-200 hover:text-white'
-                : 'bg-white/80 hover:bg-neutral-100 border-neutral-200 text-neutral-800'
+                : 'bg-white hover:bg-neutral-50 border-neutral-300 text-neutral-900 shadow-sm'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-amber-400" />
+            <Sparkles className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
             <span>{isAuthenticated ? 'Open Studio' : 'Enter Studio'}</span>
           </button>
         </div>
@@ -136,11 +136,11 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             className={`p-4 rounded-2xl border backdrop-blur-sm transition-all duration-200 cursor-pointer ${
               isDark 
                 ? 'bg-neutral-900/40 border-neutral-800/80 hover:border-amber-500/50 hover:bg-neutral-850/60' 
-                : 'bg-white/60 border-neutral-200/80 hover:border-amber-400 hover:bg-white shadow-sm'
+                : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 shadow-sm'
             }`}
           >
             <div className="flex items-center gap-2.5 mb-1.5">
-              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+              <div className={`p-1.5 rounded-lg ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
                 <MessageSquare className="w-4 h-4" />
               </div>
               <span className="font-display font-semibold text-sm">ForgeX Chat</span>
@@ -156,11 +156,11 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             className={`p-4 rounded-2xl border backdrop-blur-sm transition-all duration-200 cursor-pointer ${
               isDark 
                 ? 'bg-neutral-900/40 border-neutral-800/80 hover:border-amber-500/50 hover:bg-neutral-850/60' 
-                : 'bg-white/60 border-neutral-200/80 hover:border-amber-400 hover:bg-white shadow-sm'
+                : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 shadow-sm'
             }`}
           >
             <div className="flex items-center gap-2.5 mb-1.5">
-              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+              <div className={`p-1.5 rounded-lg ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
                 <ImageIcon className="w-4 h-4" />
               </div>
               <span className="font-display font-semibold text-sm">Image Studio</span>
@@ -176,11 +176,11 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             className={`p-4 rounded-2xl border backdrop-blur-sm transition-all duration-200 cursor-pointer ${
               isDark 
                 ? 'bg-neutral-900/40 border-neutral-800/80 hover:border-amber-500/50 hover:bg-neutral-850/60' 
-                : 'bg-white/60 border-neutral-200/80 hover:border-amber-400 hover:bg-white shadow-sm'
+                : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 shadow-sm'
             }`}
           >
             <div className="flex items-center gap-2.5 mb-1.5">
-              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+              <div className={`p-1.5 rounded-lg ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
                 <Code2 className="w-4 h-4" />
               </div>
               <span className="font-display font-semibold text-sm">Code Studio</span>

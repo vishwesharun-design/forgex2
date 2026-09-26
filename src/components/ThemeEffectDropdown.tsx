@@ -95,11 +95,17 @@ export const ThemeEffectDropdown: React.FC<ThemeEffectDropdownProps> = ({
               : 'bg-white/95 border-neutral-200 text-neutral-900 shadow-neutral-300'
           }`}
         >
-          <div className="px-2 py-1.5 border-b border-neutral-800/50 mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+          <div className={`px-2 py-1.5 border-b mb-1 flex items-center justify-between ${
+            isDark ? 'border-neutral-800/50' : 'border-neutral-200'
+          }`}>
+            <span className={`text-[10px] font-mono uppercase tracking-wider ${
+              isDark ? 'text-neutral-400' : 'text-neutral-600 font-bold'
+            }`}>
               Theme Canvas Effect
             </span>
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400">
+            <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+              isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-800'
+            }`}>
               {THEME_EFFECTS_META.length} Effects
             </span>
           </div>
@@ -119,7 +125,9 @@ export const ThemeEffectDropdown: React.FC<ThemeEffectDropdownProps> = ({
                   }}
                   className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
                     isSelected
-                      ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300'
+                      ? isDark
+                        ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300'
+                        : 'bg-amber-100 border border-amber-400 text-amber-900 font-semibold'
                       : isDark
                         ? 'hover:bg-neutral-900 text-neutral-300 hover:text-white border border-transparent'
                         : 'hover:bg-neutral-100 text-neutral-700 hover:text-neutral-900 border border-transparent'
@@ -137,7 +145,7 @@ export const ThemeEffectDropdown: React.FC<ThemeEffectDropdownProps> = ({
                       <span className="text-xs font-semibold block truncate">
                         {eff.name}
                       </span>
-                      <span className={`text-[10px] block truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      <span className={`text-[10px] block truncate ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                         {eff.badge}
                       </span>
                     </div>

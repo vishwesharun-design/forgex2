@@ -410,19 +410,23 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
 
                 {/* Did You Mean Spelling Correction Banner */}
                 {(currentResult.didYouMean || currentResult.correctedQuery) && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl border ${
+                    isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-amber-300 bg-amber-50 text-amber-900'
+                  }`}>
                     <div className="flex items-center gap-2.5">
-                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                       <div className="text-xs">
                         <span>Did you mean: </span>
                         <button
                           type="button"
                           onClick={() => executeSearch(currentResult.didYouMean || currentResult.correctedQuery!)}
-                          className="font-bold underline text-white hover:text-amber-300 transition-colors"
+                          className={`font-bold underline transition-colors ${
+                            isDark ? 'text-white hover:text-amber-300' : 'text-neutral-950 hover:text-amber-700'
+                          }`}
                         >
                           {currentResult.didYouMean || currentResult.correctedQuery}
                         </button>
-                        <span className="text-neutral-400 ml-2 text-[11px] block sm:inline">
+                        <span className={`ml-2 text-[11px] block sm:inline ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                           (Spelling corrected from "{currentResult.query}")
                         </span>
                       </div>
@@ -448,18 +452,18 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-500/20">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold">
+                          <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold">
                             Exact Application
                           </span>
                           {currentResult.exactApp.developer && (
-                            <span className="text-[11px] text-neutral-400">
-                              by <strong className="text-neutral-200">{currentResult.exactApp.developer}</strong>
+                            <span className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                              by <strong className={isDark ? 'text-neutral-200' : 'text-neutral-900'}>{currentResult.exactApp.developer}</strong>
                             </span>
                           )}
                         </div>
-                        <h3 className="text-base sm:text-lg font-bold mt-1 text-white flex items-center gap-2">
+                        <h3 className={`text-base sm:text-lg font-bold mt-1 flex items-center gap-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                           {currentResult.exactApp.name}
-                          <span className="text-xs font-normal text-amber-400/80">({currentResult.exactApp.category})</span>
+                          <span className={`text-xs font-normal ${isDark ? 'text-amber-400/80' : 'text-amber-700'}`}>({currentResult.exactApp.category})</span>
                         </h3>
                       </div>
 
@@ -476,20 +480,22 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
                       </div>
                     </div>
 
-                    <p className="text-xs text-neutral-300 mt-3 leading-relaxed">
+                    <p className={`text-xs mt-3 leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                       {currentResult.exactApp.description}
                     </p>
 
                     {currentResult.exactApp.access && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-neutral-400 border-t border-neutral-800/40 pt-2">
-                        <span className="font-semibold text-neutral-300">Access:</span>
+                      <div className={`mt-3 flex flex-wrap items-center gap-2 text-[11px] border-t pt-2 ${
+                        isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
+                      }`}>
+                        <span className={`font-semibold ${isDark ? 'text-neutral-300' : 'text-neutral-800'}`}>Access:</span>
                         <span>{currentResult.exactApp.access}</span>
-                        <span className="text-neutral-600 hidden sm:inline">•</span>
+                        <span className="text-neutral-400 hidden sm:inline">•</span>
                         <a
                           href={currentResult.exactApp.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-amber-400 hover:underline flex items-center gap-1"
+                          className={`${isDark ? 'text-amber-400' : 'text-amber-700 font-medium'} hover:underline flex items-center gap-1`}
                         >
                           <span className="truncate max-w-[200px]">{currentResult.exactApp.url}</span>
                           <ExternalLink className="w-2.5 h-2.5 shrink-0" />
@@ -550,8 +556,8 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-2 py-10">
                 <Globe className="w-12 h-12 text-neutral-500 opacity-40 mb-1" />
-                <h3 className="text-sm font-bold text-neutral-300">Live Search & Grounding</h3>
-                <p className="text-xs text-neutral-500 max-w-md px-4">
+                <h3 className={`text-sm font-bold ${isDark ? 'text-neutral-300' : 'text-neutral-800'}`}>Live Search & Grounding</h3>
+                <p className={`text-xs max-w-md px-4 ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
                   Query real-time web indexes with spelling correction, exact application detection, citations, and fast summarization.
                 </p>
               </div>

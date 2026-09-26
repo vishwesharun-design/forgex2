@@ -67,7 +67,20 @@ export default function App() {
 
   // App Settings & Theme
   const [settings, setSettings] = useState<UserSettings>(() => {
+    const lightInitialized = localStorage.getItem('forgex_light_default_v1');
     const saved = localStorage.getItem('forgex_settings');
+    if (!lightInitialized) {
+      localStorage.setItem('forgex_light_default_v1', 'true');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return { ...DEFAULT_SETTINGS, ...parsed, theme: 'light' };
+        } catch {
+          return DEFAULT_SETTINGS;
+        }
+      }
+      return DEFAULT_SETTINGS;
+    }
     if (saved) {
       try {
         return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
@@ -206,8 +219,10 @@ export default function App() {
     localStorage.setItem('forgex_settings', JSON.stringify(settings));
     if (settings.theme === 'dark') {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     }
   }, [settings]);
 
@@ -372,15 +387,17 @@ export default function App() {
           </main>
 
           {/* Minimal Landing Footer */}
-          <footer className="py-6 px-6 text-center text-xs text-neutral-500 border-t border-neutral-900/50 backdrop-blur-sm">
+          <footer className={`py-6 px-6 text-center text-xs border-t backdrop-blur-sm transition-colors ${
+            isDark ? 'text-neutral-500 border-neutral-900/50' : 'text-neutral-600 border-neutral-200/80 bg-white/40'
+          }`}>
             <div className="flex items-center justify-center gap-6">
-              <button onClick={() => setIsAboutOpen(true)} className="hover:text-amber-400 transition-colors">
+              <button onClick={() => setIsAboutOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                 About ForgeX
               </button>
-              <button onClick={() => setIsCreatorOpen(true)} className="hover:text-amber-400 transition-colors">
+              <button onClick={() => setIsCreatorOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                 Created by VishweshVarman
               </button>
-              <button onClick={() => setIsSettingsOpen(true)} className="hover:text-amber-400 transition-colors">
+              <button onClick={() => setIsSettingsOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                 Settings
               </button>
             </div>

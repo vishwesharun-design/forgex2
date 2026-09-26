@@ -372,8 +372,10 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 h-8 sm:h-9 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-semibold">
-                <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <div className={`flex items-center gap-1.5 px-2.5 sm:px-3 h-8 sm:h-9 rounded-xl border text-xs font-semibold ${
+                isDark ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-cyan-300 bg-cyan-50 text-cyan-800'
+              }`}>
+                <Mic className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-700'}`} />
                 <span>AI Voice: {selectedVoiceProfile}</span>
               </div>
 
@@ -451,7 +453,9 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                     onClick={() => setSelectedGenre(g.id)}
                     className={`p-3 rounded-2xl border text-left transition-all ${
                       isSelected
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 ring-1 ring-amber-500/40 shadow-sm'
+                        ? isDark
+                          ? 'bg-amber-500/15 border-amber-500 text-amber-300 ring-1 ring-amber-500/40 shadow-sm'
+                          : 'bg-amber-100 border-amber-500 text-amber-900 ring-1 ring-amber-500/40 shadow-sm font-semibold'
                         : isDark
                         ? 'bg-neutral-950/60 border-neutral-800 hover:border-neutral-700 text-neutral-300'
                         : 'bg-neutral-50 border-neutral-200 hover:border-neutral-300 text-neutral-800'
@@ -461,7 +465,11 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                       <GenreIcon className="w-4 h-4" />
                     </div>
                     <div className="text-xs font-bold leading-tight">{g.label}</div>
-                    <div className={`text-[10px] line-clamp-1 mt-0.5 leading-normal ${isSelected ? 'text-amber-400/80' : 'text-neutral-500'}`}>
+                    <div className={`text-[10px] line-clamp-1 mt-0.5 leading-normal ${
+                      isSelected 
+                        ? (isDark ? 'text-amber-400/80' : 'text-amber-800 font-medium') 
+                        : (isDark ? 'text-neutral-500' : 'text-neutral-600')
+                    }`}>
                       {g.desc}
                     </div>
                   </button>
@@ -518,7 +526,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                 <label className={`block text-xs font-semibold ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                   Duration (30s to 5:00 Min)
                 </label>
-                <span className="text-[11px] font-mono text-cyan-400 font-medium">
+                <span className={`text-[11px] font-mono font-medium ${isDark ? 'text-cyan-400' : 'text-cyan-700 font-semibold'}`}>
                   {Math.floor(selectedDuration / 60)}:{(selectedDuration % 60).toString().padStart(2, '0')} ({selectedDuration}s)
                 </span>
               </div>
@@ -613,7 +621,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
           </div>
 
           {/* Lyrics toggle & optional editor */}
-          <div className="pt-2 border-t border-neutral-800/60">
+          <div className={`pt-2 border-t ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`}>
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -631,7 +639,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveLyricsTab(!activeLyricsTab)}
-                  className="text-xs text-amber-400 hover:text-amber-300 font-medium"
+                  className={`text-xs font-medium ${isDark ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-800'}`}
                 >
                   {activeLyricsTab ? 'Hide Custom Lyrics' : 'Write Custom Lyrics'}
                 </button>
@@ -889,37 +897,43 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1 pr-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-sm sm:text-base leading-snug truncate" title={song.title}>
+                                <h4 className={`font-bold text-sm sm:text-base leading-snug truncate ${isDark ? 'text-white' : 'text-neutral-900'}`} title={song.title}>
                                   {song.title}
                                 </h4>
                                 {song.isFavorite ? (
-                                  <span className="text-[9px] font-bold px-2 h-4 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 inline-flex items-center leading-none">
+                                  <span className={`text-[9px] font-bold px-2 h-4 rounded-md border shrink-0 inline-flex items-center leading-none ${
+                                    isDark ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-amber-100 text-amber-800 border-amber-300'
+                                  }`}>
                                     ★ Favorite
                                   </span>
                                 ) : null}
                               </div>
 
-                              <p className="text-xs text-neutral-400 truncate mt-0.5 leading-normal">
+                              <p className={`text-xs truncate mt-0.5 leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                                 {song.artist || 'AI Studio Original'}
                               </p>
 
                               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                                 {song.hasVoice !== false && (
-                                  <span className="text-[10px] font-semibold px-2 h-5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 inline-flex items-center gap-1 leading-none">
-                                    <Mic className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                                  <span className={`text-[10px] font-semibold px-2 h-5 rounded-full border inline-flex items-center gap-1 leading-none ${
+                                    isDark ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-cyan-50 text-cyan-800 border-cyan-300'
+                                  }`}>
+                                    <Mic className={`w-2.5 h-2.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-700'}`} />
                                     <span>{song.voiceProfile || 'Zephyr'}</span>
                                   </span>
                                 )}
-                                <span className="text-[10px] font-semibold px-2 h-5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 inline-flex items-center leading-none">
+                                <span className={`text-[10px] font-semibold px-2 h-5 rounded-full border inline-flex items-center leading-none ${
+                                  isDark ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-amber-100 text-amber-800 border-amber-300'
+                                }`}>
                                   {song.genre}
                                 </span>
                                 <span className={`text-[10px] px-2 h-5 rounded-full border inline-flex items-center leading-none ${isDark ? 'bg-neutral-800 text-neutral-300 border-neutral-700/50' : 'bg-neutral-100 text-neutral-700 border-neutral-200'}`}>
                                   {song.mood}
                                 </span>
-                                <span className="text-[10px] font-mono tabular-nums text-neutral-400 inline-flex items-center leading-none">
+                                <span className={`text-[10px] font-mono tabular-nums inline-flex items-center leading-none ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                                   {song.tempoBpm} BPM
                                 </span>
-                                <span className="text-[10px] font-mono tabular-nums text-neutral-400 inline-flex items-center leading-none">
+                                <span className={`text-[10px] font-mono tabular-nums inline-flex items-center leading-none ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                                   • {song.durationSeconds}s
                                 </span>
                               </div>
@@ -960,19 +974,19 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                           {/* Audio Progress / Visualizer when playing */}
                           {isPlaying && (
                             <div className="mt-3 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-amber-400">
+                              <div className={`flex items-center justify-between text-[10px] font-mono tabular-nums ${isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'}`}>
                                 <span>{formatSeconds(playbackTime)}</span>
                                 <div className="flex items-end gap-1 h-3">
-                                  <span className="w-1 bg-amber-400 rounded-full animate-bounce h-2" />
-                                  <span className="w-1 bg-amber-400 rounded-full animate-bounce h-3 delay-75" />
-                                  <span className="w-1 bg-amber-400 rounded-full animate-bounce h-1.5 delay-150" />
-                                  <span className="w-1 bg-amber-400 rounded-full animate-bounce h-2.5 delay-100" />
+                                  <span className="w-1 bg-amber-500 rounded-full animate-bounce h-2" />
+                                  <span className="w-1 bg-amber-500 rounded-full animate-bounce h-3 delay-75" />
+                                  <span className="w-1 bg-amber-500 rounded-full animate-bounce h-1.5 delay-150" />
+                                  <span className="w-1 bg-amber-500 rounded-full animate-bounce h-2.5 delay-100" />
                                 </div>
                                 <span>{formatSeconds(playbackDuration)}</span>
                               </div>
-                              <div className="w-full h-1.5 rounded-full bg-neutral-800 overflow-hidden">
+                              <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}>
                                 <div
-                                  className="h-full bg-amber-400 rounded-full transition-all duration-100"
+                                  className="h-full bg-amber-500 rounded-full transition-all duration-100"
                                   style={{ width: `${Math.min(100, (playbackTime / playbackDuration) * 100)}%` }}
                                 />
                               </div>
@@ -980,7 +994,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                           )}
 
                           {/* Card Footer Actions */}
-                          <div className="flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-neutral-800/40 flex-wrap sm:flex-nowrap">
+                          <div className={`flex items-center justify-between gap-2 mt-3 pt-2.5 border-t flex-wrap sm:flex-nowrap ${isDark ? 'border-neutral-800/40' : 'border-neutral-200'}`}>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <button
                                 onClick={(e) => {
@@ -994,7 +1008,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                                     : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
                                 }`}
                               >
-                                <Download className="w-3 h-3 text-amber-400 shrink-0" />
+                                <Download className="w-3 h-3 text-amber-500 shrink-0" />
                                 <span>WAV</span>
                               </button>
 
@@ -1007,7 +1021,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                                 title={song.cloudStorageUrl || savedCloudIds.has(song.id) ? 'Saved in Firebase Storage' : 'Save to Firebase Storage'}
                                 className={`h-7 px-2.5 inline-flex items-center gap-1 text-[11px] font-semibold rounded-lg transition-colors leading-none shrink-0 ${
                                   song.cloudStorageUrl || savedCloudIds.has(song.id)
-                                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                                    ? isDark ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40' : 'bg-sky-100 text-sky-800 border border-sky-300'
                                     : isDark
                                     ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200'
                                     : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
@@ -1016,7 +1030,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                                 {savingCloudId === song.id ? (
                                   <div className="w-3 h-3 rounded-full border-2 border-sky-400 border-t-transparent animate-spin shrink-0" />
                                 ) : (
-                                  <Cloud className="w-3 h-3 text-sky-400 shrink-0" />
+                                  <Cloud className="w-3 h-3 text-sky-500 shrink-0" />
                                 )}
                                 <span>{song.cloudStorageUrl || savedCloudIds.has(song.id) ? 'Synced' : 'Cloud'}</span>
                               </button>
@@ -1036,8 +1050,8 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                                 >
                                   {copiedId === song.id ? (
                                     <>
-                                      <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                                      <span className="text-emerald-400">Copied</span>
+                                      <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                                      <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
                                     </>
                                   ) : (
                                     <>
@@ -1057,7 +1071,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                       </div>
 
                       {/* Song Sections preview at bottom of card */}
-                      <div className="mt-3 pt-2.5 border-t border-neutral-800/40 flex items-center justify-between text-xs gap-2">
+                      <div className={`mt-3 pt-2.5 border-t flex items-center justify-between text-xs gap-2 ${isDark ? 'border-neutral-800/40' : 'border-neutral-200'}`}>
                         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                           <span className="text-[10px] text-neutral-500 font-mono shrink-0 leading-none">Sections:</span>
                           {cardSections.map((sec, sIdx) => (
@@ -1072,7 +1086,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                           ))}
                         </div>
 
-                        <span className="text-[10px] text-amber-400 font-semibold hover:underline shrink-0 ml-auto whitespace-nowrap leading-none flex items-center gap-1">
+                        <span className={`text-[10px] font-semibold hover:underline shrink-0 ml-auto whitespace-nowrap leading-none flex items-center gap-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
                           {isSelected ? 'Loaded in Master' : 'Inspect in Master →'}
                         </span>
                       </div>

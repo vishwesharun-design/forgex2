@@ -280,7 +280,7 @@ export interface NotificationItem {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  theme: 'dark',
+  theme: 'light',
   defaultModel: 'unreal-5',
   responsePreference: 'Balanced',
   defaultImageRatio: '16:9',

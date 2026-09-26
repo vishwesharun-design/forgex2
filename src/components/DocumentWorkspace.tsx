@@ -400,8 +400,8 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
             {activeDocs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <FileText className="w-12 h-12 text-neutral-500 mb-3 opacity-40" />
-                <h3 className="text-sm font-bold text-neutral-300">No Document Selected</h3>
-                <p className="text-xs text-neutral-500 mt-1 max-w-sm">
+                <h3 className={`text-sm font-bold ${isDark ? 'text-neutral-300' : 'text-neutral-800'}`}>No Document Selected</h3>
+                <p className={`text-xs mt-1 max-w-sm ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
                   Upload a document or select an existing file from the left vault to begin synthesis.
                 </p>
               </div>
@@ -487,11 +487,11 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
                                   }}
                                   className={`p-2.5 rounded-xl border text-left text-xs transition-all ${
                                     isCorrect
-                                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold'
+                                      ? isDark ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold' : 'bg-emerald-100 border-emerald-500 text-emerald-800 font-bold'
                                       : isWrong
-                                      ? 'bg-red-500/20 border-red-500 text-red-300 font-bold'
+                                      ? isDark ? 'bg-red-500/20 border-red-500 text-red-300 font-bold' : 'bg-red-100 border-red-500 text-red-800 font-bold'
                                       : isSelected
-                                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold'
+                                      ? isDark ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold' : 'bg-amber-100 border-amber-500 text-amber-900 font-semibold'
                                       : isDark
                                       ? 'bg-neutral-950/60 border-neutral-800 hover:border-neutral-700 text-neutral-300'
                                       : 'bg-neutral-50 border-neutral-200 hover:border-neutral-300 text-neutral-700'
@@ -504,8 +504,10 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
                           </div>
 
                           {showQuizScore && (
-                            <div className="p-2.5 rounded-xl bg-neutral-950/40 border border-neutral-800/80 text-[11px] text-neutral-400">
-                              <span className="font-bold text-amber-400 mr-1">Explanation:</span>
+                            <div className={`p-2.5 rounded-xl border text-[11px] ${
+                              isDark ? 'bg-neutral-950/40 border-neutral-800/80 text-neutral-400' : 'bg-neutral-100 border-neutral-200 text-neutral-700'
+                            }`}>
+                              <span className={`font-bold mr-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>Explanation:</span>
                               {q.explanation}
                             </div>
                           )}

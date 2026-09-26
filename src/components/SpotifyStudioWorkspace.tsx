@@ -480,7 +480,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                       10 Real Master Songs Included
                     </span>
                   </div>
-                  <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                  <h2 className={`text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                     {currentCategoryMeta.name}
                   </h2>
                   <p className={`text-xs sm:text-sm mt-1 max-w-xl ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
@@ -592,7 +592,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                             }`}>
                               {track.title}
                             </h3>
-                            <span className="text-[11px] font-mono tabular-nums text-neutral-400 shrink-0 leading-none">
+                            <span className={`text-[11px] font-mono tabular-nums shrink-0 leading-none ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                               {track.duration}
                             </span>
                           </div>
@@ -600,10 +600,10 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                           {/* USER REQUIREMENT: "give the creator name belove that song" */}
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs font-bold text-[#1DB954] truncate flex items-center gap-1 leading-normal">
-                              <span className="text-neutral-400 font-normal">By</span>
+                              <span className={`font-normal ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>By</span>
                               <span>{track.creator}</span>
                             </p>
-                            <p className={`text-[11px] truncate leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                            <p className={`text-[11px] truncate leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                               {track.album} • {track.year}
                             </p>
                           </div>
@@ -611,15 +611,17 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                       </div>
 
                       {/* Song Description */}
-                      <p className={`text-[11px] line-clamp-2 mt-2.5 leading-relaxed text-left ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      <p className={`text-[11px] line-clamp-2 mt-2.5 leading-relaxed text-left ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>
                         {track.description}
                       </p>
 
                       {/* Bottom Footer Actions: Spotify Link Icon + Favorite + Play Real Song Button */}
-                      <div className="mt-3.5 pt-2.5 border-t border-neutral-800/40 flex items-center justify-between gap-2">
+                      <div className={`mt-3.5 pt-2.5 border-t flex items-center justify-between gap-2 ${isDark ? 'border-neutral-800/40' : 'border-neutral-200'}`}>
                         {/* Real Audio Pill */}
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                          isDark ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                        }`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           Real Song
                         </span>
 
@@ -725,10 +727,10 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                             {track.title}
                           </div>
                           <div className="text-xs text-[#1DB954] font-semibold truncate flex items-center gap-1.5">
-                            <span className="text-neutral-400 font-normal">By</span>
+                            <span className={`font-normal ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>By</span>
                             <span>{track.creator}</span>
                             <span className="text-neutral-500">•</span>
-                            <span className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                            <span className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                               {track.album}
                             </span>
                           </div>
@@ -737,11 +739,13 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
 
                       {/* Right Meta + Spotify Icon Link */}
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hidden sm:inline-flex">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full hidden sm:inline-flex ${
+                          isDark ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                        }`}>
                           Real Audio
                         </span>
 
-                        <span className="hidden sm:inline-block text-xs font-mono tabular-nums text-neutral-400">
+                        <span className={`hidden sm:inline-block text-xs font-mono tabular-nums ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                           {track.duration}
                         </span>
 
@@ -749,7 +753,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                           type="button"
                           onClick={(e) => handleToggleFavorite(e, track.id)}
                           className={`p-1.5 rounded-lg transition-colors ${
-                            isFav ? 'text-rose-500' : 'text-neutral-400 hover:text-white'
+                            isFav ? 'text-rose-500' : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
                           }`}
                         >
                           <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-500' : ''}`} />
@@ -893,17 +897,21 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
 
             {/* Song Title & PROMINENT CREATOR NAME BELOW THAT SONG */}
             <div className="text-center px-1">
-              <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white truncate leading-tight">
+              <h2 className={`text-lg sm:text-xl font-extrabold tracking-tight truncate leading-tight ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                 {currentSong.title}
               </h2>
 
               {/* USER REQUIREMENT: "give the creator name belove that song" */}
               <div className="mt-1.5 flex flex-col items-center justify-center">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/30 text-[#1DB954] font-bold text-xs leading-none">
-                  <span className="text-neutral-400 font-normal">Creator:</span>
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs leading-none font-bold border ${
+                  isDark
+                    ? 'bg-[#1DB954]/15 border-[#1DB954]/30 text-[#1DB954]'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                }`}>
+                  <span className={isDark ? 'text-neutral-400 font-normal' : 'text-neutral-600 font-normal'}>Creator:</span>
                   <span>{currentSong.creator}</span>
                 </div>
-                <p className={`text-xs mt-1.5 truncate max-w-xs leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <p className={`text-xs mt-1.5 truncate max-w-xs leading-normal ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                   {currentSong.album} • {currentSong.year}
                 </p>
               </div>
@@ -935,7 +943,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     <Waves className="w-3.5 h-3.5" />
                     Master Equalizer Spectrum
                   </span>
-                  <span className="text-neutral-400 font-mono text-[10px]">
+                  <span className={`font-mono text-[10px] ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>
                     {currentSong.genre} • {currentSong.bpm} BPM
                   </span>
                 </div>
@@ -973,7 +981,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     type="button"
                     onClick={() => spotifyPlayerService.toggleShuffle()}
                     className={`p-2 rounded-lg transition-colors ${
-                      playerState.isShuffled ? 'text-[#1DB954] bg-[#1DB954]/15' : 'text-neutral-400 hover:text-white'
+                      playerState.isShuffled ? 'text-[#1DB954] bg-[#1DB954]/15' : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
                     }`}
                     title="Shuffle tracks"
                   >
@@ -984,7 +992,9 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     <button
                       type="button"
                       onClick={handlePrevTrack}
-                      className="p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                      className={`p-2 rounded-xl transition-colors ${
+                        isDark ? 'text-neutral-300 hover:text-white hover:bg-neutral-800' : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200'
+                      }`}
                       title="Previous song"
                     >
                       <SkipBack className="w-5 h-5" />
@@ -1006,7 +1016,9 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     <button
                       type="button"
                       onClick={handleNextTrack}
-                      className="p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                      className={`p-2 rounded-xl transition-colors ${
+                        isDark ? 'text-neutral-300 hover:text-white hover:bg-neutral-800' : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200'
+                      }`}
                       title="Next song"
                     >
                       <SkipForward className="w-5 h-5" />
@@ -1017,7 +1029,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     type="button"
                     onClick={() => spotifyPlayerService.toggleRepeat()}
                     className={`p-2 rounded-lg transition-colors ${
-                      playerState.isRepeating ? 'text-[#1DB954] bg-[#1DB954]/15' : 'text-neutral-400 hover:text-white'
+                      playerState.isRepeating ? 'text-[#1DB954] bg-[#1DB954]/15' : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
                     }`}
                     title="Repeat track"
                   >
@@ -1026,11 +1038,11 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                 </div>
 
                 {/* Volume Slider & Mute Toggle */}
-                <div className="mt-3.5 pt-3 border-t border-neutral-800/60 flex items-center gap-2.5">
+                <div className={`mt-3.5 pt-3 border-t flex items-center gap-2.5 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`}>
                   <button
                     type="button"
                     onClick={() => spotifyPlayerService.toggleMute()}
-                    className="text-neutral-400 hover:text-white transition-colors"
+                    className={`transition-colors ${isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'}`}
                     title={playerState.isMuted ? 'Unmute' : 'Mute'}
                   >
                     {playerState.isMuted || playerState.volume === 0 ? (
@@ -1106,7 +1118,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                   <Info className="w-3.5 h-3.5" />
                   Song Information
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
+                <span className={`px-2 py-0.5 rounded-md font-medium ${isDark ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'}`}>
                   {currentSong.mood}
                 </span>
               </div>

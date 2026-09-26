@@ -214,14 +214,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  const handleDeleteMessage = (messageId: string) => {
-    if (!currentSession) return;
-    const updated = chatService.deleteMessage(currentSession.id, messageId);
-    if (updated) {
-      onUpdateSession(updated);
-    }
-  };
-
   const handleClearChat = () => {
     if (!currentSession) return;
     const updated = chatService.clearSession(currentSession.id);
@@ -280,12 +272,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
+                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
                 }`}
               >
-                <span className="text-amber-400 text-xs font-semibold block mb-1">Concept</span>
-                <p className="font-medium text-sm">Explain something</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Concept</span>
+                <p className="font-semibold text-sm">Explain something</p>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   Deep dive into complex technical mechanisms
                 </p>
               </button>
@@ -296,12 +288,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
+                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
                 }`}
               >
-                <span className="text-amber-400 text-xs font-semibold block mb-1">Visual</span>
-                <p className="font-medium text-sm">Create an image</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Visual</span>
+                <p className="font-semibold text-sm">Create an image</p>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   Craft hyper-detailed prompts for Image Studio
                 </p>
               </button>
@@ -312,12 +304,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
+                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
                 }`}
               >
-                <span className="text-amber-400 text-xs font-semibold block mb-1">Audio & Song</span>
-                <p className="font-medium text-sm">Compose a song</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Audio & Song</span>
+                <p className="font-semibold text-sm">Compose a song</p>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   Structure rhythm, BPM, vocal style, and lyrics
                 </p>
               </button>
@@ -328,12 +320,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all ${
                   isDark
                     ? 'bg-neutral-900/60 border-neutral-800 hover:border-amber-500/40 hover:bg-neutral-850 text-neutral-200'
-                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-800 shadow-sm'
+                    : 'bg-white border-neutral-200 hover:border-amber-400 hover:bg-neutral-50 text-neutral-900 shadow-sm'
                 }`}
               >
-                <span className="text-amber-400 text-xs font-semibold block mb-1">Ideation</span>
-                <p className="font-medium text-sm">Brainstorm an idea</p>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <span className={`text-xs font-bold block mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Ideation</span>
+                <p className="font-semibold text-sm">Brainstorm an idea</p>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   Generate out-of-the-box creative perspectives
                 </p>
               </button>
@@ -345,10 +337,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             {/* Chat Control Bar */}
             <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-neutral-800/80' : 'border-neutral-200'}`}>
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className={`font-semibold text-xs sm:text-sm truncate max-w-[200px] sm:max-w-xs ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
+                <span className={`font-semibold text-xs sm:text-sm truncate max-w-[200px] sm:max-w-xs ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
                   {currentSession?.title || 'Current Chat'}
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-amber-500/15 text-amber-400 font-semibold shrink-0">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold shrink-0 ${
+                  isDark ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                }`}>
                   {displayMessages.length} {displayMessages.length === 1 ? 'msg' : 'msgs'}
                 </span>
               </div>
@@ -388,51 +382,104 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   className={`group flex gap-3.5 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {!isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-1 shadow-sm">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 shadow-sm border ${
+                      isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-600'
+                    }`}>
                       <Zap className="w-4 h-4 fill-amber-400 text-amber-400 glow-lightning" />
                     </div>
                   )}
 
-                  <div
-                    className={`relative max-w-[85%] sm:max-w-[78%] rounded-3xl p-4 sm:p-5 transition-all text-sm leading-relaxed ${
-                      isUser
-                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-neutral-950 font-medium rounded-tr-sm shadow-md shadow-amber-500/15'
-                        : isDark
-                          ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
-                          : 'bg-white border border-neutral-200 text-neutral-800 rounded-tl-sm shadow-sm'
-                    }`}
-                  >
-                    {/* Attachments if any */}
-                    {message.attachments && message.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {message.attachments.map((att, i) => (
-                          <div key={i} className="flex flex-col gap-1">
-                            {att.type === 'image' && att.url && (
-                              <img
-                                src={att.url}
-                                alt={att.name}
-                                className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
-                              />
-                            )}
-                            <div
-                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit ${
-                                isUser ? 'bg-neutral-950/20 text-neutral-950' : 'bg-neutral-800/60 text-neutral-300'
-                              }`}
-                            >
-                              {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-                              <span className="truncate max-w-[140px]">{att.name}</span>
+                  {isUser ? (
+                    <div className="flex flex-col items-end max-w-[85%] sm:max-w-[78%]">
+                      {/* Attachments if any */}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                          {message.attachments.map((att, i) => (
+                            <div key={i} className="flex flex-col gap-1 items-end">
+                              {att.type === 'image' && att.url && (
+                                <img
+                                  src={att.url}
+                                  alt={att.name}
+                                  className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
+                                />
+                              )}
+                              <div
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit ${
+                                  isDark ? 'bg-neutral-800/80 text-neutral-300' : 'bg-neutral-200 text-neutral-800 font-medium'
+                                }`}
+                              >
+                                {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                                <span className="truncate max-w-[140px]">{att.name}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
 
-                    {/* Message Body with rich Markdown rendering */}
-                    {isUser ? (
-                      <div className="whitespace-pre-wrap font-sans space-y-2">
+                      {/* User message text bubble: Orange background ONLY for the text */}
+                      <div className="rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-amber-500 to-amber-600 text-neutral-950 font-medium rounded-tr-sm shadow-md shadow-amber-500/15 text-sm leading-relaxed whitespace-pre-wrap font-sans">
                         {message.content}
                       </div>
-                    ) : (
+
+                      {/* Action Bar for User Messages: Outside orange bubble, NO orange background */}
+                      <div className="mt-1 flex items-center justify-end px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => copyToClipboard(message.content, message.id)}
+                          title="Copy message"
+                          className={`flex items-center gap-1 py-0.5 px-1.5 rounded-md text-xs transition-colors ${
+                            isDark
+                              ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
+                              : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-200/80'
+                          }`}
+                        >
+                          {copiedMessageId === message.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span className="text-[11px]">Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={`relative max-w-[85%] sm:max-w-[78%] rounded-3xl p-4 sm:p-5 transition-all text-sm leading-relaxed ${
+                        isDark
+                          ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
+                          : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm shadow-sm'
+                      }`}
+                    >
+                      {/* Attachments if any */}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {message.attachments.map((att, i) => (
+                            <div key={i} className="flex flex-col gap-1">
+                              {att.type === 'image' && att.url && (
+                                <img
+                                  src={att.url}
+                                  alt={att.name}
+                                  className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
+                                />
+                              )}
+                              <div
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit ${
+                                  isDark ? 'bg-neutral-800/60 text-neutral-300' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                }`}
+                              >
+                                {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                                <span className="truncate max-w-[140px]">{att.name}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Message Body with rich Markdown rendering */}
                       <div className="relative">
                         <MarkdownRenderer
                           content={message.content}
@@ -442,36 +489,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                           <span className="inline-block w-2 h-4 ml-1 bg-amber-400 animate-pulse rounded-xs align-middle shadow-sm shadow-amber-400/50" />
                         )}
                       </div>
-                    )}
 
-                    {/* Action Bar for User Messages */}
-                    {isUser && (
-                      <div className="mt-2 pt-1.5 border-t border-black/10 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => copyToClipboard(message.content, message.id)}
-                          title="Copy message"
-                          className="p-1 rounded-md hover:bg-black/10 text-neutral-950/80 hover:text-neutral-950 transition-colors"
-                        >
-                          {copiedMessageId === message.id ? (
-                            <Check className="w-3 h-3 text-green-800" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMessage(message.id)}
-                          title="Delete message"
-                          className="p-1 rounded-md hover:bg-red-600 hover:text-white text-neutral-950/80 transition-colors"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Model badge & actions on assistant reply */}
-                    {!isUser && (
-                      <div className="mt-3 pt-2.5 border-t border-neutral-800/40 flex items-center justify-between text-xs text-neutral-400">
-                        <span className="text-[11px] font-mono text-amber-400 inline-flex items-center gap-1">
+                      {/* Model badge & copy action on assistant reply */}
+                      <div className={`mt-3 pt-2.5 border-t flex items-center justify-between text-xs ${
+                        isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
+                      }`}>
+                        <span className={`text-[11px] font-mono inline-flex items-center gap-1 ${
+                          isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'
+                        }`}>
                           <Zap className="w-3 h-3 shrink-0" />
                           <span>
                             {message.isStreaming 
@@ -485,12 +510,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => copyToClipboard(message.content, message.id)}
-                            className="flex items-center gap-1 hover:text-white transition-colors"
+                            className={`flex items-center gap-1 transition-colors ${
+                              isDark ? 'hover:text-white text-neutral-400' : 'hover:text-neutral-950 text-neutral-600'
+                            }`}
                           >
                             {copiedMessageId === message.id ? (
                               <>
-                                <Check className="w-3.5 h-3.5 text-green-400" />
-                                <span className="text-green-400 text-[11px]">Copied</span>
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">Copied</span>
                               </>
                             ) : (
                               <>
@@ -499,19 +526,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                               </>
                             )}
                           </button>
-
-                          <button
-                            onClick={() => handleDeleteMessage(message.id)}
-                            title="Delete message"
-                            className="flex items-center gap-1 text-neutral-400 hover:text-red-400 transition-colors ml-1"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span className="text-[11px]">Delete</span>
-                          </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -598,7 +616,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             {attachedFiles.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs border ${
+                  isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'
+                }`}
               >
                 {file.type === 'image' && file.url ? (
                   <img src={file.url} alt={file.name} className="w-5 h-5 rounded object-cover border border-amber-500/40" />
@@ -610,7 +630,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 <span className="truncate max-w-[140px]">{file.name}</span>
                 <button
                   onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
-                  className="hover:text-white ml-1"
+                  className={`${isDark ? 'hover:text-white' : 'hover:text-neutral-900'} ml-1`}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -637,12 +657,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             onKeyDown={handleKeyDown}
             placeholder="Ask ForgeX anything..."
             className={`w-full bg-transparent px-3 py-1.5 text-sm resize-none outline-none max-h-48 leading-relaxed ${
-              isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-400'
+              isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-500'
             }`}
           />
 
           {/* Action toolbar inside input bottom */}
-          <div className="flex items-center justify-between pt-2 border-t border-neutral-800/30 px-1">
+          <div className={`flex items-center justify-between pt-2 border-t px-1 ${
+            isDark ? 'border-neutral-800/40' : 'border-neutral-200'
+          }`}>
             <div className="flex items-center gap-1">
               {/* Attach File Button */}
               <button

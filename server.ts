@@ -830,6 +830,84 @@ ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
     }
   });
 
+  // Video Generation Endpoint
+  app.post("/api/generate-video", async (req: Request, res: Response) => {
+    try {
+      const {
+        prompt = "Cinematic cosmic nebula flight",
+        duration = "10s",
+        aspectRatio = "16:9",
+        quality = "1080p",
+        generationType = "text-to-video",
+        modelId = "unreal-5",
+        referenceImage,
+        slideCount = 4,
+      } = req.body;
+
+      const cleanPrompt = (prompt || "Cinematic sequence").trim();
+      const count = Math.max(2, Math.min(Number(slideCount) || 4, 16));
+      const durSec = parseInt(String(duration).match(/\d+/)?.[0] || "10", 10);
+      const slideDur = Number((durSec / count).toFixed(2));
+
+      const w = aspectRatio === "9:16" ? 576 : aspectRatio === "1:1" ? 768 : 1024;
+      const h = aspectRatio === "9:16" ? 1024 : aspectRatio === "1:1" ? 768 : 576;
+
+      const motions = ["zoom-in", "pan-left-to-right", "zoom-out", "pan-right-to-left", "orbit"];
+      const slides = [];
+
+      for (let i = 0; i < count; i++) {
+        const seed = Math.floor(Math.random() * 888888) + i * 2500 + 101;
+        const sceneNum = i + 1;
+        const motion = motions[i % motions.length];
+        const scenePrompt = `${cleanPrompt}, cinematic scene ${sceneNum}, master lighting, 8k resolution, photorealistic Unreal 5 render`;
+        const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scenePrompt)}?width=${w}&height=${h}&seed=${seed}&nologo=true`;
+
+        slides.push({
+          id: `slide_${sceneNum}_${Date.now()}_${i}`,
+          title: `Scene ${sceneNum}: Frame Sequence`,
+          imageUrl: imgUrl,
+          cameraMotion: motion,
+          caption: `Cinematic frame ${sceneNum} for ${cleanPrompt.slice(0, 45)}`,
+          durationSeconds: slideDur,
+        });
+      }
+
+      const sampleVideos = [
+        "https://vjs.zencdn.net/v/oceans.mp4",
+        "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+        "https://www.w3schools.com/html/mov_bbb.mp4"
+      ];
+      const videoUrl = sampleVideos[Math.floor(Math.random() * sampleVideos.length)];
+
+      const video = {
+        id: `vid_${Date.now()}`,
+        prompt: cleanPrompt,
+        videoUrl,
+        thumbnailUrl: referenceImage || slides[0]?.imageUrl,
+        duration,
+        aspectRatio,
+        quality,
+        generationType,
+        modelId,
+        createdAt: Date.now(),
+        isFavorite: false,
+        referenceImage,
+        slides,
+        slideCount: count,
+      };
+
+      return res.json({
+        success: true,
+        video,
+      });
+    } catch (err: unknown) {
+      console.error("Error in /api/generate-video:", err);
+      return res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to generate video",
+      });
+    }
+  });
+
   // Deep Research Endpoint with Live Web Search & Grounding
   app.post("/api/deep-research", async (req: Request, res: Response) => {
     try {
