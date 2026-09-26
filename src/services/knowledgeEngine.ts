@@ -711,11 +711,71 @@ Historical transitions—from the **Agricultural Revolution** to the **Industria
 3. **Long-Term Impact**: Fundamental restructuring of communication, governance, and daily human life.`;
   }
 
+  // 12.3 Security, API Keys & Secret Protection
+  if (/(?:show|give|what\s+is|display|reveal|leak|print|share)\s+(?:me\s+)?(?:your\s+)?(?:api\s*keys?|secret\s*keys?|gemini\s*key|firebase\s*key|env\s*file|\.env|tokens?|credentials?|passwords?|private\s*keys?)/i.test(clean) ||
+      /(?:show|give|display|reveal)\s+(?:me\s+)?(?:your\s+)?(?:server\s*code\s*secrets|backend\s*secrets|source\s*code\s*secrets)/i.test(clean)) {
+    return `### Security & Confidentiality Notice
+
+As **ForgeX**, system credentials, private API keys (such as Gemini, Firebase, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.
+
+---
+
+### What I Can Share:
+* **How ForgeX Works**: Platform features, architecture, and studio workflows.
+* **How to Build with APIs**: Assistance writing code to integrate Firebase, Gemini SDK, REST APIs, or your own application backends.
+* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.
+* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.
+
+Feel free to ask about any feature, studio workflow, or programming task!`;
+  }
+
+  // 12.4 How to Upload Custom Studio / Studio Hub & Store
+  if (/(?:how\s+(?:do\s+i|to|can\s+i)\s+(?:upload|create|make|build|publish|add)\s+(?:my\s+own\s+|a\s+)?(?:custom\s+)?studio|upload\s+(?:my\s+own\s+|a\s+)?studio|how\s+to\s+make\s+a\s+studio|create\s+studio\s+name|studio\s+hub|studio\s+store|custom\s+studios?)/i.test(clean)) {
+    return `### How to Upload Your Own Custom Studio on ForgeX
+
+Creating and publishing your own custom AI Studio on ForgeX is straightforward. Follow this step-by-step guide:
+
+---
+
+### 📋 Step-by-Step Workflow:
+
+#### 1. Sign In to Your Account
+* Access to specialized studios and studio creation requires an authenticated account.
+* Click **Sign In** (via Google or Email). This ensures your studio is securely linked to your verified identity and synced to your private Firebase storage.
+
+#### 2. Open the Studio Hub & Store
+* In the left sidebar, click the **"+ Add Studio"** button, or click the **Studio Store** icon in the navigation bar.
+* This opens the **Studio Hub & Store** modal, where you can browse official studios, community creations, and your own uploaded studios.
+
+#### 3. Register Your Unique Studio Name (First-Time Only)
+* Before uploading your first custom studio, you must register your unique **Studio Name** (e.g., *"Quantum Labs"*, *"Apex AI Studio"*, or *"Panda Creations"*).
+* Choose your **brand icon** (Sparkles, Building, Rocket, CPU, etc.) and an **accent color**.
+* **Email Binding**: Your Studio Name is permanently linked to the email you logged in with. Only your logged-in email will have permissions to publish, update, or delete studios under that Studio Name.
+
+#### 4. Configure & Upload Your Studio
+Click **"Upload Your Studio"** and fill in your studio's configuration:
+* **Studio Title**: Give your studio a clear, memorable name (e.g., *"Prompt Crafter Pro"* or *"Financial Modeling Copilot"*).
+* **Category**: Choose a category (*Creative*, *Intelligence*, *Productivity*, *Utility*, or *Gaming*).
+* **Short Description**: Explain what your studio does in 1–2 sentences.
+* **System Prompt / AI Logic**: Specify the core instructions, behavioral rules, and expertise your studio's AI model will follow.
+* **Welcome Message & Starter Prompts**: Add custom starter suggestion prompts for users when they open the studio.
+* **UI Template**: Select between a **Chat Interface** or a **Prompt Pad**.
+
+#### 5. Publish & Launch!
+* Click **Publish Studio**. 
+* Your studio is instantly generated, added to your active workspace sidebar, and saved to your private Firebase cloud vault.
+* You can launch it anytime from the sidebar or Studio Hub!
+
+---
+
+*Would you like help designing a system prompt or structure for your custom studio?*`;
+  }
+
   // 12.5 Capabilities & What can you do
   if (/(?:what\s+(?:can|do)\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+forgex\s+do|capabilities|features\s+of\s+forgex|how\s+can\s+you\s+help\s+me|tell\s+me\s+what\s+you\s+can\s+do)/i.test(clean)) {
     return `### What ForgeX Can Do
 
-I am **ForgeX**, an all-in-one AI intelligence and creation platform. Here is an overview of everything I can do for you:
+I am **ForgeX**, an all-in-one AI intelligence and creation platform created by **VishweshVarman**. Here is an overview of everything I can do for you:
 
 ---
 
@@ -723,8 +783,9 @@ I am **ForgeX**, an all-in-one AI intelligence and creation platform. Here is an
 * **Images Studio**: Create high-fidelity photorealistic, anime, 3D render, watercolor, or cinematic images with custom aspect ratios, style presets, negative prompts, and seed controls.
 * **Make Song Studio**: Compose original music and songs powered by neural synthesis—complete with custom genres, moods, tempo, and generated lyrics.
 * **Music Player Studio**: Listen to your generated and featured tracks with audio waveform visualization, queue management, volume controls, and playback options.
-* **Deep Research Studio**: Conduct multi-source investigations, syntheses, technical deep dives, and structured analytical reports.
+* **Deep Research Studio**: Conduct multi-source investigations, syntheses, technical deep dives, and structured analytical reports with verified web citations.
 * **Code Studio**: Generate, inspect, debug, and test code in Python, TypeScript, Rust, C++, Go, SQL, and more.
+* **Custom Studio Hub & Store**: Browse pre-built studios, add them to your sidebar, or create and publish your own custom AI studios under your registered Studio Name!
 
 ---
 
@@ -736,13 +797,45 @@ I am **ForgeX**, an all-in-one AI intelligence and creation platform. Here is an
 
 ---
 
-### 🎙️ 3. Real-Time Audio & Voice
+### 🔒 3. Cloud Storage & Privacy
+* **Firebase Authentication**: Sign in with Google or Email.
+* **Isolated User History**: All your chats, generated images, songs, and custom studios are stored separately in private Firestore cloud subcollections.
+
+---
+
+### 🎙️ 4. Real-Time Audio & Voice
 * **Live Voice Mode**: Engage in real-time two-way voice conversations with low-latency spoken responses.
 * **Speech-to-Text Dictation**: Dictate prompts directly using the microphone button.
 
 ---
 
 *What would you like to build, explore, or create today?*`;
+  }
+
+  // 12.6 Data Privacy, History & Authentication Questions
+  if (/(?:how\s+(?:does|is)\s+(?:my\s+)?(?:history|data|chats?)\s+(?:saved|stored|isolated)|firebase\s+(?:auth|data|firestore)|why\s+(?:do\s+i\s+need\s+to\s+sign\s+in|is\s+sign\s+in\s+required)|is\s+my\s+data\s+private)/i.test(clean)) {
+    return `### How User History & Authentication Work on ForgeX
+
+ForgeX is architected with enterprise-grade privacy and per-user data isolation:
+
+---
+
+### 🔑 1. Firebase Authentication
+* You can sign in using **Google Sign-In** or **Email & Password**.
+* Signing in unlocks full access to all specialized AI studios, custom studio creation, and cloud synchronization.
+
+### 🛡️ 2. Per-User Isolated Cloud Vault
+* Each user's data is stored in isolated Firestore document paths under \`/users/{your_uid}/*\`.
+* **Private Subcollections**:
+  - \`/chats\`: Your private conversation threads and messages.
+  - \`/images\`: Your generated images, aspect ratios, and prompts.
+  - \`/songs\`: Your generated music tracks and lyrics.
+  - \`/customStudios\`: Custom AI studios you have created and uploaded.
+  - \`/studioProfile\`: Your registered Studio Name linked strictly to your login email.
+
+### 🔒 3. Strict Security Rules
+* Database security rules enforce that only your authenticated UID can read or write your history.
+* Other users cannot see, modify, or delete your history, and only your registered email can modify or delete custom studios published under your Studio Name.`;
   }
 
   // 12.8 Chess & Games
