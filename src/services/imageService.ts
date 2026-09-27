@@ -29,9 +29,9 @@ export const imageService = {
       const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: GeneratedImage[] = JSON.parse(stored);
-        // Strictly filter out any legacy mock images
+        // Strictly filter out any legacy mock images or fake fallback unsplash stock photos
         const realImages = Array.isArray(parsed)
-          ? parsed.filter((img) => !MOCK_IMAGE_IDS.has(img.id))
+          ? parsed.filter((img) => !MOCK_IMAGE_IDS.has(img.id) && !img.imageUrl?.includes('images.unsplash.com/photo-'))
           : [];
         if (realImages.length !== parsed.length) {
           this.saveImages(realImages);
@@ -98,20 +98,70 @@ export const imageService = {
     const count = Math.min(Math.max(params.count || 1, 1), 4);
     const apiKey = this.getApiKey();
 
-    if (onProgress) onProgress(8);
+    if (onProgress) onProgress(10);
 
-    // 1. Try real-time streaming SSE image synthesis pipeline first
+    // 1. Primary: Direct Puter.js SDK call with Black Forest Labs FLUX in browser
+    const puterResults: GeneratedImage[] = [];
+    let puterError: Error | null = null;
+
+    try {
+      if (onProgress) onProgress(25);
+      for (let i = 0; i < count; i++) {
+        if (onProgress) onProgress(25 + Math.floor((i / count) * 65));
+        const res = await puterService.generateFluxImage({
+          prompt: params.prompt,
+          aspectRatio: params.aspectRatio,
+          style: params.style,
+          customStyle: params.customStyle,
+          model: selectedFluxModel,
+          referenceImage: params.referenceImage,
+        });
+
+        if (res && res.imageUrl) {
+          puterResults.push({
+            id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+            prompt: params.prompt,
+            imageUrl: res.imageUrl,
+            aspectRatio: params.aspectRatio,
+            style: params.style,
+            customStyle: params.customStyle,
+            modelId: params.modelId,
+            createdAt: Date.now(),
+            isFavorite: false,
+            referenceImage: params.referenceImage,
+            engine: res.engine || 'Black Forest Labs FLUX (Puter)',
+          });
+        }
+      }
+
+      if (puterResults.length > 0) {
+        if (onProgress) onProgress(100);
+        const current = this.getImages();
+        const updated = [...puterResults, ...current];
+        this.saveImages(updated);
+        return puterResults;
+      }
+    } catch (err: any) {
+      puterError = err instanceof Error ? err : new Error(String(err));
+      console.warn('Puter client-side generation notice, trying server pipeline:', err);
+    }
+
+    const puterAuthToken = puterService.getAuthToken();
+
+    // 2. Real-time streaming SSE image synthesis pipeline
     try {
       const streamRes = await fetch('/api/generate-image/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(apiKey ? { 'x-api-key': apiKey } : {}),
+          ...(puterAuthToken ? { 'x-puter-auth': puterAuthToken } : {}),
         },
         body: JSON.stringify({
           ...params,
           fluxModel: selectedFluxModel,
           apiKey: apiKey || undefined,
+          puterAuthToken: puterAuthToken || undefined,
         }),
       });
 
@@ -156,53 +206,7 @@ export const imageService = {
         }
       }
     } catch (_streamErr) {
-      console.warn('Streaming image synthesis notice, trying client Puter engine:', _streamErr);
-    }
-
-    // 2. Direct Puter.js SDK call with Black Forest Labs FLUX in browser
-    const puterResults: GeneratedImage[] = [];
-    let puterError: Error | null = null;
-
-    try {
-      if (onProgress) onProgress(35);
-      for (let i = 0; i < count; i++) {
-        if (onProgress) onProgress(35 + Math.floor((i / count) * 45));
-        const res = await puterService.generateFluxImage({
-          prompt: params.prompt,
-          aspectRatio: params.aspectRatio,
-          style: params.style,
-          customStyle: params.customStyle,
-          model: selectedFluxModel,
-          referenceImage: params.referenceImage,
-        });
-
-        if (res && res.imageUrl) {
-          puterResults.push({
-            id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
-            prompt: params.prompt,
-            imageUrl: res.imageUrl,
-            aspectRatio: params.aspectRatio,
-            style: params.style,
-            customStyle: params.customStyle,
-            modelId: params.modelId,
-            createdAt: Date.now(),
-            isFavorite: false,
-            referenceImage: params.referenceImage,
-            engine: res.engine || 'Black Forest Labs FLUX (Puter)',
-          });
-        }
-      }
-
-      if (puterResults.length > 0) {
-        if (onProgress) onProgress(100);
-        const current = this.getImages();
-        const updated = [...puterResults, ...current];
-        this.saveImages(updated);
-        return puterResults;
-      }
-    } catch (err: any) {
-      puterError = err instanceof Error ? err : new Error(String(err));
-      console.warn('Puter client-side generation notice, falling back to server FLUX pipeline:', err);
+      console.warn('Streaming image synthesis notice, trying server fallback:', _streamErr);
     }
 
     // 3. Fallback standard endpoint
@@ -213,11 +217,13 @@ export const imageService = {
         headers: {
           'Content-Type': 'application/json',
           ...(apiKey ? { 'x-api-key': apiKey } : {}),
+          ...(puterAuthToken ? { 'x-puter-auth': puterAuthToken } : {}),
         },
         body: JSON.stringify({
           ...params,
           fluxModel: selectedFluxModel,
           apiKey: apiKey || undefined,
+          puterAuthToken: puterAuthToken || undefined,
         }),
       });
 

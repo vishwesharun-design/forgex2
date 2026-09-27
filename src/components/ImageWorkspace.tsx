@@ -47,6 +47,7 @@ type StudioTool = 'text2img' | 'img2img' | 'inpaint' | 'removeBg' | 'removeObj' 
 const ASPECT_RATIOS: ImageAspectRatio[] = ['1:1', '16:9', '9:16', '4:3'];
 const IMAGE_COUNTS: number[] = [1, 2, 4];
 const STYLES: ImageStyle[] = [
+  'None',
   'Realistic',
   'Cinematic',
   'Anime',
@@ -68,7 +69,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>('16:9');
   const [imageCount, setImageCount] = useState<number>(1);
-  const [style, setStyle] = useState<ImageStyle>('Cinematic');
+  const [style, setStyle] = useState<ImageStyle>('None');
   const [isGenerating, setIsGenerating] = useState(false);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -532,7 +533,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                         : 'bg-neutral-50 border-neutral-200 text-neutral-700 hover:border-neutral-300'
                   }`}
                 >
-                  {st}
+                  {st === 'None' ? 'Exact Prompt (Raw)' : st}
                 </button>
               ))}
             </div>

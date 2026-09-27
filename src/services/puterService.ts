@@ -68,6 +68,7 @@ export interface FluxGenerationResult {
 }
 
 const STYLE_ENHANCEMENTS: Record<string, string> = {
+  None: '',
   Realistic: 'photorealistic, ultra-detailed photography, 8k resolution, raw photo, Hasselblad 50mm, natural soft lighting, hyperrealistic textures',
   Cinematic: 'cinematic movie still, 35mm anamorphic lens, dramatic volumetric lighting, color graded, blockbuster atmosphere, shallow depth of field, IMAX quality',
   Anime: 'modern Japanese anime visual aesthetic, Makoto Shinkai style, Studio Ghibli inspired, vibrant colors, clean cel-shaded lineart',
@@ -223,6 +224,23 @@ class PuterService {
   }
 
   /**
+   * Get current Puter auth token if signed in.
+   */
+  public getAuthToken(): string | null {
+    if (this.puterInstance && this.puterInstance.authToken) {
+      return this.puterInstance.authToken;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        return (window as any).puter?.authToken || localStorage.getItem('puter-auth-token-v2') || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Get current selected or default Black Forest Labs FLUX model.
    */
   public getDefaultFluxModel(): string {
@@ -268,22 +286,8 @@ class PuterService {
       throw new Error('Puter.js AI engine is not initialized. Please ensure the Puter SDK is loaded.');
     }
 
-    // Official Puter.js browser-side authentication flow:
-    // If not signed in, prompt user to authenticate with Puter via official browser popup
-    if (puter.auth && typeof puter.auth.isSignedIn === 'function' && !puter.auth.isSignedIn()) {
-      try {
-        await puter.auth.signIn();
-      } catch (authErr: any) {
-        const msg = authErr?.error || authErr?.message || String(authErr || '');
-        if (msg.includes('closed') || msg.includes('cancel')) {
-          throw new Error('Puter authentication was cancelled. Please sign in to Puter to generate images with Black Forest Labs FLUX.');
-        }
-        if (msg.includes('blocked')) {
-          throw new Error('Authentication popup was blocked by your browser. Please allow popups to sign in to Puter.');
-        }
-        throw new Error(`Puter authentication required: ${msg}`);
-      }
-    }
+    // Try direct txt2img generation first under the active session (Puter allows guest / session usage)
+    // Only invoke signIn if txt2img returns an authentication-required error or if user is not in a sandbox.
 
     const targetModel = options.model || PUTER_FLUX_CONFIG.defaultModel;
     const cleanPrompt = (options.prompt || '').trim();
@@ -292,12 +296,18 @@ class PuterService {
       throw new Error('Prompt cannot be empty for image generation.');
     }
 
-    // Build enhanced prompt with artistic style
-    const styleName = options.style || 'Cinematic';
-    const styleKeywords = options.customStyle?.trim()
-      ? options.customStyle.trim()
-      : (STYLE_ENHANCEMENTS[styleName] || `${styleName} style, high quality masterpiece`);
-    const fullPrompt = `${cleanPrompt}, ${styleKeywords}, masterpiece, highly detailed`;
+    // Build prompt: if style is 'None' (Raw exact mode), use cleanPrompt directly so FLUX obeys verbatim.
+    // If a specific style is selected and not 'None', append appropriate style cues without drowning out user specifics.
+    const styleName = options.style || 'None';
+    let fullPrompt = cleanPrompt;
+    if (styleName !== 'None') {
+      const styleKeywords = options.customStyle?.trim()
+        ? options.customStyle.trim()
+        : (STYLE_ENHANCEMENTS[styleName] || `${styleName} style`);
+      if (styleKeywords) {
+        fullPrompt = `${cleanPrompt}, ${styleKeywords}`;
+      }
+    }
 
     // Map aspect ratio to dimensions and ratio configurations
     let width = 1024;

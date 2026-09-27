@@ -11,6 +11,7 @@ import { TOOL_REGISTRY, getToolsForAgent } from "./src/services/agentToolRegistr
 dotenv.config();
 
 const STYLE_PROMPTS: Record<string, string> = {
+  None: "",
   Realistic: "photorealistic, ultra-detailed photography, 8k resolution, raw photo, Hasselblad 50mm, natural soft lighting, hyperrealistic textures, masterwork",
   Cinematic: "cinematic movie still, 35mm anamorphic lens, dramatic volumetric lighting, color graded, blockbuster atmosphere, shallow depth of field, IMAX quality",
   Anime: "modern Japanese anime visual aesthetic, Makoto Shinkai style, Studio Ghibli inspired, vibrant colors, clean cel-shaded lineart, Japanese animation masterpiece",
@@ -22,64 +23,6 @@ const STYLE_PROMPTS: Record<string, string> = {
   Watercolor: "delicate watercolor painting, soft pigment washes, organic paper texture, fluid bleed edges, fine art ink and watercolor wash",
   "Pixel Art": "16-bit retro pixel art, crisp pixel grid, vibrant nostalgic color palette, classic arcade aesthetic, detailed sprite artwork",
   Custom: "custom bespoke artistic style, exquisite craftsmanship, balanced composition, ultra-fine detail",
-};
-
-const FALLBACK_IMAGES: Record<string, string[]> = {
-  Realistic: [
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-  ],
-  Cinematic: [
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?q=80&w=1200&auto=format&fit=crop',
-  ],
-  Anime: [
-    'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
-  ],
-  '3D': [
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Illustration: [
-    'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Minimal: [
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1507499739999-097706ad8914?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Cyberpunk: [
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Fantasy: [
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Watercolor: [
-    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop',
-  ],
-  'Pixel Art': [
-    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Custom: [
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1200&auto=format&fit=crop',
-  ]
 };
 
 // Cached GenAI SDK client instances for low-latency reuse
@@ -552,7 +495,7 @@ async function* generateContentStreamResilient(
   throw lastError || new Error("All streaming models failed.");
 }
 
-// Generate prompt-specific real AI image using Black Forest Labs FLUX / Gemini high-resolution pipeline
+// Generate prompt-specific real AI image using Black Forest Labs FLUX / Imagen 3 pipeline
 async function generateRealAiImage(
   prompt: string, 
   style: string, 
@@ -560,46 +503,133 @@ async function generateRealAiImage(
   seed: number,
   customStyleDesc?: string,
   fluxModel?: string,
-  apiKey?: string
+  apiKey?: string,
+  puterAuthToken?: string
 ): Promise<{ imageUrl: string; engine: string }> {
+  const cleanPrompt = (prompt || "A cinematic visual masterpiece").trim();
+  let fullPrompt = cleanPrompt;
+  if (style && style !== "None") {
+    const styleDesc = customStyleDesc?.trim() || STYLE_PROMPTS[style] || `${style} style`;
+    if (styleDesc) {
+      fullPrompt = `${cleanPrompt}, ${styleDesc}`;
+    }
+  } else if (customStyleDesc?.trim()) {
+    fullPrompt = `${cleanPrompt}, ${customStyleDesc.trim()}`;
+  }
+
+  let width = 1024;
+  let height = 576;
+  if (aspectRatio === "1:1") {
+    width = 1024;
+    height = 1024;
+  } else if (aspectRatio === "9:16") {
+    width = 576;
+    height = 1024;
+  } else if (aspectRatio === "4:3") {
+    width = 1024;
+    height = 768;
+  } else if (aspectRatio === "3:4") {
+    width = 768;
+    height = 1024;
+  }
+
+  // 1. If Puter auth token is available, generate with official Black Forest Labs FLUX via Puter SDK
+  if (puterAuthToken) {
+    try {
+      const puterModule = await import("@heyputer/puter.js");
+      const puter = puterModule.default || (puterModule as any).puter || puterModule;
+      if (puter && typeof puter.setAuthToken === "function" && puter.ai?.txt2img) {
+        puter.setAuthToken(puterAuthToken);
+        const targetModel = fluxModel || "black-forest-labs/flux-1.1-pro";
+        const puterRes = await puter.ai.txt2img(fullPrompt, {
+          model: targetModel,
+          width,
+          height,
+        });
+        const resAny = puterRes as any;
+        const url = typeof puterRes === "string" ? puterRes : resAny?.src || resAny?.url;
+        if (url) {
+          return {
+            imageUrl: url,
+            engine: "Black Forest Labs FLUX (Puter)",
+          };
+        }
+      }
+    } catch (puterErr) {
+      console.warn("[Puter Node FLUX] Generation notice:", puterErr);
+    }
+  }
+
+  // 2. Official Black Forest Labs BFL API (if BFL_API_KEY is configured)
+  const bflKey = process.env.BFL_API_KEY?.trim();
+  if (bflKey) {
+    try {
+      const bflRes = await fetch("https://api.bfl.ai/v1/flux-pro-1.1", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Key": bflKey,
+        },
+        body: JSON.stringify({
+          prompt: fullPrompt,
+          width,
+          height,
+          seed,
+        }),
+      });
+      if (bflRes.ok) {
+        const bflData = (await bflRes.json()) as any;
+        if (bflData.id && bflData.polling_url) {
+          // Poll for completion (up to 30 seconds)
+          for (let poll = 0; poll < 15; poll++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const pollRes = await fetch(bflData.polling_url, {
+              headers: { "X-Key": bflKey },
+            });
+            if (pollRes.ok) {
+              const pollData = (await pollRes.json()) as any;
+              if (pollData.status === "Ready" && pollData.result?.sample) {
+                return {
+                  imageUrl: pollData.result.sample,
+                  engine: "Black Forest Labs FLUX 1.1 Pro (BFL API)",
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (bflErr) {
+      console.warn("[BFL API] FLUX notice:", bflErr);
+    }
+  }
+
+  // 3. Google Imagen 3 (High-Fidelity Diffusion) if API key is provided
   const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
   if (effectiveKey) {
     try {
       const ai = getGenAiClient(effectiveKey);
       const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
       const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
-      const styleDesc = customStyleDesc?.trim() || STYLE_PROMPTS[style] || `${style} style, high quality visual composition`;
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite-image",
-        contents: {
-          parts: [{ text: `${prompt}, ${styleDesc}, masterpiece, highly detailed` }],
-        },
+      const imagenRes = await ai.models.generateImages({
+        model: "imagen-3.0-generate-002",
+        prompt: fullPrompt,
         config: {
-          imageConfig: {
-            aspectRatio: targetRatio as any,
-          },
+          numberOfImages: 1,
+          aspectRatio: targetRatio as any,
+          outputMimeType: "image/jpeg",
         },
       });
-      const part = response.candidates?.[0]?.content?.parts?.[0];
-      if (part?.inlineData?.data) {
-        const mime = part.inlineData.mimeType || "image/png";
+      const imgBytes = imagenRes.generatedImages?.[0]?.image?.imageBytes;
+      if (imgBytes) {
         return {
-          imageUrl: `data:${mime};base64,${part.inlineData.data}`,
-          engine: "ForgeX Visual Neural Engine",
+          imageUrl: `data:image/jpeg;base64,${imgBytes}`,
+          engine: "Google Imagen 3 (High Fidelity)",
         };
       }
-    } catch (_err) {
-      // Fall through to high-resolution curated photography catalog
-    }
+    } catch (_err) {}
   }
 
-  // Curated photography fallback from high-resolution catalog based on style and seed
-  const styleList = FALLBACK_IMAGES[style] || FALLBACK_IMAGES.Cinematic;
-  const pickedUrl = styleList[seed % styleList.length] || styleList[0];
-  return {
-    imageUrl: pickedUrl,
-    engine: "Black Forest Labs FLUX (Puter)",
-  };
+  throw new Error(`Image generation for "${cleanPrompt}" requires Puter authentication for Black Forest Labs FLUX or a Gemini API key. Please connect Puter in Image Studio.`);
 }
 
 // Comprehensive Universal Knowledge & Synthesis Engine
@@ -1389,105 +1419,47 @@ async function startServer() {
       } = req.body;
 
       const apiKey = getEffectiveApiKey(req);
+      const puterAuthToken = (req.headers["x-puter-auth"] as string | undefined) || req.body?.puterAuthToken;
       const cleanPrompt = (prompt || "A cinematic futuristic hyper-realistic landscape").trim();
       const styleEnhancement = customStyle?.trim()
         ? `${customStyle.trim()}, high fidelity`
         : (STYLE_PROMPTS[style] || `${style} art style, masterpiece, high quality composition`);
 
       // Stage 1: Initializing Latent Space
-      sendEvent({ progress: 14, stage: "initializing" });
+      sendEvent({ progress: 15, stage: "initializing", message: "Initializing Black Forest Labs FLUX latent space..." });
 
-      // Stage 2: Prompt Encoding & Cross Attention
-      sendEvent({ progress: 38, stage: "diffusion_setup" });
+      // Stage 2: Prompt conditioning & Cross Attention
+      sendEvent({ progress: 35, stage: "diffusion_setup", message: `Encoding prompt: "${cleanPrompt.slice(0, 40)}..."` });
 
-      let generatedImagesList: any[] = [];
-      let imageModelUsed = "ForgeX Visual Neural Engine";
+      const numToGen = Math.min(Math.max(count || 1, 1), 4);
+      const generatedImagesList: any[] = [];
 
-      // 1. Try Gemini image synthesis if key is present
-      if (apiKey) {
-        try {
-          const ai = getGenAiClient(apiKey);
-          const parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [];
+      for (let i = 0; i < numToGen; i++) {
+        sendEvent({
+          progress: 40 + Math.floor((i / numToGen) * 45),
+          stage: "denoising",
+          message: `Diffusing image ${i + 1} of ${numToGen} with Black Forest Labs FLUX...`,
+        });
 
-          if (referenceImage && typeof referenceImage === "string" && referenceImage.startsWith("data:")) {
-            const matches = referenceImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-            if (matches && matches[2]) {
-              parts.push({
-                inlineData: {
-                  mimeType: matches[1] || "image/png",
-                  data: matches[2],
-                },
-              });
-            }
-          }
+        const seed = Math.floor(Math.random() * 999999) + i;
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
 
-          parts.push({ text: `${cleanPrompt}, in ${style} style, ${styleEnhancement}.` });
-          sendEvent({ progress: 62, stage: "denoising" });
-
-          const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
-          const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
-          const imageCandidateModels = ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"];
-
-          for (const imgModel of imageCandidateModels) {
-            try {
-              const response = await ai.models.generateContent({
-                model: imgModel,
-                contents: { parts },
-                config: {
-                  imageConfig: {
-                    aspectRatio: targetRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-                  },
-                },
-              });
-
-              if (response.candidates?.[0]?.content?.parts) {
-                for (const part of response.candidates[0].content.parts) {
-                  if (part.inlineData?.data) {
-                    const mime = part.inlineData.mimeType || "image/png";
-                    generatedImagesList.push({
-                      id: `img_${Date.now()}_0`,
-                      prompt: cleanPrompt,
-                      imageUrl: `data:${mime};base64,${part.inlineData.data}`,
-                      aspectRatio,
-                      style,
-                      customStyle,
-                      modelId,
-                      createdAt: Date.now(),
-                      isFavorite: false,
-                      engine: "ForgeX Visual Neural Engine",
-                    });
-                  }
-                }
-              }
-              if (generatedImagesList.length > 0) break;
-            } catch (_err) {}
-          }
-        } catch (_err) {}
+        generatedImagesList.push({
+          id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+          prompt: cleanPrompt,
+          imageUrl: genResult.imageUrl,
+          aspectRatio,
+          style,
+          customStyle,
+          modelId,
+          createdAt: Date.now(),
+          isFavorite: false,
+          referenceImage,
+          engine: genResult.engine || "Black Forest Labs FLUX.1",
+        });
       }
 
-      sendEvent({ progress: 88, stage: "rendering" });
-
-      // 2. High-Fidelity Black Forest Labs FLUX Synthesis Pipeline
-      if (generatedImagesList.length === 0) {
-        const numToGen = Math.min(Math.max(count || 1, 1), 4);
-        for (let i = 0; i < numToGen; i++) {
-          const seed = Math.floor(Math.random() * 999999) + i;
-          const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey);
-          generatedImagesList.push({
-            id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
-            prompt: cleanPrompt,
-            imageUrl: genResult.imageUrl,
-            aspectRatio,
-            style,
-            customStyle,
-            modelId,
-            createdAt: Date.now(),
-            isFavorite: false,
-            referenceImage,
-            engine: genResult.engine || "Black Forest Labs FLUX (Puter)",
-          });
-        }
-      }
+      sendEvent({ progress: 95, stage: "rendering", message: "Finalizing image render..." });
 
       // Final Stage: Reached 100% complete
       sendEvent({
@@ -1505,7 +1477,7 @@ async function startServer() {
     }
   });
 
-  // Image Generation Endpoint (Black Forest Labs FLUX via Puter + Gemini Vision)
+  // Image Generation Endpoint (Black Forest Labs FLUX)
   app.post("/api/generate-image", async (req: Request, res: Response) => {
     try {
       const {
@@ -1516,107 +1488,19 @@ async function startServer() {
         modelId = "forge-2-ultra",
         referenceImage,
         customStyle,
-        fluxModel = "black-forest-labs/flux-schnell",
+        fluxModel = "black-forest-labs/flux-1.1-pro",
       } = req.body;
 
       const apiKey = getEffectiveApiKey(req);
+      const puterAuthToken = (req.headers["x-puter-auth"] as string | undefined) || req.body?.puterAuthToken;
       const cleanPrompt = (prompt || "A cinematic futuristic hyper-realistic landscape").trim();
 
-      const styleEnhancement = customStyle?.trim()
-        ? `${customStyle.trim()}, high fidelity`
-        : (STYLE_PROMPTS[style] || `${style} art style, masterpiece, high quality composition`);
-
-      // 1. Try Gemini image generation if API key is provided
-      if (apiKey) {
-        try {
-          const ai = getGenAiClient(apiKey);
-          const parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [];
-
-          if (referenceImage && typeof referenceImage === "string" && referenceImage.startsWith("data:")) {
-            const matches = referenceImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-            if (matches && matches[2]) {
-              parts.push({
-                inlineData: {
-                  mimeType: matches[1] || "image/png",
-                  data: matches[2],
-                },
-              });
-            }
-          }
-
-          parts.push({
-            text: `${cleanPrompt}, in ${style} style, ${styleEnhancement}.`,
-          });
-
-          const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
-          const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
-
-          // Try primary image models: gemini-3.1-flash-lite-image or gemini-3.1-flash-image
-          const imageCandidateModels = ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"];
-          const generatedUrls: string[] = [];
-          let imageModelUsed = "ForgeX Visual Neural Engine";
-
-          for (const imgModel of imageCandidateModels) {
-            try {
-              const response = await ai.models.generateContent({
-                model: imgModel,
-                contents: { parts },
-                config: {
-                  imageConfig: {
-                    aspectRatio: targetRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
-                  },
-                },
-              });
-
-              if (response.candidates?.[0]?.content?.parts) {
-                for (const part of response.candidates[0].content.parts) {
-                  if (part.inlineData?.data) {
-                    const mime = part.inlineData.mimeType || "image/png";
-                    generatedUrls.push(`data:${mime};base64,${part.inlineData.data}`);
-                  }
-                }
-              }
-
-              if (generatedUrls.length > 0) {
-                imageModelUsed = "ForgeX Visual Neural Engine";
-                break;
-              }
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : String(err);
-              // If 429 quota exhausted or permission denied, don't stall trying subsequent paid models
-              if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
-                break;
-              }
-            }
-          }
-
-          if (generatedUrls.length > 0) {
-            const results = generatedUrls.map((url, idx) => ({
-              id: `img_${Date.now()}_${idx}`,
-              prompt: cleanPrompt,
-              imageUrl: url,
-              aspectRatio,
-              style,
-              customStyle,
-              modelId,
-              createdAt: Date.now(),
-              isFavorite: false,
-              engine: imageModelUsed,
-            }));
-            return res.json({ success: true, images: results });
-          }
-        } catch (_apiErr) {
-          // Gracefully continue to prompt-accurate AI synthesis pipeline
-        }
-      }
-
-      // 2. Real Prompt-Driven AI Image Synthesis Pipeline with Black Forest Labs FLUX
       const numToGen = Math.min(Math.max(count || 1, 1), 4);
       const results = [];
 
       for (let i = 0; i < numToGen; i++) {
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey);
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
         results.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
           prompt: cleanPrompt,
@@ -1628,20 +1512,19 @@ async function startServer() {
           createdAt: Date.now(),
           isFavorite: false,
           referenceImage,
-          engine: genResult.engine || "Black Forest Labs FLUX (Puter)",
+          engine: genResult.engine || "Black Forest Labs FLUX.1",
         });
       }
 
       return res.json({
         success: true,
         images: results,
-        engine: "Black Forest Labs FLUX via Puter",
-        notice: apiKey ? undefined : "Generated using Black Forest Labs FLUX engine via Puter."
+        engine: "Black Forest Labs FLUX",
       });
     } catch (err: unknown) {
       console.error("Error in /api/generate-image:", err);
       return res.status(500).json({
-        error: err instanceof Error ? err.message : "Failed to generate image"
+        error: err instanceof Error ? err.message : "Failed to generate image with Black Forest Labs FLUX",
       });
     }
   });
@@ -1711,7 +1594,13 @@ async function startServer() {
         const sceneNum = i + 1;
         const motion = motions[i % motions.length];
         const scenePrompt = `${cleanPrompt}, cinematic scene ${sceneNum}, master lighting, 8k resolution, photorealistic Unreal 5 render`;
-        const imgUrl = FALLBACK_IMAGES.Cinematic[i % FALLBACK_IMAGES.Cinematic.length];
+        let imgUrl = "";
+        try {
+          const gen = await generateRealAiImage(scenePrompt, "Cinematic", aspectRatio, seed);
+          imgUrl = gen.imageUrl;
+        } catch {
+          imgUrl = "";
+        }
 
         slides.push({
           id: `slide_${sceneNum}_${Date.now()}_${i}`,

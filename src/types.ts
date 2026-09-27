@@ -208,6 +208,7 @@ export interface ChatSession {
 
 export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '4:3';
 export type ImageStyle = 
+  | 'None'
   | 'Realistic' 
   | 'Cinematic' 
   | 'Anime' 
