@@ -414,7 +414,9 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                 : status === 'listening'
                 ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                : 'bg-neutral-800/60 text-neutral-400 border border-neutral-700/50'
+                : isDark
+                  ? 'bg-neutral-800/60 text-neutral-400 border border-neutral-700/50'
+                  : 'bg-neutral-200 text-neutral-700 border border-neutral-300'
             }`}>
               <PhoneCall className="w-4 h-4" />
             </div>
@@ -428,7 +430,9 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                     ? 'bg-red-500/15 text-red-400'
                     : status === 'thinking'
                     ? 'bg-amber-500/15 text-amber-400'
-                    : 'bg-neutral-800 text-neutral-400'
+                    : isDark
+                      ? 'bg-neutral-800 text-neutral-400'
+                      : 'bg-neutral-200 text-neutral-700'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${
                     status === 'speaking'

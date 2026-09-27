@@ -951,7 +951,9 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                   <div className={`p-4 rounded-2xl border ${isDark ? 'bg-neutral-950/70 border-neutral-800' : 'bg-neutral-100/70 border-neutral-200'}`}>
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">Studio Identity Preview</div>
                     <div className={`p-3.5 rounded-xl border flex items-center gap-3 ${isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-200'}`}>
-                      <div className="w-10 h-10 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center">
+                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+                        isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+                      }`}>
                         {React.createElement(ICON_MAP[regStudioIcon] || Sparkles, { className: `w-5 h-5 ${regStudioColor}` })}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -962,7 +964,7 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-800">
+                  <div className={`flex items-center justify-end gap-3 pt-3 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                     {isEditingStudioName && studioProfile?.studioName && (
                       <button
                         type="button"
@@ -1279,7 +1281,9 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">Live Studio Card Preview</div>
                     <div className={`p-3.5 rounded-xl border max-w-sm ${isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-200'}`}>
                       <div className="flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center justify-center">
+                        <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${
+                          isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+                        }`}>
                           {React.createElement(ICON_MAP[newIconName] || Bot, { className: `w-4 h-4 ${newAccentColor}` })}
                         </div>
                         <div className="flex-1 min-w-0">

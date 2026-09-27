@@ -186,7 +186,9 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     <img
                       src={item.previewUrl}
                       alt={item.title}
-                      className="w-12 h-12 rounded-xl object-cover shrink-0 border border-neutral-800"
+                      className={`w-12 h-12 rounded-xl object-cover shrink-0 border ${
+                        isDark ? 'border-neutral-800' : 'border-neutral-200'
+                      }`}
                     />
                   ) : item.type === 'song' ? (
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${

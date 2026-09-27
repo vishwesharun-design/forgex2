@@ -657,7 +657,9 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               <button
                 onClick={handleCopy}
                 disabled={!currentText}
-                className="px-2.5 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-medium flex items-center gap-1.5"
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                  isDark ? 'border-neutral-800 hover:bg-neutral-850 text-neutral-300' : 'border-neutral-200 hover:bg-neutral-100 text-neutral-700'
+                }`}
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied' : 'Copy'}</span>
@@ -666,7 +668,9 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               <button
                 onClick={handleExportText}
                 disabled={!currentText}
-                className="px-2.5 py-1.5 rounded-xl border border-neutral-800 hover:bg-neutral-850 text-xs font-medium flex items-center gap-1.5"
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                  isDark ? 'border-neutral-800 hover:bg-neutral-850 text-neutral-300' : 'border-neutral-200 hover:bg-neutral-100 text-neutral-700'
+                }`}
               >
                 <Download className="w-3.5 h-3.5 text-amber-400" />
                 <span>Export .md</span>
@@ -713,14 +717,18 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
             />
             <div className="flex items-center gap-3">
               {/* View Mode Switcher: Edit | Split | Markdown Preview */}
-              <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl">
+              <div className={`flex items-center gap-1 p-0.5 rounded-xl border ${
+                isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+              }`}>
                 <button
                   type="button"
                   onClick={() => setViewMode('edit')}
                   className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                     viewMode === 'edit'
                       ? 'bg-amber-500 text-neutral-950 shadow-sm font-bold'
-                      : 'text-neutral-400 hover:text-white'
+                      : isDark
+                        ? 'text-neutral-400 hover:text-white'
+                        : 'text-neutral-600 hover:text-neutral-900'
                   }`}
                   title="Raw Text Editor"
                 >

@@ -953,7 +953,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                   ref={canvasRef}
                   width={340}
                   height={68}
-                  className="w-full h-16 rounded-xl bg-neutral-900/95 border border-neutral-800/80"
+                  className={`w-full h-16 rounded-xl border ${isDark ? 'bg-neutral-900/95 border-neutral-800/80' : 'bg-neutral-50 border-neutral-200'}`}
                 />
 
                 {/* Scrubber Progress Bar */}
@@ -971,7 +971,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     step={0.1}
                     value={playerState.currentTime}
                     onChange={(e) => spotifyPlayerService.seek(Number(e.target.value))}
-                    className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
+                    className={`w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#1DB954] ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}
                   />
                 </div>
 
@@ -1058,7 +1058,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
                     step={0.05}
                     value={playerState.isMuted ? 0 : playerState.volume}
                     onChange={(e) => spotifyPlayerService.setVolume(Number(e.target.value))}
-                    className="flex-1 h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
+                    className={`flex-1 h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1DB954] ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}
                   />
                   <span className="text-[10px] font-mono text-neutral-400 w-8 text-right">
                     {Math.round((playerState.isMuted ? 0 : playerState.volume) * 100)}%

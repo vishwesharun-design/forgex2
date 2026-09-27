@@ -766,14 +766,18 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
 
                 {/* Filter Tabs & Clear Library button */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center p-1 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-xs shadow-inner">
+                  <div className={`flex items-center p-1 rounded-2xl border text-xs shadow-inner ${
+                    isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+                  }`}>
                     <button
                       type="button"
                       onClick={() => setLibraryFilter('all')}
                       className={`px-3 py-1 rounded-xl transition-all font-medium ${
                         libraryFilter === 'all'
                           ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
-                          : 'text-neutral-400 hover:text-white'
+                          : isDark
+                            ? 'text-neutral-400 hover:text-white'
+                            : 'text-neutral-600 hover:text-neutral-900'
                       }`}
                     >
                       All Tracks ({songs.length})
@@ -784,7 +788,9 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                       className={`px-3 py-1 rounded-xl transition-all font-medium flex items-center gap-1.5 ${
                         libraryFilter === 'favorites'
                           ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
-                          : 'text-neutral-400 hover:text-white'
+                          : isDark
+                            ? 'text-neutral-400 hover:text-white'
+                            : 'text-neutral-600 hover:text-neutral-900'
                       }`}
                     >
                       <Heart className="w-3 h-3 text-red-400 fill-current" />
@@ -807,15 +813,17 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
               </div>
 
               {filteredSongs.length === 0 ? (
-                <div className="p-10 rounded-3xl border border-neutral-800/80 bg-neutral-900/40 text-center space-y-3">
+                <div className={`p-10 rounded-3xl border text-center space-y-3 ${
+                  isDark ? 'border-neutral-800/80 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'
+                }`}>
                   <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
                     <Music className="w-6 h-6" />
                   </div>
                   <div>
-                    <h5 className="text-sm font-bold text-neutral-200">
+                    <h5 className={`text-sm font-bold ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
                       {libraryFilter === 'favorites' ? 'No favorite tracks yet' : 'Your track library is empty'}
                     </h5>
-                    <p className="text-xs text-neutral-400 max-w-sm mx-auto mt-1">
+                    <p className={`text-xs max-w-sm mx-auto mt-1 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                       {libraryFilter === 'favorites'
                         ? 'Click the heart icon on any generated track to save it here.'
                         : 'Describe a song style in the studio generator above and click Synthesize Song to compose your first track!'}
@@ -825,7 +833,9 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                     <button
                       type="button"
                       onClick={() => setLibraryFilter('all')}
-                      className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-semibold text-xs transition-colors"
+                      className={`px-4 py-2 rounded-xl font-semibold text-xs transition-colors ${
+                        isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-800'
+                      }`}
                     >
                       View All Tracks
                     </button>

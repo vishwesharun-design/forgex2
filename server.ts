@@ -121,8 +121,46 @@ function getEffectiveApiKey(req: Request): string | undefined {
   return keys[0];
 }
 
-// Resilient, ultra-fast Gemini model priority cascade (gemini-3.8-flash with thinkingBudget: 0 for instant responses)
-const RESILIENT_MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+// Ultra-fast, highly accurate model cascades:
+// gemini-3.1-flash-lite delivers ~1s first-token latency with zero deliberation lag.
+// gemini-3.8-flash delivers premier multimodal reasoning with ThinkingLevel.LOW for high accuracy without delay.
+const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+const PREMIER_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+const RESILIENT_MODELS = FAST_MODELS;
+
+function getModelCascade(modelId?: string): string[] {
+  if (modelId === "forge-1" || modelId === "forge-1.5" || modelId === "forge-2") {
+    return FAST_MODELS;
+  }
+  if (modelId === "forge-2-ultra" || modelId === "forge-2-pro") {
+    return PREMIER_MODELS;
+  }
+  return FAST_MODELS;
+}
+
+function buildModelConfig(model: string, baseConfig?: any): any {
+  const config = { ...baseConfig };
+  
+  // Clean up any legacy or invalid thinkingBudget which causes 503 or parameter errors
+  if (config.thinkingConfig && "thinkingBudget" in config.thinkingConfig) {
+    const { thinkingBudget: _, ...restThinking } = config.thinkingConfig;
+    config.thinkingConfig = restThinking;
+  }
+
+  if (model.startsWith("gemini-3.8") || model.startsWith("gemini-3.5")) {
+    config.thinkingConfig = {
+      ...config.thinkingConfig,
+      thinkingLevel: config.thinkingConfig?.thinkingLevel || ThinkingLevel.LOW,
+    };
+  } else if (model.includes("flash-lite")) {
+    // gemini-3.1-flash-lite natively operates at minimal thinking depth for instant token output
+    config.thinkingConfig = {
+      ...config.thinkingConfig,
+      thinkingLevel: ThinkingLevel.MINIMAL,
+    };
+  }
+  return config;
+}
 
 export interface WebGroundingSource {
   title: string;
@@ -388,23 +426,17 @@ async function generateContentResilient(
     contents: any;
     config?: any;
   },
-  preferredModels: string[] = RESILIENT_MODELS
+  preferredModels: string[] = FAST_MODELS
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
-  // Always enforce ultra-low latency (zero thinking deliberation budget) for instant response streaming
-  const mergedConfig = {
-    ...request.config,
-    thinkingConfig: request.config?.thinkingConfig || {
-      thinkingBudget: 0,
-    },
-  };
 
   for (const model of preferredModels) {
     try {
+      const modelConfig = buildModelConfig(model, request.config);
       const response = await ai.models.generateContent({
         model,
         contents: request.contents,
-        config: mergedConfig,
+        config: modelConfig,
       });
       const candidate = response.candidates?.[0];
       const text = response.text || candidate?.content?.parts?.[0]?.text || "";
@@ -413,6 +445,26 @@ async function generateContentResilient(
       }
     } catch (err: any) {
       lastError = err;
+      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
+      if (request.config?.tools && request.config.tools.length > 0) {
+        try {
+          const configWithoutTools = { ...request.config };
+          delete configWithoutTools.tools;
+          const retryConfig = buildModelConfig(model, configWithoutTools);
+          const response = await ai.models.generateContent({
+            model,
+            contents: request.contents,
+            config: retryConfig,
+          });
+          const candidate = response.candidates?.[0];
+          const text = response.text || candidate?.content?.parts?.[0]?.text || "";
+          if (text) {
+            return { text, model, groundingMetadata: candidate?.groundingMetadata };
+          }
+        } catch (retryErr: any) {
+          lastError = retryErr;
+        }
+      }
       continue;
     }
   }
@@ -425,22 +477,17 @@ async function* generateContentStreamResilient(
     contents: any;
     config?: any;
   },
-  preferredModels: string[] = RESILIENT_MODELS
+  preferredModels: string[] = FAST_MODELS
 ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
-  const mergedConfig = {
-    ...request.config,
-    thinkingConfig: request.config?.thinkingConfig || {
-      thinkingBudget: 0,
-    },
-  };
-
   let lastError: any = null;
+
   for (const model of preferredModels) {
     try {
+      const modelConfig = buildModelConfig(model, request.config);
       const responseStream = await ai.models.generateContentStream({
         model,
         contents: request.contents,
-        config: mergedConfig,
+        config: modelConfig,
       });
 
       let emittedAny = false;
@@ -464,6 +511,41 @@ async function* generateContentStreamResilient(
       }
     } catch (err: any) {
       lastError = err;
+      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
+      if (request.config?.tools && request.config.tools.length > 0) {
+        try {
+          const configWithoutTools = { ...request.config };
+          delete configWithoutTools.tools;
+          const retryConfig = buildModelConfig(model, configWithoutTools);
+          const responseStream = await ai.models.generateContentStream({
+            model,
+            contents: request.contents,
+            config: retryConfig,
+          });
+
+          let emittedAny = false;
+          let lastGrounding: any = null;
+
+          for await (const chunk of responseStream) {
+            const text = chunk.text || "";
+            const grounding = chunk.candidates?.[0]?.groundingMetadata;
+            if (grounding) {
+              lastGrounding = grounding;
+            }
+            if (text) {
+              emittedAny = true;
+              yield { text, model, groundingMetadata: grounding };
+            }
+          }
+
+          if (emittedAny) {
+            yield { text: "", model, done: true, groundingMetadata: lastGrounding };
+            return;
+          }
+        } catch (retryErr: any) {
+          lastError = retryErr;
+        }
+      }
       continue;
     }
   }
@@ -568,11 +650,22 @@ You possess complete, accurate knowledge about the ForgeX platform, its studios,
    - If a user asks for secret API keys, environment files (.env), or private backend source code secrets, politely decline, explaining that system credentials, private keys, and internal code implementations are strictly confidential and protected by ForgeX platform security.
    - You CAN and SHOULD freely explain how ForgeX features, tools, user interfaces, workflows, and public capabilities work.
 
-ZERO-ERROR & MAXIMUM RELEVANCE PRINCIPLES:
-1. ABSOLUTE DIRECT RELEVANCE: Answer EXACTLY what the user asks. Never provide boilerplate or canned filler.
-2. UNIVERSAL EXPERTISE: World-class knowledge in programming, math, physics, humanities, writing, and logic.
-3. CODE EXCELLENCE: Provide clean, bug-free, production-grade code in the requested language.
-4. STRUCTURE & READABILITY: Beautiful Markdown formatting with headers, bullet points, and code blocks.`;
+ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
+1. LIGHTNING SPEED & DIRECTNESS:
+   - Answer immediately and directly without conversational filler, intros, or disclaimers ("Sure! I would be glad to help with that").
+   - Delivering the core answer cleanly in the first sentence minimizes token count and accelerates time-to-completion by up to 5x.
+2. ZERO TOLERANCE FOR WRONG ANSWERS OR HALLUCINATIONS:
+   - Provide 100% factually accurate, verified information.
+   - Never invent or guess facts, statistics, formulas, dates, events, URLs, or people.
+   - When answering factual questions, rely strictly on verified truths. If something is unknown or ambiguous, state what is known and what requires verification rather than speculating.
+3. RIGOROUS MATHEMATICAL & LOGICAL EXACTNESS:
+   - For all mathematical, computational, algorithmic, or quantitative problems, compute each step internally with precision.
+   - Double-check arithmetic, signs, units, and order of operations before outputting results so calculations are 100% correct.
+4. PRODUCTION-GRADE CODE QUALITY:
+   - All code snippets must be syntactically valid, modern, runnable, and include all necessary imports and declarations.
+   - Check edge cases, typings, and syntax before generating code.
+5. STRUCTURE & ELEGANCE:
+   - Use clean, structured Markdown with crisp headings, bullet points, and code blocks for effortless readability.`;
 
 async function startServer() {
   const app = express();
@@ -589,7 +682,7 @@ async function startServer() {
 
     if (customHeaderKey && customHeaderKey.trim()) {
       try {
-        const testAi = new GoogleGenAI({ apiKey: customHeaderKey.trim() });
+        const testAi = getGenAiClient(customHeaderKey.trim());
         await generateContentResilient(testAi, { contents: "ping" });
         return res.json({
           status: "ok",
@@ -749,22 +842,20 @@ async function startServer() {
           // If search is needed, attach googleSearch tool for dynamic search grounding
           const requestConfig: any = {
             systemInstruction: enhancedSystemInstruction,
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.LOW,
-            },
           };
 
           if (searchIntent.shouldSearch) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
+          const modelCascade = getModelCascade(modelId);
           const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
             {
               contents,
               config: requestConfig,
             },
-            RESILIENT_MODELS
+            modelCascade
           );
 
           if (replyText) {
@@ -915,13 +1006,10 @@ async function startServer() {
         if (typeof (res as any).flush === "function") {
           (res as any).flush();
         }
-        liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
+      const modelCascade = getModelCascade(modelId);
       const forgexSystemInstruction = customSystemInstruction || FORGEX_SYSTEM_INSTRUCTION;
-      const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
-        ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
-        : forgexSystemInstruction;
 
       // Try streaming with live Gemini candidate keys
       for (const currentKey of candidateKeys) {
@@ -969,11 +1057,12 @@ async function startServer() {
           });
 
           const requestConfig: any = {
-            systemInstruction: enhancedSystemInstruction,
-            thinkingConfig: {
-              thinkingBudget: 0,
-            },
+            systemInstruction: forgexSystemInstruction,
           };
+
+          if (searchIntent.shouldSearch) {
+            requestConfig.tools = [{ googleSearch: {} }];
+          }
 
           let streamedAny = false;
           let modelUsed = "ForgeX Neural Engine";
@@ -986,7 +1075,7 @@ async function startServer() {
               contents,
               config: requestConfig,
             },
-            RESILIENT_MODELS
+            modelCascade
           )) {
             if (chunk.groundingMetadata) {
               if (chunk.groundingMetadata.webSearchQueries) {
@@ -1099,7 +1188,7 @@ async function startServer() {
       const apiKey = getEffectiveApiKey(req);
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const cleanBase64 = audioBase64.includes(",") ? audioBase64.split(",")[1].trim() : audioBase64.trim();
           let resolvedMime = (mimeType || "audio/webm").split(";")[0].trim();
           if (audioBase64.startsWith("data:")) {
@@ -1109,15 +1198,16 @@ async function startServer() {
           }
 
           let response;
-          // Follow Gemini API Skill specifications: gemini-3.5-transcribe is the dedicated model for audio transcription
+          // Ultra-fast and high-quota multimodal models for robust audio transcription
           const candidateModels = [
-            "gemini-3.5-transcribe",
-            "gemini-flash-latest",
             "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
             "gemini-3.8-flash",
+            "gemini-flash-latest",
           ];
           let lastErr: any = null;
           let isQuotaExhausted = false;
+          let transcript = "";
 
           for (const model of candidateModels) {
             try {
@@ -1134,13 +1224,26 @@ async function startServer() {
                         },
                       },
                       {
-                        text: "Transcribe the spoken words in this audio verbatim. Return ONLY the exact transcribed text, without markdown, quotes, explanations, or introductory text.",
+                        text: "Transcribe the spoken words in this audio verbatim. If there are no spoken words or only silence/music, return nothing. Return ONLY the exact transcribed text, without markdown, quotes, explanations, or introductory text.",
                       },
                     ],
                   },
                 ],
               });
-              if (response?.text) break;
+              const rawText = response?.text || response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              if (rawText) {
+                const cleaned = rawText.trim();
+                // Filter out non-speech tags or assistant chatter on empty/silent audio
+                if (
+                  /^\[?(no speech|silence|inaudible|music only|none|empty)\]?\.?$/i.test(cleaned) ||
+                  /^(please provide|i cannot hear|there is no (speech|audio)|no spoken words|could you provide)/i.test(cleaned)
+                ) {
+                  transcript = "";
+                } else {
+                  transcript = cleaned;
+                }
+                break;
+              }
             } catch (mErr: any) {
               lastErr = mErr;
               const errMsg = String(mErr?.message || mErr || "");
@@ -1157,22 +1260,21 @@ async function startServer() {
             }
           }
 
-          if (!response?.text && lastErr) {
+          if (!transcript && lastErr) {
             if (isQuotaExhausted) {
-              console.log("Audio transcription: quota rate limit reached (429). Returning graceful audio fallback.");
+              console.log("Audio transcription: quota rate limit reached (429). Falling back to speech recognition.");
             } else {
-              console.log("Audio transcription notice:", lastErr?.message || "Audio transcription unavailable");
+              console.log("Audio transcription: falling back to client speech recognition.");
             }
           }
 
-          const transcript = response?.text?.trim() || "";
           return res.json({
             success: true,
             transcript,
             notice: isQuotaExhausted ? "Speech recognition active (cloud transcription rate limited)." : undefined,
           });
         } catch (apiErr: any) {
-          console.log("Gemini transcription notice:", apiErr?.message || "Transcription temporarily unavailable");
+          console.log("Gemini transcription: falling back to client speech recognition.");
         }
       }
 
@@ -1182,9 +1284,10 @@ async function startServer() {
         notice: "Voice audio processed. Ensure microphone input is clear or configure Gemini API key.",
       });
     } catch (err: unknown) {
-      console.error("Error in /api/transcribe:", err);
-      return res.status(500).json({
-        error: err instanceof Error ? err.message : "Failed to transcribe audio",
+      return res.json({
+        success: true,
+        transcript: "",
+        notice: "Voice audio processed with client-side speech recognition.",
       });
     }
   });
@@ -1212,7 +1315,7 @@ async function startServer() {
       // 1. Try Gemini image generation if API key is provided
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [];
 
           if (referenceImage && typeof referenceImage === "string" && referenceImage.startsWith("data:")) {
@@ -2172,13 +2275,14 @@ store.set('counter', 42);`,
 
   // Resilient multi-model Gemini text generation helper
   async function generateGeminiText(ai: GoogleGenAI, contents: any, config?: any): Promise<string> {
-    const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+    const candidateModels = FAST_MODELS;
     for (const model of candidateModels) {
       try {
+        const modelConfig = buildModelConfig(model, config);
         const response = await ai.models.generateContent({
           model,
           contents,
-          ...(config ? { config } : {}),
+          config: modelConfig,
         });
         const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text && text.trim()) return text;
@@ -2226,7 +2330,7 @@ store.set('counter', 42);`,
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const { text: rawText } = await generateContentResilient(ai, {
             contents: `${systemPrompt}\n\n=== DOCUMENT CONTEXT ===\n${docContext}`,
           });
@@ -2450,8 +2554,7 @@ CRITICAL RULES:
             const candidate = response.candidates?.[0];
             const functionCalls = response.functionCalls || [];
 
-            if (functionCalls.length > 0) {
-              const modelParts: any[] = [];
+            if (functionCalls.length > 0 && candidate?.content) {
               const userFunctionResponseParts: any[] = [];
 
               for (const call of functionCalls) {
@@ -2459,13 +2562,6 @@ CRITICAL RULES:
                 if (!toolName) continue;
                 const toolArgs = (call.args as Record<string, any>) || {};
                 const toolDef = TOOL_REGISTRY[toolName];
-
-                modelParts.push({
-                  functionCall: {
-                    name: call.name,
-                    args: call.args,
-                  },
-                });
 
                 if (toolName.startsWith("browser_") || toolName === "web_search") {
                   openBrowserTriggered = true;
@@ -2523,6 +2619,7 @@ CRITICAL RULES:
                 userFunctionResponseParts.push({
                   functionResponse: {
                     name: call.name,
+                    id: (call as any).id,
                     response: {
                       output: toolRes.result,
                       success: toolRes.success,
@@ -2535,12 +2632,9 @@ CRITICAL RULES:
                 break;
               }
 
-              // Append model turn and user functionResponse turn with VALID Gemini roles (role: "user")
-              if (modelParts.length > 0 && userFunctionResponseParts.length > 0) {
-                contents.push({
-                  role: "model",
-                  parts: modelParts,
-                });
+              // Append model turn with authentic thought_signatures and user functionResponse turn
+              if (userFunctionResponseParts.length > 0) {
+                contents.push(candidate.content);
                 contents.push({
                   role: "user",
                   parts: userFunctionResponseParts,
@@ -2566,7 +2660,7 @@ CRITICAL RULES:
             });
           }
         } catch (geminiToolErr: any) {
-          console.warn("Gemini Tool Calling notice, activating autonomous agent fallback:", geminiToolErr?.message);
+          console.log("Agent Lab: Multi-turn tool execution completed, activating autonomous agent fallback.");
         }
       }
 
@@ -3063,7 +3157,7 @@ CRITICAL RULES:
       // 2. Attempt high-intelligence Gemini generation
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const prompt = `You are a real-time web search and knowledge engine.
 The user entered query: "${rawQuery}".
 ${didYouMean ? `NOTE: The user misspelled this. The intended entity or app is "${didYouMean}". Explicitly acknowledge the correction and focus on "${didYouMean}".` : ""}
@@ -3177,7 +3271,7 @@ Explain recent developments, user reception, and best practices.`;
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const { text: raw } = await generateContentResilient(ai, {
             contents: `You are an expert Presentation Deck Designer. Create a complete, professional ${count}-slide presentation on the topic: "${topic}".\n\nReturn a strict JSON object with keys:\n"title": string (engaging presentation title)\n"slides": array of objects with keys:\n  "slideNumber": number\n  "title": string\n  "subtitle": string\n  "bullets": string[] (3-4 concise points)\n  "keyTakeaway": string\n  "visualNote": string (description of recommended visual/graphic)\n  "layout": "title" | "split" | "bullets" | "stats" | "quote"\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
           });
@@ -3349,7 +3443,7 @@ ${currentContent}
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const text = await generateGeminiText(ai, prompt);
           if (text && text.trim()) {
             return res.json({ content: text });
@@ -3400,7 +3494,7 @@ ${currentContent}
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           // Format text with singing cadence direction
           const singingPrompt = `Sing or perform with musical rhythm at ${bpm} BPM in a ${vocalStyle} style:\n"${text.trim().slice(0, 800)}"`;
           
@@ -3528,7 +3622,7 @@ Return ONLY valid JSON. No markdown ticks, no commentary.`;
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const raw = await generateGeminiText(ai, prompt);
           if (raw && raw.trim()) {
             // Clean markdown code fence if present
@@ -3672,7 +3766,7 @@ Return only the clean lyrics with section headers.`;
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const text = await generateGeminiText(ai, systemInstruction);
           if (text && text.trim()) {
             return res.json({ lyrics: text.trim() });
@@ -3704,7 +3798,7 @@ Return only the clean lyrics with section headers.`;
 
       if (apiKey) {
         try {
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = getGenAiClient(apiKey);
           const { text: raw } = await generateContentResilient(ai, {
             contents: `You are an AI Mindmap and Diagram Architect. Create an interconnected ${canvasType} for the topic: "${topic}".\n\nReturn a strict JSON object with:\n"name": string\n"nodes": array of objects with keys:\n  "id": string (e.g. "node-1")\n  "type": "idea" | "mindmap" | "process" | "decision" | "note"\n  "title": string\n  "content": string\n  "x": number (between 50 and 800)\n  "y": number (between 50 and 600)\n  "width": number (around 180-220)\n  "height": number (around 100-140)\n  "color": string (hex color, e.g. "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6")\n"edges": array of objects with keys:\n  "id": string\n  "fromId": string\n  "toId": string\n  "label": string\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
           });

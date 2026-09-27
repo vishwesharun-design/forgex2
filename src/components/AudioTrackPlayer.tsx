@@ -521,13 +521,15 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
           </div>
 
           {/* Section View Tabs (Mobile friendly compact text) */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-neutral-950/60 border border-neutral-800 mb-3 sm:mb-4">
+          <div className={`flex items-center gap-1 p-1 rounded-xl border mb-3 sm:mb-4 ${
+            isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+          }`}>
             <button
               onClick={() => setActiveTab('lyrics')}
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-3 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'lyrics'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                  : 'text-neutral-400 hover:text-neutral-200'
+                  : isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-600 hover:text-neutral-900'
               }`}
             >
               <ListMusic className="w-3.5 h-3.5 shrink-0" />
@@ -539,7 +541,7 @@ export const AudioTrackPlayer: React.FC<AudioTrackPlayerProps> = ({
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-3 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'structure'
                   ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                  : 'text-neutral-400 hover:text-neutral-200'
+                  : isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-600 hover:text-neutral-900'
               }`}
             >
               <Layers className="w-3.5 h-3.5 shrink-0" />

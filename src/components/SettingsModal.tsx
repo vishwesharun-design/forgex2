@@ -217,18 +217,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => updateSetting('theme', 'dark')}
                     className={`p-4 rounded-2xl border text-left transition-all ${
                       settings.theme === 'dark'
-                        ? 'border-amber-500 bg-neutral-950 text-white shadow-md'
-                        : 'border-neutral-700/50 bg-neutral-950/40 text-neutral-400 hover:border-neutral-600'
+                        ? 'border-amber-500 bg-neutral-950 text-white shadow-md ring-2 ring-amber-500/20'
+                        : isDark
+                          ? 'border-neutral-800 bg-neutral-900/60 text-neutral-300 hover:border-neutral-700'
+                          : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 hover:border-neutral-300 text-neutral-800'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center text-amber-400">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                        isDark ? 'bg-neutral-900 text-amber-400' : 'bg-neutral-200 text-neutral-700'
+                      }`}>
                         <Moon className="w-4 h-4" />
                       </div>
                       {settings.theme === 'dark' && <Check className="w-4 h-4 text-amber-400" />}
                     </div>
-                    <span className="font-semibold text-sm block text-neutral-100">Dark Theme</span>
-                    <span className="text-[11px] text-neutral-500 mt-1 block">
+                    <span className={`font-semibold text-sm block ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>
+                      Dark Theme
+                    </span>
+                    <span className={`text-[11px] mt-1 block ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                       Dark navy-black canvas with luminous amber lightning
                     </span>
                   </button>
@@ -240,8 +246,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => updateSetting('theme', 'light')}
                     className={`p-4 rounded-2xl border text-left transition-all ${
                       settings.theme === 'light'
-                        ? 'border-amber-500 bg-white text-neutral-900 shadow-md'
-                        : 'border-neutral-300 bg-neutral-100 text-neutral-600 hover:border-neutral-400'
+                        ? 'border-amber-500 bg-white text-neutral-900 shadow-md ring-2 ring-amber-500/20'
+                        : isDark
+                          ? 'border-neutral-800 bg-neutral-900/60 text-neutral-300 hover:border-neutral-700'
+                          : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 hover:border-neutral-300 text-neutral-800'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
@@ -313,7 +321,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <span className="text-xs font-bold block">{eff.name}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800/60 text-neutral-400">
+                            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                              isDark ? 'bg-neutral-800/60 text-neutral-400' : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+                            }`}>
                               {eff.badge}
                             </span>
                             {isSelected && <Check className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
@@ -366,7 +376,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               ) : (
                 <form onSubmit={handleSaveAccount} className="space-y-4">
-                  <div className="flex items-center gap-4 p-4 rounded-2xl border border-neutral-800/60 bg-neutral-950/30">
+                  <div className={`flex items-center gap-4 p-4 rounded-2xl border ${
+                    isDark ? 'border-neutral-800/60 bg-neutral-950/30' : 'border-neutral-200 bg-neutral-50'
+                  }`}>
                     <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xl border border-amber-500/30">
                       {userName ? userName.charAt(0).toUpperCase() : 'U'}
                     </div>
@@ -458,7 +470,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() => updateSetting('defaultModel', model.id)}
                       className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
                         settings.defaultModel === model.id
-                          ? 'border-amber-500 bg-amber-500/10 text-white'
+                          ? isDark
+                            ? 'border-amber-500 bg-amber-500/10 text-white'
+                            : 'border-amber-500 bg-amber-50 text-neutral-950 font-semibold shadow-sm'
                           : isDark
                             ? 'border-neutral-800 bg-neutral-950/40 text-neutral-300 hover:border-neutral-700'
                             : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
@@ -466,7 +480,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       <div>
                         <span className="font-semibold text-xs">{model.name}</span>
-                        <p className="text-[11px] text-neutral-400">{model.description}</p>
+                        <p className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>{model.description}</p>
                       </div>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
                         {model.badge}
@@ -536,7 +550,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-800/60 bg-neutral-950/20">
+              <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                isDark ? 'border-neutral-800/60 bg-neutral-950/20' : 'border-neutral-200 bg-neutral-50'
+              }`}>
                 <div>
                   <span className="text-xs font-semibold block">Auto-Enhance Prompts</span>
                   <span className="text-[11px] text-neutral-500">
@@ -564,7 +580,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-800/60 bg-neutral-950/20">
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                  isDark ? 'border-neutral-800/60 bg-neutral-950/20' : 'border-neutral-200 bg-neutral-50'
+                }`}>
                   <div>
                     <span className="text-xs font-semibold block">Dynamic Canvas Theme Effect</span>
                     <span className="text-[11px] text-neutral-500">
@@ -592,7 +610,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-800/60 bg-neutral-950/20">
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                  isDark ? 'border-neutral-800/60 bg-neutral-950/20' : 'border-neutral-200 bg-neutral-50'
+                }`}>
                   <div>
                     <span className="text-xs font-semibold block">UI Transitions & Animations</span>
                     <span className="text-[11px] text-neutral-500">
@@ -607,7 +627,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-800/60 bg-neutral-950/20">
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                  isDark ? 'border-neutral-800/60 bg-neutral-950/20' : 'border-neutral-200 bg-neutral-50'
+                }`}>
                   <div>
                     <span className="text-xs font-semibold block">Reduce Motion</span>
                     <span className="text-[11px] text-neutral-500">

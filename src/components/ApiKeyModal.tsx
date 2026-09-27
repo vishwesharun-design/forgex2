@@ -149,7 +149,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-neutral-800/40 mb-5">
+        <div className={`flex items-center justify-between pb-4 border-b mb-5 ${
+          isDark ? 'border-neutral-800/40' : 'border-neutral-200'
+        }`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500">
               <Key className="w-5 h-5" />
@@ -274,7 +276,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-2 border-t border-neutral-800/40">
+        <div className={`flex items-center justify-between pt-2 border-t ${
+          isDark ? 'border-neutral-800/40' : 'border-neutral-200'
+        }`}>
           <a
             href="https://aistudio.google.com/app/apikey"
             target="_blank"
