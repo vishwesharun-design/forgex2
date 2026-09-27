@@ -6,18 +6,68 @@ import { imageService } from './imageService';
 
 export function detectImageGenerationIntent(text: string): { isImage: boolean; prompt: string } {
   const clean = text.trim();
-  if (/^\/image\s+/i.test(clean)) {
-    return { isImage: true, prompt: clean.replace(/^\/image\s+/i, '').trim() };
+  if (/^\/image\b/i.test(clean)) {
+    const p = clean.replace(/^\/image\s*/i, '').trim();
+    return { isImage: true, prompt: p || 'A stunning creative visual masterpiece' };
   }
-  const match = clean.match(/^(?:please\s+)?(?:can\s+you\s+)?(?:generate|create|make|draw|paint|render|show\s+me)\s+(?:an?\s+)?(?:image|picture|photo|illustration|drawing|artwork)\s+(?:of|with|depicting|showing|for)?\s*(.+)$/i) ||
+
+  // Exact or short phrases like "u create", "you create", "create", "can u create"
+  if (/^(?:can\s+(?:you|u)\s+|please\s+)?(?:u\s+|you\s+)?create(?:\s+something|\s+one|\s+image|\s+picture|\s+art|\s+artwork|\s+visual)?$/i.test(clean)) {
+    return { isImage: true, prompt: 'A breathtaking futuristic digital artwork masterpiece with vibrant neon lighting and intricate details' };
+  }
+
+  // Explicit image keywords with action verb
+  const match = clean.match(/^(?:please\s+)?(?:can\s+(?:you|u)\s+)?(?:u\s+|you\s+)?(?:generate|create|make|draw|paint|render|show\s+me)\s+(?:an?\s+)?(?:image|picture|photo|photograph|illustration|drawing|artwork|portrait|wallpaper|scene|render|graphic)\s*(?:of|with|depicting|showing|for|about)?\s*(.*)$/i) ||
                 clean.match(/^(?:generate|create|make|draw|paint|render)\s*:\s*(.+)$/i) ||
-                clean.match(/^(?:draw|paint|render)\s+(?:a|an)\s+(.+)$/i);
-  if (match && match[1] && match[1].trim().length > 2) {
-    const candidate = match[1].trim();
-    if (!/^(?:a\s+)?(?:function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app)\b/i.test(candidate)) {
+                clean.match(/^(?:draw|paint|render)\s+(?:me\s+)?(?:a|an)\s+(.+)$/i) ||
+                clean.match(/^(?:u\s+|you\s+)?(?:create|generate|make)\s+(?:me\s+)?(?:a|an)\s+(?:image|picture|photo|drawing|illustration|artwork)\s*(?:of|with)?\s*(.*)$/i);
+
+  if (match) {
+    const rawPrompt = (match[1] || match[0]).trim();
+    if (!/^(?:a\s+)?(?:function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm)\b/i.test(rawPrompt)) {
+      const finalPrompt = rawPrompt.replace(/[?!.]+$/, '').trim() || 'A stunning creative visual composition';
+      return { isImage: true, prompt: finalPrompt };
+    }
+  }
+
+  // Direct "create/draw <subject>"
+  const directMatch = clean.match(/^(?:please\s+)?(?:can\s+(?:you|u)\s+)?(?:u\s+|you\s+)?(?:create|draw|paint|render|generate)\s+(?:a|an)\s+([^.\n?!]+)$/i);
+  if (directMatch && directMatch[1]) {
+    const candidate = directMatch[1].trim();
+    if (!/^(?:function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm|test|report|summary)\b/i.test(candidate)) {
+      return { isImage: true, prompt: candidate };
+    }
+  }
+
+  // Direct "image/picture/photo/wallpaper/illustration of ..."
+  const nounOfMatch = clean.match(/^(?:an?\s+)?(?:image|picture|photo|photograph|wallpaper|illustration|drawing|artwork|portrait|render|graphic)\s+(?:of|with|depicting|showing|for|about)\s+(.+)$/i);
+  if (nounOfMatch && nounOfMatch[1]) {
+    const candidate = nounOfMatch[1].trim();
+    if (!/^(?:code|function|script|component|table|list|essay|story|poem|song)\b/i.test(candidate)) {
       return { isImage: true, prompt: candidate.replace(/[?!.]+$/, '').trim() };
     }
   }
+
+  // Paint / Draw / Sketch directly
+  const paintMatch = clean.match(/^(?:please\s+)?(?:can\s+(?:you|u)\s+)?(?:paint|draw|sketch|illustrate)\s+(.+)$/i);
+  if (paintMatch && paintMatch[1]) {
+    const candidate = paintMatch[1].trim();
+    if (!/^(?:a\s+)?(?:function|script|code|component|table|list|diagram|chart|graph|flowchart)\b/i.test(candidate)) {
+      return { isImage: true, prompt: candidate.replace(/[?!.]+$/, '').trim() };
+    }
+  }
+
+  // Edit / transform patterns: "edit this image to ...", "modify image ...", "change to ...", "add ... to image", "now make it..."
+  const editMatch = clean.match(/^(?:please\s+)?(?:can\s+(?:you|u)\s+)?(?:edit|modify|alter|change|transform|remix)\s+(?:this\s+|the\s+)?(?:image|picture|photo)?\s*(?:to|with|into)?\s*(.+)$/i) ||
+                    clean.match(/^(?:add|make|turn|put)\s+(?:this\s+|the\s+)?(?:image|picture|photo)?\s*(?:into|with|to)?\s*(.+)$/i) ||
+                    clean.match(/^(?:now\s+)?(?:make\s+it|change\s+it\s+to|turn\s+it\s+into|edit\s+it\s+to|regenerate\s+with)\s+(.+)$/i);
+  if (editMatch && editMatch[1]) {
+    const candidate = editMatch[1].trim();
+    if (!/^(?:function|script|code|component|table|list|essay|story|poem|song|test)\b/i.test(candidate)) {
+      return { isImage: true, prompt: candidate.replace(/[?!.]+$/, '').trim() };
+    }
+  }
+
   return { isImage: false, prompt: '' };
 }
 
@@ -153,7 +203,8 @@ export const chatService = {
     attachments?: ChatMessage['attachments'],
     onStreamChunk?: (streamedText: string, modelName?: string, sources?: any[]) => void,
     searchMode: 'auto' | 'on' | 'off' = 'auto',
-    onSearchStatus?: (searching: boolean, searchQuery?: string) => void
+    onSearchStatus?: (searching: boolean, searchQuery?: string) => void,
+    onImageProgress?: (progress: number) => void
   ): Promise<{ updatedSession: ChatSession; assistantMessage: ChatMessage }> {
     let sessions = this.getSessions();
     let session = sessions.find((s) => s.id === sessionId);
@@ -186,6 +237,49 @@ export const chatService = {
 
     // Immediately persist user turn so messages are never lost
     this.saveSessions(sessions);
+
+    // Image Generation in Chat via Black Forest Labs FLUX
+    // When generating image: do NOT output conversational text!
+    // After created: ONLY show the image!
+    const imgIntent = detectImageGenerationIntent(userContent);
+    if (imgIntent.isImage && imgIntent.prompt) {
+      let generatedImagesForTurn: GeneratedImage[] = [];
+      try {
+        const generated = await imageService.generateImages(
+          {
+            prompt: imgIntent.prompt,
+            aspectRatio: '16:9',
+            count: 1,
+            style: 'Cinematic',
+            modelId,
+          },
+          onImageProgress
+        );
+        if (generated && generated.length > 0) {
+          generatedImagesForTurn = generated;
+        }
+      } catch (imgErr) {
+        console.warn('Image generation in chat notice:', imgErr);
+      }
+
+      const assistantMessage: ChatMessage = {
+        id: 'asst_msg_' + Date.now(),
+        role: 'assistant',
+        content: '', // NO TEXT! ONLY THE IMAGE!
+        timestamp: Date.now(),
+        modelUsed: 'Black Forest Labs FLUX (Puter)',
+        generatedImages: generatedImagesForTurn,
+      };
+
+      session.messages.push(assistantMessage);
+      session.updatedAt = Date.now();
+      this.saveSessions(sessions);
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        firestoreStorageService.saveUserChat(userId, session).catch(() => {});
+      }
+      return { updatedSession: session, assistantMessage };
+    }
 
     const rawApiKey = localStorage.getItem('forgex_api_key') || undefined;
     const geminiApiKey = rawApiKey && rawApiKey.startsWith('AIza') ? rawApiKey : undefined;
@@ -333,43 +427,6 @@ export const chatService = {
       assistantReplyText = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
     }
 
-    // Image Generation in Chat via Black Forest Labs FLUX
-    let generatedImagesForTurn: GeneratedImage[] | undefined = undefined;
-    const imgIntent = detectImageGenerationIntent(userContent);
-    if (imgIntent.isImage && imgIntent.prompt) {
-      try {
-        if (onStreamChunk) {
-          onStreamChunk(`🎨 Synthesizing image with **Black Forest Labs FLUX** for "${imgIntent.prompt}"...`, 'Black Forest Labs FLUX (Puter)');
-        }
-        const generated = await imageService.generateImages({
-          prompt: imgIntent.prompt,
-          aspectRatio: '16:9',
-          count: 1, // Default 1 image
-          style: 'Cinematic',
-          modelId,
-        });
-
-        if (generated && generated.length > 0) {
-          generatedImagesForTurn = generated;
-          const img = generated[0];
-          const imgMarkdown = `\n\n![${img.prompt}](${img.imageUrl})\n\n*Created with **Black Forest Labs FLUX** via Puter*`;
-          if (assistantReplyText) {
-            if (!assistantReplyText.includes(img.imageUrl)) {
-              assistantReplyText = `${assistantReplyText}\n${imgMarkdown}`;
-            }
-          } else {
-            assistantReplyText = `Here is your creation generated with **Black Forest Labs FLUX**:\n${imgMarkdown}`;
-          }
-          modelUsedName = 'Black Forest Labs FLUX (Puter)';
-          if (onStreamChunk) {
-            onStreamChunk(assistantReplyText, modelUsedName, responseGroundingSources);
-          }
-        }
-      } catch (imgErr) {
-        console.warn('Image generation in chat notice:', imgErr);
-      }
-    }
-
     const assistantMessage: ChatMessage = {
       id: 'asst_msg_' + Date.now(),
       role: 'assistant',
@@ -379,7 +436,7 @@ export const chatService = {
       searchedWeb: responseSearchedWeb,
       searchQueries: responseSearchQueries,
       groundingSources: responseGroundingSources,
-      generatedImages: generatedImagesForTurn,
+      generatedImages: undefined,
     };
 
     session.messages.push(assistantMessage);

@@ -26,13 +26,17 @@ import {
   ChevronUp,
   Download,
   Code2,
-  Maximize2
+  Maximize2,
+  Pencil
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { detectWebSearchIntent } from '../utils/searchIntent';
+import { detectImageGenerationIntent } from '../services/chatService';
+import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
+import { FullscreenImageModal } from './FullscreenImageModal';
 
 interface ChatWorkspaceProps {
   currentSession: ChatSession | null;
@@ -78,12 +82,52 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     modelUsed?: string;
     groundingSources?: any[];
   } | null>(null);
-  const [previewModalImage, setPreviewModalImage] = useState<{ url: string; prompt: string } | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<{ url: string; prompt: string; id?: string; initialEdit?: boolean } | null>(null);
+  const [downloadedImageId, setDownloadedImageId] = useState<string | null>(null);
+  const [generatingImageState, setGeneratingImageState] = useState<{ prompt: string; progress: number } | null>(null);
+
+  const handleDownloadImage = async (imageUrl: string, imageId?: string) => {
+    try {
+      if (imageId) {
+        setDownloadedImageId(imageId);
+        setTimeout(() => setDownloadedImageId(null), 2000);
+      }
+      const filename = `forgex-image-${Date.now()}.jpg`;
+      if (imageUrl.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = imageUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch {
+      const a = document.createElement('a');
+      a.href = imageUrl;
+      a.target = '_blank';
+      a.download = `forgex-image-${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const imageProgressTimerRef = useRef<any>(null);
 
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
@@ -310,6 +354,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       if (transcribingSafetyTimerRef.current) {
         clearTimeout(transcribingSafetyTimerRef.current);
       }
+      if (imageProgressTimerRef.current) {
+        clearInterval(imageProgressTimerRef.current);
+      }
     };
   }, []);
 
@@ -400,16 +447,23 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setPendingUserTurn({ text, attachments: filesToAttach });
     setStreamingReply(null);
 
-    // Fast-path web search intent detection: Immediately activate the shiny web search UI
-    // for web search queries so the user NEVER sees "Thinking..." during web search
+    // Check for image generation intent vs web search vs general chat
+    const imgIntent = detectImageGenerationIntent(text);
     const localSearchIntent = detectWebSearchIntent(text);
-    if (localSearchIntent.shouldSearch) {
+
+    if (imgIntent.isImage) {
+      setSearchingQuery(null);
+      setSearchedForQueryDuringTurn(null);
+      setGeneratingImageState({ prompt: imgIntent.prompt, progress: 10 });
+    } else if (localSearchIntent.shouldSearch) {
       const q = localSearchIntent.searchQuery || text;
       setSearchingQuery(q);
       setSearchedForQueryDuringTurn(q);
+      setGeneratingImageState(null);
     } else {
       setSearchingQuery(null);
       setSearchedForQueryDuringTurn(null);
+      setGeneratingImageState(null);
     }
 
     setIsSubmitting(true);
@@ -422,6 +476,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         selectedModelId,
         filesToAttach,
         (streamedText, modelName, sources) => {
+          // If generating image, never display streaming text!
+          if (imgIntent.isImage) return;
           setStreamingReply({
             text: streamedText,
             modelUsed: modelName || currentModel.name,
@@ -430,6 +486,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         },
         'auto',
         (isSearching, q) => {
+          if (imgIntent.isImage) return;
           if (isSearching) {
             const query = q || localSearchIntent.searchQuery || text;
             setSearchingQuery(query);
@@ -437,8 +494,24 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           } else {
             setSearchingQuery(null);
           }
+        },
+        (realProgress) => {
+          // Real-time progress percentage callback from image synthesis pipeline
+          setGeneratingImageState({
+            prompt: imgIntent.prompt,
+            progress: Math.min(100, Math.max(1, Math.round(realProgress))),
+          });
         }
       );
+
+      // Ensure progress reaches exactly 100% before showing the image
+      if (imgIntent.isImage) {
+        setGeneratingImageState({ prompt: imgIntent.prompt, progress: 100 });
+        // Give smooth time for user to see the 100% completion before revealing the image
+        await new Promise((resolve) => setTimeout(resolve, 550));
+      }
+
+      setGeneratingImageState(null);
       setStreamingReply(null);
       setSearchingQuery(null);
       setSearchedForQueryDuringTurn(null);
@@ -446,6 +519,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       onUpdateSession(updatedSession);
     } catch (error) {
       console.error('Failed to send message', error);
+      setGeneratingImageState(null);
       setStreamingReply(null);
       setSearchingQuery(null);
       setSearchedForQueryDuringTurn(null);
@@ -980,173 +1054,237 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div
-                      className={`relative max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 sm:p-4 transition-all text-sm leading-relaxed ${
-                        isDark
-                          ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
-                          : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm shadow-sm'
-                      }`}
-                    >
-                      {/* Attachments if any */}
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {message.attachments.map((att, i) => (
-                            <div key={i} className="flex flex-col gap-1">
-                              {att.type === 'image' && att.url && (
-                                <img
-                                  src={att.url}
-                                  alt={att.name}
-                                  className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
-                                />
-                              )}
+                    (() => {
+                      const hasImages = Boolean(
+                        message.generatedImages &&
+                        message.generatedImages.length > 0
+                      );
+
+                      // If message contains generated image(s), display ONLY the image with zero assistant text chatter and zero prompt
+                      if (hasImages) {
+                        return (
+                          <div className="flex flex-col gap-3 max-w-xl w-full animate-in fade-in duration-200">
+                            {message.generatedImages!.map((img) => (
                               <div
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit ${
-                                  isDark ? 'bg-neutral-800/60 text-neutral-300' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                key={img.id}
+                                className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border shadow-lg group cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.008] ${
+                                  isDark
+                                    ? 'border-neutral-800 bg-neutral-900/80 hover:border-amber-500/50'
+                                    : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/50'
                                 }`}
-                              >
-                                {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-                                <span className="truncate max-w-[140px]">{att.name}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Message Body with rich Markdown rendering */}
-                      <div className="relative">
-                        <MarkdownRenderer
-                          content={message.content}
-                          theme={theme}
-                          onOpenInCodeStudio={(code, lang) => {
-                            if (onNavigateToCode) {
-                              onNavigateToCode(code, lang);
-                            }
-                          }}
-                          onOpenInImageStudio={() => {
-                            onNavigateToImage();
-                          }}
-                          onViewImageFullscreen={(url, prompt) => {
-                            setPreviewModalImage({ url, prompt });
-                          }}
-                        />
-                        {message.isStreaming && (
-                          <span className="inline-block w-2 h-4 ml-1 bg-amber-400 animate-pulse rounded-xs align-middle shadow-sm shadow-amber-400/50" />
-                        )}
-                      </div>
-
-                      {/* Generated Black Forest Labs FLUX Images in Chat */}
-                      {message.generatedImages && message.generatedImages.length > 0 && (
-                        <div className="mt-3.5 space-y-3">
-                          {message.generatedImages.map((img) => (
-                            <div key={img.id} className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950/80 p-2 shadow-xl group">
-                              <div
-                                className="relative rounded-xl overflow-hidden cursor-pointer"
-                                onClick={() => setPreviewModalImage({ url: img.imageUrl, prompt: img.prompt })}
+                                onClick={() => setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id, initialEdit: false })}
+                                title="Click to view full screen, edit or download"
                               >
                                 <img
                                   src={img.imageUrl}
                                   alt={img.prompt}
-                                  className="w-full h-auto rounded-xl object-cover max-h-72 transition-transform duration-300 group-hover:scale-[1.01]"
+                                  className="w-full h-auto object-cover rounded-2xl sm:rounded-3xl max-h-[520px] transition-transform duration-300"
                                 />
-                                <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-amber-500/50 text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1 shadow-sm">
-                                  <Sparkles className="w-3 h-3 text-amber-400" />
-                                  <span>Black Forest Labs FLUX</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between px-2 pt-2 pb-0.5 text-xs text-neutral-400 gap-2">
-                                <span className="truncate max-w-[200px] sm:max-w-[280px] font-medium text-neutral-300">
-                                  {img.prompt}
-                                </span>
-                                <div className="flex items-center gap-1.5 shrink-0">
+
+                                {/* Floating Quick Actions on Image: Edit, Download, Fullscreen */}
+                                <div className="absolute top-3 right-3 flex items-center gap-1.5 sm:gap-2 z-10 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                  {/* Edit Icon Button in Chat */}
                                   <button
                                     type="button"
-                                    onClick={() => onNavigateToImage()}
-                                    className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-medium flex items-center gap-1 transition-colors"
-                                    title="Open in Image Studio"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id, initialEdit: true });
+                                    }}
+                                    title="Edit image"
+                                    className="p-2 rounded-xl backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all hover:scale-105 shadow-md cursor-pointer"
                                   >
-                                    <ImageIcon className="w-3 h-3 text-amber-400" />
-                                    <span>Image Studio</span>
+                                    <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                                   </button>
-                                  <a
-                                    href={img.imageUrl}
-                                    download={`forgex-flux-${img.id}.jpg`}
-                                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-[11px] font-semibold border border-amber-500/30 flex items-center gap-1 transition-colors"
+
+                                  {/* Download Icon Button in Chat */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownloadImage(img.imageUrl, img.id);
+                                    }}
                                     title="Download image"
+                                    className="p-2 rounded-xl backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all hover:scale-105 shadow-md cursor-pointer"
                                   >
-                                    <Download className="w-3 h-3" />
-                                    <span>Download</span>
-                                  </a>
+                                    {downloadedImageId === img.id ? (
+                                      <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                                    ) : (
+                                      <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                                    )}
+                                  </button>
+
+                                  {/* Fullscreen Icon Button */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id, initialEdit: false });
+                                    }}
+                                    title="View Fullscreen"
+                                    className="p-2 rounded-xl backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all hover:scale-105 shadow-md cursor-pointer"
+                                  >
+                                    <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                                  </button>
                                 </div>
                               </div>
+                            ))}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          className={`relative max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 sm:p-4 transition-all text-sm leading-relaxed ${
+                            isDark
+                              ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
+                              : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm shadow-sm'
+                          }`}
+                        >
+                          {/* Attachments if any */}
+                          {message.attachments && message.attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {message.attachments.map((att, i) => (
+                                <div key={i} className="flex flex-col gap-1">
+                                  {att.type === 'image' && att.url && (
+                                    <img
+                                      src={att.url}
+                                      alt={att.name}
+                                      className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
+                                    />
+                                  )}
+                                  <div
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit ${
+                                      isDark ? 'bg-neutral-800/60 text-neutral-300' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                    }`}
+                                  >
+                                    {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                                    <span className="truncate max-w-[140px]">{att.name}</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Web Search Sources Pills (ChatGPT Style — rendered at the bottom of the response) */}
-                      {message.groundingSources && message.groundingSources.length > 0 ? (
-                        renderSourcePills(message.groundingSources, message.id)
-                      ) : message.searchedWeb ? (
-                        <div className="flex items-center gap-1.5 pt-2 pb-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                          <Globe className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 shrink-0" />
-                          <span>Searched the web{message.searchQueries?.[0] ? ` for "${message.searchQueries[0]}"` : ''}</span>
-                        </div>
-                      ) : null}
-
-                      {/* Model badge & copy action on assistant reply */}
-                      <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-xs ${
-                        isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
-                      }`}>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[11px] font-mono inline-flex items-center gap-1 ${
-                            isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'
-                          }`}>
-                            <Zap className="w-3 h-3 shrink-0" />
-                            <span>
-                              {message.isStreaming 
-                                ? `${currentModel.name} is streaming...`
-                                : (message.modelUsed && !/gemini/i.test(message.modelUsed)
-                                    ? message.modelUsed
-                                    : currentModel.name || 'ForgeX Neural Engine')}
-                            </span>
-                          </span>
-
-                          {message.searchedWeb && (
-                            <span className="text-[10px] text-blue-500 dark:text-blue-400 inline-flex items-center gap-1 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                              <Globe className="w-2.5 h-2.5" />
-                              <span>Web Search</span>
-                            </span>
                           )}
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => copyToClipboard(message.content, message.id)}
-                            className={`flex items-center gap-1 transition-colors ${
-                              isDark ? 'hover:text-white text-neutral-400' : 'hover:text-neutral-950 text-neutral-600'
-                            }`}
-                          >
-                            {copiedMessageId === message.id ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                                <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">Copied</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                <span className="text-[11px]">Copy</span>
-                              </>
+                          {/* Message Body with rich Markdown rendering */}
+                          <div className="relative">
+                            <MarkdownRenderer
+                              content={message.content}
+                              theme={theme}
+                              onOpenInCodeStudio={(code, lang) => {
+                                if (onNavigateToCode) {
+                                  onNavigateToCode(code, lang);
+                                }
+                              }}
+                              onOpenInImageStudio={() => {
+                                onNavigateToImage();
+                              }}
+                              onViewImageFullscreen={(url, prompt) => {
+                                setFullscreenImage({ url, prompt });
+                              }}
+                            />
+                            {message.isStreaming && (
+                              <span className="inline-block w-2 h-4 ml-1 bg-amber-400 animate-pulse rounded-xs align-middle shadow-sm shadow-amber-400/50" />
                             )}
-                          </button>
+                          </div>
+
+                          {/* Generated Images in Chat */}
+                          {message.generatedImages && message.generatedImages.length > 0 && (
+                            <div className="mt-3.5 space-y-3">
+                              {message.generatedImages.map((img) => (
+                                <div
+                                  key={img.id}
+                                  className={`relative rounded-2xl overflow-hidden border shadow-md group cursor-pointer ${
+                                    isDark ? 'border-neutral-800 bg-neutral-950/80' : 'border-neutral-200 bg-neutral-100'
+                                  }`}
+                                  onClick={() => setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id })}
+                                  title="Click to view full screen, edit or download"
+                                >
+                                  <img
+                                    src={img.imageUrl}
+                                    alt={img.prompt}
+                                    className="w-full h-auto rounded-xl object-cover max-h-72 transition-transform duration-300 group-hover:scale-[1.01]"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Web Search Sources Pills */}
+                          {message.groundingSources && message.groundingSources.length > 0 ? (
+                            renderSourcePills(message.groundingSources, message.id)
+                          ) : message.searchedWeb ? (
+                            <div className="flex items-center gap-1.5 pt-2 pb-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                              <Globe className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 shrink-0" />
+                              <span>Searched the web{message.searchQueries?.[0] ? ` for "${message.searchQueries[0]}"` : ''}</span>
+                            </div>
+                          ) : null}
+
+                          {/* Model badge & copy action on assistant reply */}
+                          <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-xs ${
+                            isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[11px] font-mono inline-flex items-center gap-1 ${
+                                isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'
+                              }`}>
+                                <Zap className="w-3 h-3 shrink-0" />
+                                <span>
+                                  {message.isStreaming 
+                                    ? `${currentModel.name} is streaming...`
+                                    : (message.modelUsed && !/gemini/i.test(message.modelUsed)
+                                        ? message.modelUsed
+                                        : currentModel.name || 'ForgeX Neural Engine')}
+                                </span>
+                              </span>
+
+                              {message.searchedWeb && (
+                                <span className="text-[10px] text-blue-500 dark:text-blue-400 inline-flex items-center gap-1 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                                  <Globe className="w-2.5 h-2.5" />
+                                  <span>Web Search</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => copyToClipboard(message.content, message.id)}
+                                className={`flex items-center gap-1 transition-colors ${
+                                  isDark ? 'hover:text-white text-neutral-400' : 'hover:text-neutral-950 text-neutral-600'
+                                }`}
+                              >
+                                {copiedMessageId === message.id ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span className="text-[11px]">Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })()
                   )}
                 </div>
               );
             })}
 
-            {isSubmitting && !streamingReply && (
+            {/* Image Generating Animation: GPU-accelerated canvas with percentage counter */}
+            {generatingImageState && (
+              <div className="py-2 px-0.5 select-none animate-in fade-in duration-200">
+                <ImageGeneratingAnimation
+                  progress={generatingImageState.progress}
+                  theme={theme}
+                />
+              </div>
+            )}
+
+            {isSubmitting && !streamingReply && !generatingImageState && (
               <div className="py-2 px-1 select-none animate-in fade-in duration-150">
                 {searchingQuery ? (
                   /* Searching the Web — Minimal, clean inline style matching Screenshot 1 */
@@ -1187,63 +1325,23 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         ForgeX can make mistakes. Check important info.
       </p>
 
-      {/* Fullscreen Image Preview Modal */}
-      {previewModalImage && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setPreviewModalImage(null)}
-        >
-          <div 
-            className="relative max-w-4xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl p-3 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 mb-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span className="font-semibold text-xs text-white">Black Forest Labs FLUX Creation</span>
-              </div>
-              <button 
-                type="button"
-                onClick={() => setPreviewModalImage(null)}
-                className="p-1 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="relative rounded-2xl overflow-hidden bg-black max-h-[70vh] flex items-center justify-center">
-              <img 
-                src={previewModalImage.url} 
-                alt={previewModalImage.prompt} 
-                className="max-h-[68vh] w-auto max-w-full object-contain"
-              />
-            </div>
-            <div className="flex items-center justify-between px-3 pt-3 text-xs">
-              <span className="text-neutral-400 truncate max-w-md">{previewModalImage.prompt}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewModalImage(null);
-                    onNavigateToImage();
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-medium flex items-center gap-1.5"
-                >
-                  <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Open in Image Studio</span>
-                </button>
-                <a
-                  href={previewModalImage.url}
-                  download="forgex-flux-creation.jpg"
-                  className="px-3 py-1.5 rounded-xl bg-amber-500 text-neutral-950 font-bold flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Fullscreen Image Modal with Edit & Download Icons */}
+      <FullscreenImageModal
+        isOpen={Boolean(fullscreenImage)}
+        onClose={() => setFullscreenImage(null)}
+        imageUrl={fullscreenImage?.url || ''}
+        prompt={fullscreenImage?.prompt || ''}
+        initialEdit={fullscreenImage?.initialEdit || false}
+        theme={theme}
+        onOpenInImageStudio={(promptText, url) => {
+          setFullscreenImage(null);
+          onNavigateToImage();
+        }}
+        onEditPromptAndRegenerate={(newPrompt) => {
+          setFullscreenImage(null);
+          handleSendMessage(newPrompt);
+        }}
+      />
     </div>
   );
 };

@@ -197,31 +197,31 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           hr: () => (
             <hr className={`my-3 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`} />
           ),
-          // Embedded AI Images with Black Forest Labs FLUX badge, download and studio jump
+          // Embedded AI Images with clean theme support, download and fullscreen
           img: ({ src, alt }: any) => {
             if (!src) return null;
-            const isFlux = src.includes('flux') || (alt && alt.toLowerCase().includes('flux'));
             return (
-              <div className="my-3 rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950/80 p-2 max-w-lg shadow-xl group relative">
+              <div className={`my-3 rounded-2xl sm:rounded-3xl overflow-hidden border p-2 max-w-lg shadow-lg group relative transition-colors ${
+                isDark ? 'border-neutral-800 bg-neutral-950/80' : 'border-neutral-200 bg-neutral-50/90'
+              }`}>
                 <div 
                   className="relative rounded-xl overflow-hidden cursor-pointer" 
                   onClick={() => onViewImageFullscreen?.(src, alt || 'Creation')}
+                  title="Click to view full screen, edit or download"
                 >
                   <img
                     src={src}
                     alt={alt || 'Generated Creation'}
-                    className="w-full h-auto rounded-xl object-cover max-h-[420px] transition-transform duration-300 group-hover:scale-[1.01]"
+                    className="w-full h-auto rounded-xl object-cover max-h-[440px] transition-transform duration-300 group-hover:scale-[1.01]"
                     loading="lazy"
                   />
-                  {isFlux && (
-                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-amber-500/50 text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1 shadow-sm">
-                      <Sparkles className="w-3 h-3 text-amber-400" />
-                      <span>Black Forest Labs FLUX</span>
-                    </div>
-                  )}
                 </div>
-                <div className="flex items-center justify-between px-1.5 pt-2 pb-0.5 text-xs text-neutral-400 gap-2">
-                  <span className="truncate max-w-[190px] sm:max-w-[260px] font-medium text-neutral-300">
+                <div className={`flex items-center justify-between px-1.5 pt-2 pb-0.5 text-xs gap-2 ${
+                  isDark ? 'text-neutral-400' : 'text-neutral-600'
+                }`}>
+                  <span className={`truncate max-w-[190px] sm:max-w-[260px] font-medium ${
+                    isDark ? 'text-neutral-300' : 'text-neutral-700'
+                  }`}>
                     {alt || 'AI Creation'}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -232,19 +232,21 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                           e.stopPropagation();
                           onOpenInImageStudio(src, alt || '');
                         }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium text-[11px] transition-colors"
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[11px] transition-colors ${
+                          isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-800'
+                        }`}
                         title="Open in Image Studio for variations, inpainting & upscaling"
                       >
-                        <ImageIcon className="w-3 h-3 text-amber-400" />
+                        <ImageIcon className="w-3 h-3 text-amber-500" />
                         <span className="hidden sm:inline">Image Studio</span>
                       </button>
                     )}
                     <a
                       href={src}
-                      download={`forgex-flux-${Date.now()}.jpg`}
+                      download={`forgex-creation-${Date.now()}.jpg`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-semibold text-[11px] transition-colors border border-amber-500/30"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 font-semibold text-[11px] transition-colors border border-amber-500/30"
                       title="Download image"
                     >
                       <Download className="w-3 h-3" />

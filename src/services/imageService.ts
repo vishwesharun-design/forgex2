@@ -81,24 +81,92 @@ export const imageService = {
     }
   },
 
-  async generateImages(params: {
-    prompt: string;
-    aspectRatio: ImageAspectRatio;
-    count: number;
-    style: ImageStyle;
-    modelId: ForgeXModelId;
-    referenceImage?: string;
-    customStyle?: string;
-    fluxModel?: string;
-  }): Promise<GeneratedImage[]> {
+  async generateImages(
+    params: {
+      prompt: string;
+      aspectRatio: ImageAspectRatio;
+      count: number;
+      style: ImageStyle;
+      modelId: ForgeXModelId;
+      referenceImage?: string;
+      customStyle?: string;
+      fluxModel?: string;
+    },
+    onProgress?: (progress: number) => void
+  ): Promise<GeneratedImage[]> {
     const selectedFluxModel = params.fluxModel || puterService.getDefaultFluxModel();
     const count = Math.min(Math.max(params.count || 1, 1), 4);
+    const apiKey = this.getApiKey();
+
+    if (onProgress) onProgress(8);
+
+    // 1. Try real-time streaming SSE image synthesis pipeline first
+    try {
+      const streamRes = await fetch('/api/generate-image/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'x-api-key': apiKey } : {}),
+        },
+        body: JSON.stringify({
+          ...params,
+          fluxModel: selectedFluxModel,
+          apiKey: apiKey || undefined,
+        }),
+      });
+
+      if (streamRes.ok && streamRes.body) {
+        const reader = streamRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamedImages: GeneratedImage[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            const payloadStr = trimmed.slice(5).trim();
+            if (!payloadStr) continue;
+
+            try {
+              const data = JSON.parse(payloadStr);
+              if (typeof data.progress === 'number' && onProgress) {
+                onProgress(data.progress);
+              }
+              if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+                streamedImages = data.images;
+              }
+            } catch {}
+          }
+        }
+
+        if (streamedImages.length > 0) {
+          if (onProgress) onProgress(100);
+          const current = this.getImages();
+          const updated = [...streamedImages, ...current];
+          this.saveImages(updated);
+          return streamedImages;
+        }
+      }
+    } catch (_streamErr) {
+      console.warn('Streaming image synthesis notice, trying client Puter engine:', _streamErr);
+    }
+
+    // 2. Direct Puter.js SDK call with Black Forest Labs FLUX in browser
     const puterResults: GeneratedImage[] = [];
     let puterError: Error | null = null;
 
-    // 1. Direct Puter.js SDK call with Black Forest Labs FLUX in browser
     try {
+      if (onProgress) onProgress(35);
       for (let i = 0; i < count; i++) {
+        if (onProgress) onProgress(35 + Math.floor((i / count) * 45));
         const res = await puterService.generateFluxImage({
           prompt: params.prompt,
           aspectRatio: params.aspectRatio,
@@ -126,6 +194,7 @@ export const imageService = {
       }
 
       if (puterResults.length > 0) {
+        if (onProgress) onProgress(100);
         const current = this.getImages();
         const updated = [...puterResults, ...current];
         this.saveImages(updated);
@@ -136,9 +205,9 @@ export const imageService = {
       console.warn('Puter client-side generation notice, falling back to server FLUX pipeline:', err);
     }
 
-    // 2. Server-side Black Forest Labs FLUX synthesis pipeline
-    const apiKey = this.getApiKey();
+    // 3. Fallback standard endpoint
     try {
+      if (onProgress) onProgress(80);
       const res = await fetch('/api/generate-image', {
         method: 'POST',
         headers: {
@@ -155,6 +224,7 @@ export const imageService = {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.images) && data.images.length > 0) {
+          if (onProgress) onProgress(100);
           const current = this.getImages();
           const updated = [...data.images, ...current];
           this.saveImages(updated);
@@ -162,9 +232,6 @@ export const imageService = {
         } else if (data.error) {
           throw new Error(data.error);
         }
-      } else {
-        const errJson = await res.json().catch(() => null);
-        throw new Error(errJson?.error || `Image generation failed with HTTP status ${res.status}`);
       }
     } catch (serverErr: any) {
       const finalMsg = puterError?.message || serverErr?.message || 'Failed to generate image with Black Forest Labs FLUX';

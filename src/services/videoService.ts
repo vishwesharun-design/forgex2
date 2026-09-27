@@ -138,8 +138,7 @@ export function buildSlideStoryboard(
     const title = count <= 4 ? template.title : `Scene ${sceneIndex}: ${template.title.split(': ')[1] || 'Perspective'}`;
     const specificPrompt = `${prompt}, ${template.promptModifier}`;
     const seed = Math.floor(Math.random() * 888888) + i * 2500 + 101;
-    const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(specificPrompt)}` +
-      `?width=${w}&height=${h}&seed=${seed}&nologo=true`;
+    const imgUrl = createSlideSvgFallback(title, sceneIndex, template.caption, w, h, count);
 
     slides.push({
       id: `slide_${sceneIndex}_${Date.now()}_${i}`,
@@ -455,8 +454,7 @@ export const videoService = {
     const newSlide: VideoSlide = {
       id: `slide_${newSceneIndex}_${Date.now()}`,
       title: `Scene ${newSceneIndex}: Expanded Perspective`,
-      imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText + ', cinematic dynamic camera, rich lighting, 8k resolution, Unreal Engine 5 render')}` +
-        `?width=${w}&height=${h}&seed=${seed}&nologo=true`,
+      imageUrl: createSlideSvgFallback(`Scene ${newSceneIndex}`, newSceneIndex, `Extended cinematic perspective ${newSceneIndex}`, w, h, newSceneIndex),
       cameraMotion: chosenMotion,
       caption: `Extended cinematic perspective ${newSceneIndex} of ${target.prompt.slice(0, 40)}`,
       durationSeconds: newSlideDur,

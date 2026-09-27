@@ -411,9 +411,7 @@ export const musicService = {
       }
     }
 
-    const seed = Math.floor(Math.random() * 999999);
-    const cover = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt + ' album cover art, ' + params.genre + ' music style, graphic design, vinyl record art 8k')}` +
-      `?width=600&height=600&seed=${seed}&nologo=true`;
+    const cover = COVER_IMAGES[params.genre] || COVER_IMAGES.Synthwave;
 
     const newSong: GeneratedSong = {
       id: 'song_' + Date.now(),
@@ -428,7 +426,7 @@ export const musicService = {
       modelId: params.modelId,
       createdAt: Date.now(),
       isFavorite: false,
-      audioSeed: seed,
+      audioSeed: Math.floor(Math.random() * 999999),
       hasVoice,
       voiceProfile,
       vocalStyle,

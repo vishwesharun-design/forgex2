@@ -295,4 +295,26 @@
   animation: haptic-ambient-breathe 2.8s ease-in-out infinite;
 }
 
+/* =========================================================================
+   ChatGPT / DALL-E style Dotted Grid Matrix Shimmer Animation for Image Creation
+   ========================================================================= */
+
+@keyframes dot-matrix-shimmer {
+  0%, 100% {
+    transform: scale(0.65);
+    opacity: 0.15;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+    filter: drop-shadow(0 0 3px currentColor);
+  }
+}
+
+.animate-dot-matrix {
+  animation: dot-matrix-shimmer 2.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
 
