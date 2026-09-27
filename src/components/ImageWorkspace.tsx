@@ -30,6 +30,7 @@ import {
   FORGEX_MODELS 
 } from '../types';
 import { imageService } from '../services/imageService';
+import { puterService, PUTER_FLUX_CONFIG } from '../services/puterService';
 import { ModelSelector } from './ModelSelector';
 
 interface ImageWorkspaceProps {
@@ -66,20 +67,61 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [activeStudioTool, setActiveStudioTool] = useState<StudioTool>('text2img');
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>('16:9');
-  const [imageCount, setImageCount] = useState<number>(2);
+  const [imageCount, setImageCount] = useState<number>(1);
   const [style, setStyle] = useState<ImageStyle>('Cinematic');
   const [isGenerating, setIsGenerating] = useState(false);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState<number>(24);
   const [objectToRemove, setObjectToRemove] = useState<string>('');
+  const [selectedFluxModel, setSelectedFluxModel] = useState<string>(() => puterService.getDefaultFluxModel());
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [puterUser, setPuterUser] = useState<any>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
+  const activeFluxModelInfo = PUTER_FLUX_CONFIG.availableModels.find((m) => m.id === selectedFluxModel) || PUTER_FLUX_CONFIG.availableModels[0];
+
+  const checkPuterAuth = async () => {
+    try {
+      const user = await puterService.getUser();
+      setPuterUser(user);
+    } catch {
+      setPuterUser(null);
+    }
+  };
+
+  useEffect(() => {
+    // Eagerly initialize Puter SDK and check authentication status
+    puterService.init().then(() => {
+      checkPuterAuth();
+    }).catch((err) => {
+      console.warn('Puter SDK background init notice:', err);
+    });
+  }, []);
+
+  const handlePuterAuth = async () => {
+    try {
+      setErrorMessage(null);
+      if (puterService.isSignedIn()) {
+        await puterService.signOut();
+        setPuterUser(null);
+      } else {
+        await puterService.signIn();
+        await checkPuterAuth();
+      }
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err || '');
+      if (!msg.includes('closed') && !msg.includes('cancel')) {
+        setErrorMessage(`Puter authentication: ${msg}`);
+      }
+    }
+  };
 
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setErrorMessage(null);
     let cleanPrompt = prompt.trim();
     if (!cleanPrompt) {
       if (activeStudioTool === 'removeBg') cleanPrompt = 'Isolate foreground subject against transparent studio background, sharp cutout edges';
@@ -105,10 +147,13 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
         style,
         modelId: selectedModelId,
         referenceImage: referenceImage || undefined,
+        fluxModel: selectedFluxModel,
       });
       onUpdateImages(imageService.getImages());
-    } catch (err) {
+      checkPuterAuth();
+    } catch (err: any) {
       console.error('Image generation failed', err);
+      setErrorMessage(err instanceof Error ? err.message : String(err || 'Failed to generate image'));
     } finally {
       setIsGenerating(false);
     }
@@ -120,14 +165,37 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
     onUpdateImages(updated);
   };
 
-  const handleDownload = (img: GeneratedImage, e: React.MouseEvent) => {
+  const handleDownload = async (img: GeneratedImage, e: React.MouseEvent) => {
     e.stopPropagation();
-    const a = document.createElement('a');
-    a.href = img.imageUrl;
-    a.download = `forgex-${img.style.toLowerCase()}-${img.id}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      if (img.imageUrl.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = img.imageUrl;
+        a.download = `forgex-flux-${img.style.toLowerCase()}-${img.id}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+      const res = await fetch(img.imageUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `forgex-flux-${img.style.toLowerCase()}-${img.id}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch {
+      const a = document.createElement('a');
+      a.href = img.imageUrl;
+      a.target = '_blank';
+      a.download = `forgex-flux-${img.style.toLowerCase()}-${img.id}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   const handleCreateVariation = (img: GeneratedImage, e: React.MouseEvent) => {
@@ -197,17 +265,76 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               <h2 className="font-display font-bold text-xl">Image Studio</h2>
             </div>
 
-            {/* Model Selector */}
-            <div className="flex items-center gap-2">
-              <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Model:</span>
-              <ModelSelector
-                selectedModelId={selectedModelId}
-                onSelectModel={onSelectModel}
-                theme={theme}
-                useShortName={true}
-              />
+            {/* Model & FLUX Selector & Puter Auth */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Puter Browser Auth Flow Button */}
+              <button
+                type="button"
+                id="btn-puter-auth"
+                onClick={handlePuterAuth}
+                className={`text-xs px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all font-medium ${
+                  puterUser
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                    : isDark
+                    ? 'border-neutral-800 bg-neutral-950 text-neutral-300 hover:border-amber-500/50 hover:text-amber-400'
+                    : 'border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-amber-500/50 hover:text-amber-700'
+                }`}
+                title={puterUser ? `Signed in to Puter as @${puterUser.username || 'user'}. Click to sign out.` : 'Authenticate with Puter for Black Forest Labs FLUX generation.'}
+              >
+                <div className={`w-2 h-2 rounded-full ${puterUser ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400/80'}`} />
+                <span>{puterUser ? `@${puterUser.username || 'Puter'}` : 'Puter Sign In'}</span>
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>FLUX:</span>
+                <select
+                  id="select-flux-model"
+                  value={selectedFluxModel}
+                  onChange={(e) => setSelectedFluxModel(e.target.value)}
+                  className={`text-xs px-2.5 py-1.5 rounded-xl border font-semibold outline-none transition-all cursor-pointer ${
+                    isDark
+                      ? 'bg-neutral-950 border-neutral-800 text-amber-400 focus:border-amber-500'
+                      : 'bg-neutral-50 border-neutral-200 text-amber-700 focus:border-amber-500'
+                  }`}
+                  title="Black Forest Labs FLUX image-generation model via Puter"
+                >
+                  {PUTER_FLUX_CONFIG.availableModels.map((m) => (
+                    <option key={m.id} value={m.id} className={isDark ? 'bg-neutral-900 text-white' : 'bg-white text-neutral-900'}>
+                      {m.name} ({m.badge})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Model:</span>
+                <ModelSelector
+                  selectedModelId={selectedModelId}
+                  onSelectModel={onSelectModel}
+                  theme={theme}
+                  useShortName={true}
+                />
+              </div>
             </div>
           </div>
+
+          {/* Graceful Error Notification Banner */}
+          {errorMessage && (
+            <div className="mb-4 p-3.5 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs flex items-center justify-between gap-3 animate-fadeIn">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-ping" />
+                <span>{errorMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                className="p-1 rounded-lg hover:bg-red-500/20 text-red-300 transition-colors"
+                title="Dismiss error"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Studio Tool Selection Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-none">
@@ -423,12 +550,12 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               {isGenerating ? (
                 <>
                   <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
-                  <span>Synthesizing ({currentModel.badge})...</span>
+                  <span>Synthesizing ({activeFluxModelInfo.badge} via Puter)...</span>
                 </>
               ) : (
                 <>
                   <Zap className="w-4 h-4 fill-neutral-950" />
-                  <span>Generate Image</span>
+                  <span>Generate Image (FLUX)</span>
                 </>
               )}
             </button>
@@ -493,12 +620,12 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-4 flex flex-col justify-between" />
 
                     {/* Top Badges */}
-                    <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                    <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 max-w-[70%]">
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white border border-white/10">
                         {img.style}
                       </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/80 text-neutral-950 font-bold">
-                        {modelMeta.badge}
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500 text-neutral-950 font-bold shadow-sm">
+                        {img.engine?.includes('FLUX') ? 'FLUX' : modelMeta.badge}
                       </span>
                     </div>
 
@@ -596,8 +723,10 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                       {img.prompt}
                     </p>
                     <div className="flex items-center justify-between mt-3 text-[11px] text-neutral-500">
+                      <span className="text-amber-500/90 font-medium truncate max-w-[170px]" title={img.engine || "Black Forest Labs FLUX"}>
+                        {img.engine || 'Black Forest Labs FLUX'}
+                      </span>
                       <span>Ratio {img.aspectRatio}</span>
-                      <span>{new Date(img.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>

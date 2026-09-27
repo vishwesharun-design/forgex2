@@ -193,6 +193,8 @@ export interface ChatMessage {
     name: string;
     url?: string;
   }[];
+  generatedImages?: GeneratedImage[];
+  isGeneratingImage?: boolean;
 }
 
 export interface ChatSession {
@@ -228,6 +230,8 @@ export interface GeneratedImage {
   createdAt: number;
   isFavorite?: boolean;
   referenceImage?: string;
+  customStyle?: string;
+  engine?: string;
 }
 
 export type VideoDuration = '5s' | '10s' | '15s' | '20s' | '30s' | '60s' | string;

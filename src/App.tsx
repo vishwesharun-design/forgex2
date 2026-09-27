@@ -68,6 +68,7 @@ export default function App() {
   // Workspace View State
   const [activeWorkspace, setActiveWorkspace] = useState<ActiveWorkspace>('chat');
   const [selectedModelId, setSelectedModelId] = useState<ForgeXModelId>('forge-2-ultra');
+  const [pendingCodeSnippet, setPendingCodeSnippet] = useState<{ code: string; language?: string } | null>(null);
 
   // App Settings & Theme
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -504,6 +505,12 @@ export default function App() {
                   theme={settings.theme}
                   onNavigateToImage={() => setActiveWorkspace('image')}
                   onNavigateToMusic={() => setActiveWorkspace('music')}
+                  onNavigateToCode={(code, lang) => {
+                    if (code) {
+                      setPendingCodeSnippet({ code, language: lang });
+                    }
+                    setActiveWorkspace('code');
+                  }}
                   onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
                 />
               )}
@@ -545,6 +552,8 @@ export default function App() {
                   isDark={isDark}
                   selectedModel={selectedModelId}
                   onSelectModel={setSelectedModelId}
+                  initialCode={pendingCodeSnippet?.code}
+                  initialLanguage={pendingCodeSnippet?.language as any}
                 />
               )}
 

@@ -1,6 +1,7 @@
 import { GeneratedImage, ImageAspectRatio, ImageStyle, ForgeXModelId } from '../types';
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
+import { puterService, PUTER_FLUX_CONFIG } from './puterService';
 
 function getImageStorageKey(): string {
   const partition = authService.getCurrentUserPartitionKey();
@@ -8,65 +9,6 @@ function getImageStorageKey(): string {
 }
 
 const MOCK_IMAGE_IDS = new Set(['img_1', 'img_2', 'img_3', 'img_4', 'img_5', 'img_6']);
-
-// Aesthetic curated imagery matching different themes/styles for high quality instant visual feedback
-const STYLE_IMAGE_POOL: Record<ImageStyle, string[]> = {
-  Realistic: [
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-  ],
-  Cinematic: [
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?q=80&w=1200&auto=format&fit=crop',
-  ],
-  Anime: [
-    'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
-  ],
-  '3D': [
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Illustration: [
-    'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Minimal: [
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1507499739999-097706ad8914?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Cyberpunk: [
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Fantasy: [
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Watercolor: [
-    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop',
-  ],
-  'Pixel Art': [
-    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=1000&auto=format&fit=crop',
-  ],
-  Custom: [
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1200&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1200&auto=format&fit=crop',
-  ]
-};
 
 export const imageService = {
   getApiKey(): string {
@@ -147,9 +89,55 @@ export const imageService = {
     modelId: ForgeXModelId;
     referenceImage?: string;
     customStyle?: string;
+    fluxModel?: string;
   }): Promise<GeneratedImage[]> {
-    const apiKey = this.getApiKey();
+    const selectedFluxModel = params.fluxModel || puterService.getDefaultFluxModel();
+    const count = Math.min(Math.max(params.count || 1, 1), 4);
+    const puterResults: GeneratedImage[] = [];
+    let puterError: Error | null = null;
 
+    // 1. Direct Puter.js SDK call with Black Forest Labs FLUX in browser
+    try {
+      for (let i = 0; i < count; i++) {
+        const res = await puterService.generateFluxImage({
+          prompt: params.prompt,
+          aspectRatio: params.aspectRatio,
+          style: params.style,
+          customStyle: params.customStyle,
+          model: selectedFluxModel,
+          referenceImage: params.referenceImage,
+        });
+
+        if (res && res.imageUrl) {
+          puterResults.push({
+            id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+            prompt: params.prompt,
+            imageUrl: res.imageUrl,
+            aspectRatio: params.aspectRatio,
+            style: params.style,
+            customStyle: params.customStyle,
+            modelId: params.modelId,
+            createdAt: Date.now(),
+            isFavorite: false,
+            referenceImage: params.referenceImage,
+            engine: res.engine || 'Black Forest Labs FLUX (Puter)',
+          });
+        }
+      }
+
+      if (puterResults.length > 0) {
+        const current = this.getImages();
+        const updated = [...puterResults, ...current];
+        this.saveImages(updated);
+        return puterResults;
+      }
+    } catch (err: any) {
+      puterError = err instanceof Error ? err : new Error(String(err));
+      console.warn('Puter client-side generation notice, falling back to server FLUX pipeline:', err);
+    }
+
+    // 2. Server-side Black Forest Labs FLUX synthesis pipeline
+    const apiKey = this.getApiKey();
     try {
       const res = await fetch('/api/generate-image', {
         method: 'POST',
@@ -159,6 +147,7 @@ export const imageService = {
         },
         body: JSON.stringify({
           ...params,
+          fluxModel: selectedFluxModel,
           apiKey: apiKey || undefined,
         }),
       });
@@ -170,39 +159,19 @@ export const imageService = {
           const updated = [...data.images, ...current];
           this.saveImages(updated);
           return data.images;
+        } else if (data.error) {
+          throw new Error(data.error);
         }
+      } else {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error || `Image generation failed with HTTP status ${res.status}`);
       }
-    } catch (apiErr) {
-      console.warn('Network call to /api/generate-image failed, falling back to local synthesis', apiErr);
+    } catch (serverErr: any) {
+      const finalMsg = puterError?.message || serverErr?.message || 'Failed to generate image with Black Forest Labs FLUX';
+      throw new Error(finalMsg);
     }
 
-    // Local procedural fallback if server is unreachable
-    await new Promise((resolve) => setTimeout(resolve, 1400 + Math.random() * 600));
-
-    const pool = STYLE_IMAGE_POOL[params.style] || STYLE_IMAGE_POOL['Cinematic'];
-    const results: GeneratedImage[] = [];
-
-    for (let i = 0; i < params.count; i++) {
-      const baseImg = pool[(i + Math.floor(Math.random() * pool.length)) % pool.length];
-      const newImage: GeneratedImage = {
-        id: 'img_' + Date.now() + '_' + i,
-        prompt: params.prompt,
-        imageUrl: baseImg,
-        aspectRatio: params.aspectRatio,
-        style: params.style,
-        modelId: params.modelId,
-        createdAt: Date.now(),
-        isFavorite: false,
-        referenceImage: params.referenceImage,
-      };
-      results.push(newImage);
-    }
-
-    const current = this.getImages();
-    const updated = [...results, ...current];
-    this.saveImages(updated);
-
-    return results;
+    throw new Error(puterError?.message || 'Black Forest Labs FLUX generation failed');
   },
 
   toggleFavorite(imageId: string): GeneratedImage[] {

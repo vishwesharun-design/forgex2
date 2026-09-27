@@ -24,6 +24,9 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  Download,
+  Code2,
+  Maximize2
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
@@ -41,6 +44,7 @@ interface ChatWorkspaceProps {
   onNavigateToImage: () => void;
   onNavigateToVideo?: () => void;
   onNavigateToMusic?: () => void;
+  onNavigateToCode?: (initialCode?: string, initialLang?: any) => void;
   onOpenVoiceMode?: () => void;
 }
 
@@ -54,6 +58,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   onNavigateToImage,
   onNavigateToVideo,
   onNavigateToMusic,
+  onNavigateToCode,
   onOpenVoiceMode,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -73,6 +78,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     modelUsed?: string;
     groundingSources?: any[];
   } | null>(null);
+  const [previewModalImage, setPreviewModalImage] = useState<{ url: string; prompt: string } | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -596,6 +602,35 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <FileText className="w-4 h-4 text-blue-500" />
                   <span>Upload Document</span>
                 </button>
+                <div className={`my-1 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setInputText('/image ');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-amber-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-amber-600'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>Generate Image (FLUX)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setInputText('Write clean TypeScript code to ');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-blue-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-blue-600'
+                  }`}
+                >
+                  <Code2 className="w-4 h-4 text-blue-500" />
+                  <span>Write Code</span>
+                </button>
               </div>
             )}
           </div>
@@ -744,6 +779,73 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             {/* Centered Input Container */}
             <div className="w-full mb-4">
               {renderChatInput()}
+            </div>
+
+            {/* Quick Capability Chips */}
+            <div className="flex flex-wrap items-center justify-center gap-2 max-w-xl mx-auto mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setInputText('Generate an image of a cybernetic dragon soaring through neon clouds');
+                  textareaRef.current?.focus();
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isDark
+                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-amber-500/50 hover:bg-amber-500/10 text-neutral-300 hover:text-amber-400'
+                    : 'border-neutral-200 bg-white hover:border-amber-500/50 hover:bg-amber-50 text-neutral-700 shadow-2xs'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Create Image (FLUX)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInputText('Write clean TypeScript code for a reactive store with event listeners');
+                  textareaRef.current?.focus();
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isDark
+                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-blue-500/50 hover:bg-blue-500/10 text-neutral-300 hover:text-blue-400'
+                    : 'border-neutral-200 bg-white hover:border-blue-500/50 hover:bg-blue-50 text-neutral-700 shadow-2xs'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5 text-blue-500" />
+                <span>Write Code</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInputText('What are the latest breakthrough space missions and discoveries this week?');
+                  textareaRef.current?.focus();
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isDark
+                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-neutral-300 hover:text-emerald-400'
+                    : 'border-neutral-200 bg-white hover:border-emerald-500/50 hover:bg-emerald-50 text-neutral-700 shadow-2xs'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Web Search</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInputText('Write lyrics and chords for an uplifting synthwave track');
+                  textareaRef.current?.focus();
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isDark
+                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-purple-500/50 hover:bg-purple-500/10 text-neutral-300 hover:text-purple-400'
+                    : 'border-neutral-200 bg-white hover:border-purple-500/50 hover:bg-purple-50 text-neutral-700 shadow-2xs'
+                }`}
+              >
+                <Headphones className="w-3.5 h-3.5 text-purple-500" />
+                <span>Make Song</span>
+              </button>
             </div>
 
             {/* What can you do? Button */}
@@ -915,11 +1017,71 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         <MarkdownRenderer
                           content={message.content}
                           theme={theme}
+                          onOpenInCodeStudio={(code, lang) => {
+                            if (onNavigateToCode) {
+                              onNavigateToCode(code, lang);
+                            }
+                          }}
+                          onOpenInImageStudio={() => {
+                            onNavigateToImage();
+                          }}
+                          onViewImageFullscreen={(url, prompt) => {
+                            setPreviewModalImage({ url, prompt });
+                          }}
                         />
                         {message.isStreaming && (
                           <span className="inline-block w-2 h-4 ml-1 bg-amber-400 animate-pulse rounded-xs align-middle shadow-sm shadow-amber-400/50" />
                         )}
                       </div>
+
+                      {/* Generated Black Forest Labs FLUX Images in Chat */}
+                      {message.generatedImages && message.generatedImages.length > 0 && (
+                        <div className="mt-3.5 space-y-3">
+                          {message.generatedImages.map((img) => (
+                            <div key={img.id} className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950/80 p-2 shadow-xl group">
+                              <div
+                                className="relative rounded-xl overflow-hidden cursor-pointer"
+                                onClick={() => setPreviewModalImage({ url: img.imageUrl, prompt: img.prompt })}
+                              >
+                                <img
+                                  src={img.imageUrl}
+                                  alt={img.prompt}
+                                  className="w-full h-auto rounded-xl object-cover max-h-72 transition-transform duration-300 group-hover:scale-[1.01]"
+                                />
+                                <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-amber-500/50 text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1 shadow-sm">
+                                  <Sparkles className="w-3 h-3 text-amber-400" />
+                                  <span>Black Forest Labs FLUX</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between px-2 pt-2 pb-0.5 text-xs text-neutral-400 gap-2">
+                                <span className="truncate max-w-[200px] sm:max-w-[280px] font-medium text-neutral-300">
+                                  {img.prompt}
+                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => onNavigateToImage()}
+                                    className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-medium flex items-center gap-1 transition-colors"
+                                    title="Open in Image Studio"
+                                  >
+                                    <ImageIcon className="w-3 h-3 text-amber-400" />
+                                    <span>Image Studio</span>
+                                  </button>
+                                  <a
+                                    href={img.imageUrl}
+                                    download={`forgex-flux-${img.id}.jpg`}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-[11px] font-semibold border border-amber-500/30 flex items-center gap-1 transition-colors"
+                                    title="Download image"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Download</span>
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Web Search Sources Pills (ChatGPT Style — rendered at the bottom of the response) */}
                       {message.groundingSources && message.groundingSources.length > 0 ? (
@@ -1024,6 +1186,64 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       <p className="text-[11px] text-center text-neutral-400 dark:text-neutral-600 pb-2 select-none shrink-0">
         ForgeX can make mistakes. Check important info.
       </p>
+
+      {/* Fullscreen Image Preview Modal */}
+      {previewModalImage && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewModalImage(null)}
+        >
+          <div 
+            className="relative max-w-4xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl p-3 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 mb-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span className="font-semibold text-xs text-white">Black Forest Labs FLUX Creation</span>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setPreviewModalImage(null)}
+                className="p-1 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="relative rounded-2xl overflow-hidden bg-black max-h-[70vh] flex items-center justify-center">
+              <img 
+                src={previewModalImage.url} 
+                alt={previewModalImage.prompt} 
+                className="max-h-[68vh] w-auto max-w-full object-contain"
+              />
+            </div>
+            <div className="flex items-center justify-between px-3 pt-3 text-xs">
+              <span className="text-neutral-400 truncate max-w-md">{previewModalImage.prompt}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewModalImage(null);
+                    onNavigateToImage();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-medium flex items-center gap-1.5"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Open in Image Studio</span>
+                </button>
+                <a
+                  href={previewModalImage.url}
+                  download="forgex-flux-creation.jpg"
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 text-neutral-950 font-bold flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

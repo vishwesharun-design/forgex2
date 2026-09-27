@@ -1,7 +1,25 @@
-import { ChatMessage, ChatSession, ForgeXModelId, FORGEX_MODELS } from '../types';
+import { ChatMessage, ChatSession, ForgeXModelId, FORGEX_MODELS, GeneratedImage } from '../types';
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 import { generateExpertChatReply } from './knowledgeEngine';
+import { imageService } from './imageService';
+
+export function detectImageGenerationIntent(text: string): { isImage: boolean; prompt: string } {
+  const clean = text.trim();
+  if (/^\/image\s+/i.test(clean)) {
+    return { isImage: true, prompt: clean.replace(/^\/image\s+/i, '').trim() };
+  }
+  const match = clean.match(/^(?:please\s+)?(?:can\s+you\s+)?(?:generate|create|make|draw|paint|render|show\s+me)\s+(?:an?\s+)?(?:image|picture|photo|illustration|drawing|artwork)\s+(?:of|with|depicting|showing|for)?\s*(.+)$/i) ||
+                clean.match(/^(?:generate|create|make|draw|paint|render)\s*:\s*(.+)$/i) ||
+                clean.match(/^(?:draw|paint|render)\s+(?:a|an)\s+(.+)$/i);
+  if (match && match[1] && match[1].trim().length > 2) {
+    const candidate = match[1].trim();
+    if (!/^(?:a\s+)?(?:function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app)\b/i.test(candidate)) {
+      return { isImage: true, prompt: candidate.replace(/[?!.]+$/, '').trim() };
+    }
+  }
+  return { isImage: false, prompt: '' };
+}
 
 const MOCK_CHAT_IDS = new Set(['chat_1', 'chat_2', 'chat_3', 'chat_4']);
 
@@ -315,6 +333,43 @@ export const chatService = {
       assistantReplyText = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
     }
 
+    // Image Generation in Chat via Black Forest Labs FLUX
+    let generatedImagesForTurn: GeneratedImage[] | undefined = undefined;
+    const imgIntent = detectImageGenerationIntent(userContent);
+    if (imgIntent.isImage && imgIntent.prompt) {
+      try {
+        if (onStreamChunk) {
+          onStreamChunk(`🎨 Synthesizing image with **Black Forest Labs FLUX** for "${imgIntent.prompt}"...`, 'Black Forest Labs FLUX (Puter)');
+        }
+        const generated = await imageService.generateImages({
+          prompt: imgIntent.prompt,
+          aspectRatio: '16:9',
+          count: 1, // Default 1 image
+          style: 'Cinematic',
+          modelId,
+        });
+
+        if (generated && generated.length > 0) {
+          generatedImagesForTurn = generated;
+          const img = generated[0];
+          const imgMarkdown = `\n\n![${img.prompt}](${img.imageUrl})\n\n*Created with **Black Forest Labs FLUX** via Puter*`;
+          if (assistantReplyText) {
+            if (!assistantReplyText.includes(img.imageUrl)) {
+              assistantReplyText = `${assistantReplyText}\n${imgMarkdown}`;
+            }
+          } else {
+            assistantReplyText = `Here is your creation generated with **Black Forest Labs FLUX**:\n${imgMarkdown}`;
+          }
+          modelUsedName = 'Black Forest Labs FLUX (Puter)';
+          if (onStreamChunk) {
+            onStreamChunk(assistantReplyText, modelUsedName, responseGroundingSources);
+          }
+        }
+      } catch (imgErr) {
+        console.warn('Image generation in chat notice:', imgErr);
+      }
+    }
+
     const assistantMessage: ChatMessage = {
       id: 'asst_msg_' + Date.now(),
       role: 'assistant',
@@ -324,6 +379,7 @@ export const chatService = {
       searchedWeb: responseSearchedWeb,
       searchQueries: responseSearchQueries,
       groundingSources: responseGroundingSources,
+      generatedImages: generatedImagesForTurn,
     };
 
     session.messages.push(assistantMessage);

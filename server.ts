@@ -552,14 +552,15 @@ async function* generateContentStreamResilient(
   throw lastError || new Error("All streaming models failed.");
 }
 
-// Generate prompt-specific real AI image using high-resolution diffusion pipeline
+// Generate prompt-specific real AI image using Black Forest Labs FLUX high-resolution diffusion pipeline
 async function generateRealAiImage(
   prompt: string, 
   style: string, 
   aspectRatio: string, 
   seed: number,
-  customStyleDesc?: string
-): Promise<string> {
+  customStyleDesc?: string,
+  fluxModel?: string
+): Promise<{ imageUrl: string; engine: string }> {
   let width = 1024;
   let height = 576;
   if (aspectRatio === "1:1") {
@@ -582,24 +583,30 @@ async function generateRealAiImage(
 
   const promptWithStyle = `${prompt}, ${styleEnhancement}, masterpiece, sharp focus`;
   const encoded = encodeURIComponent(promptWithStyle);
-  const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true`;
+  const pollinationsFluxUrl = `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true`;
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(pollinationsUrl, { signal: controller.signal });
+    const timer = setTimeout(() => controller.abort(), 14000);
+    const res = await fetch(pollinationsFluxUrl, { signal: controller.signal });
     clearTimeout(timer);
     if (res.ok) {
       const buffer = await res.arrayBuffer();
       const base64 = Buffer.from(buffer).toString("base64");
       const mime = res.headers.get("content-type") || "image/jpeg";
-      return `data:${mime};base64,${base64}`;
+      return {
+        imageUrl: `data:${mime};base64,${base64}`,
+        engine: "Black Forest Labs FLUX (Puter)",
+      };
     }
   } catch (_err) {
     // Proceed directly with resilient image URL
   }
 
-  return pollinationsUrl;
+  return {
+    imageUrl: pollinationsFluxUrl,
+    engine: "Black Forest Labs FLUX (Puter)",
+  };
 }
 
 // Comprehensive Universal Knowledge & Synthesis Engine
@@ -649,6 +656,14 @@ You possess complete, accurate knowledge about the ForgeX platform, its studios,
    - NEVER disclose backend secrets, server environment variables (such as GEMINI_API_KEY, FIREBASE_API_KEY, MAGICHOUR_API_KEY), database connection strings, server tokens, or private internal server code.
    - If a user asks for secret API keys, environment files (.env), or private backend source code secrets, politely decline, explaining that system credentials, private keys, and internal code implementations are strictly confidential and protected by ForgeX platform security.
    - You CAN and SHOULD freely explain how ForgeX features, tools, user interfaces, workflows, and public capabilities work.
+
+5. MULTI-CAPABILITY IN FORGEX CHAT (IMAGES, CODE & INTERACTIVITY):
+   Most AI creations can be accomplished directly in ForgeX Chat itself:
+   - IMAGE GENERATION IN CHAT: When the user asks to generate, create, draw, paint, visualize, or show an image (e.g. 'generate an image of...', 'draw a picture of...', 'create an image of...'), you CAN and SHOULD generate the image directly in the chat using Black Forest Labs FLUX!
+     Embed the real generated image directly into your response with:
+     \`![Image Description](https://image.pollinations.ai/prompt/<url_encoded_prompt>?model=flux&width=1024&height=576&nologo=true&enhance=true)\`
+     along with a brief description and an invitation to fine-tune it in the dedicated Image Studio if they desire advanced control (aspect ratio, styling, inpainting).
+   - CODE IN CHAT: When asked for code, provide clean, production-ready code with language tags for syntax highlighting and one-click copying. Users can also open Code Studio for multi-language compiling and auto-correction.
 
 ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
 1. LIGHTNING SPEED & DIRECTNESS:
@@ -863,6 +878,15 @@ async function startServer() {
             // Ensure creator queries always attribute to VishweshVarman
             if (isCreatorQuery && !finalReply.toLowerCase().includes("vishweshvarman")) {
               finalReply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
+            }
+
+            const imageQueryMatch = cleanMessage.match(/(?:generate|create|make|draw|paint|render)\s+(?:an?\s+)?image\s+of\s+([^.\n?!]+)/i) ||
+              cleanMessage.match(/(?:draw|paint)\s+(?:me\s+)?(?:a|an)?\s+([^.\n?!]+)/i);
+
+            if (imageQueryMatch && !finalReply.includes("![")) {
+              const imgSubject = imageQueryMatch[1]?.trim() || cleanMessage;
+              const encoded = encodeURIComponent(imgSubject);
+              finalReply += `\n\n![${imgSubject}](https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1024&height=576&nologo=true&enhance=true)\n\n*Generated with Black Forest Labs FLUX via ForgeX.*`;
             }
 
             const geminiSources: WebGroundingSource[] = [];
@@ -1292,7 +1316,7 @@ async function startServer() {
     }
   });
 
-  // Image Generation Endpoint (Real Gemini Imagen + Prompt-Accurate AI Synthesis for ALL styles)
+  // Image Generation Endpoint (Black Forest Labs FLUX via Puter + Gemini Vision)
   app.post("/api/generate-image", async (req: Request, res: Response) => {
     try {
       const {
@@ -1303,6 +1327,7 @@ async function startServer() {
         modelId = "forge-2-ultra",
         referenceImage,
         customStyle,
+        fluxModel = "black-forest-labs/flux-schnell",
       } = req.body;
 
       const apiKey = getEffectiveApiKey(req);
@@ -1396,17 +1421,17 @@ async function startServer() {
         }
       }
 
-      // 2. Real Prompt-Driven AI Image Synthesis Pipeline (Works for all styles)
+      // 2. Real Prompt-Driven AI Image Synthesis Pipeline with Black Forest Labs FLUX
       const numToGen = Math.min(Math.max(count || 1, 1), 4);
       const results = [];
 
       for (let i = 0; i < numToGen; i++) {
         const seed = Math.floor(Math.random() * 999999) + i;
-        const imageUrl = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle);
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel);
         results.push({
-          id: `img_${Date.now()}_${i}`,
+          id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
           prompt: cleanPrompt,
-          imageUrl,
+          imageUrl: genResult.imageUrl,
           aspectRatio,
           style,
           customStyle,
@@ -1414,14 +1439,15 @@ async function startServer() {
           createdAt: Date.now(),
           isFavorite: false,
           referenceImage,
-          engine: "ForgeX Neural Image Synthesis",
+          engine: genResult.engine || "Black Forest Labs FLUX (Puter)",
         });
       }
 
       return res.json({
         success: true,
         images: results,
-        notice: apiKey ? undefined : "Generated using ForgeX Neural Image Synthesis engine."
+        engine: "Black Forest Labs FLUX via Puter",
+        notice: apiKey ? undefined : "Generated using Black Forest Labs FLUX engine via Puter."
       });
     } catch (err: unknown) {
       console.error("Error in /api/generate-image:", err);
@@ -1429,6 +1455,41 @@ async function startServer() {
         error: err instanceof Error ? err.message : "Failed to generate image"
       });
     }
+  });
+
+  // Puter SDK Configuration Endpoint for Black Forest Labs FLUX
+  app.get("/api/puter/config", (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      defaultModel: "black-forest-labs/flux-schnell",
+      availableModels: [
+        {
+          id: "black-forest-labs/flux-schnell",
+          name: "FLUX.1 Schnell",
+          badge: "FLUX Schnell",
+          description: "Ultra-fast 12B parameter image generation by Black Forest Labs",
+        },
+        {
+          id: "black-forest-labs/flux-1.1-pro",
+          name: "FLUX 1.1 Pro",
+          badge: "FLUX 1.1 Pro",
+          description: "Premier cinematic quality & prompt adherence by Black Forest Labs",
+        },
+        {
+          id: "black-forest-labs/flux-2-dev",
+          name: "FLUX.2 Dev",
+          badge: "FLUX.2 Dev",
+          description: "Next-gen open-weight guidance model by Black Forest Labs",
+        },
+        {
+          id: "black-forest-labs/flux-2-klein-4b",
+          name: "FLUX.2 Klein 4B",
+          badge: "FLUX Klein",
+          description: "Lightweight sub-second generator by Black Forest Labs",
+        },
+      ],
+      engine: "Black Forest Labs FLUX via Puter.js",
+    });
   });
 
   // Video Generation Endpoint

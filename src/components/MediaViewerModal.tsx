@@ -27,18 +27,46 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
   const modelMeta = FORGEX_MODELS.find((m) => m.id === item.modelId) || FORGEX_MODELS[4];
 
-  const handleDownload = () => {
-    const a = document.createElement('a');
-    if (type === 'image') {
-      a.href = (item as GeneratedImage).imageUrl;
-      a.download = `forgex-${item.id}.jpg`;
-    } else {
-      a.href = (item as GeneratedVideo).videoUrl;
-      a.download = `forgex-${item.id}.mp4`;
+  const handleDownload = async () => {
+    try {
+      if (type === 'image') {
+        const img = item as GeneratedImage;
+        if (img.imageUrl.startsWith('data:')) {
+          const a = document.createElement('a');
+          a.href = img.imageUrl;
+          a.download = `forgex-flux-${item.id}.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+        const res = await fetch(img.imageUrl);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `forgex-flux-${item.id}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      } else {
+        const a = document.createElement('a');
+        a.href = (item as GeneratedVideo).videoUrl;
+        a.download = `forgex-${item.id}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch {
+      const a = document.createElement('a');
+      a.href = type === 'image' ? (item as GeneratedImage).imageUrl : (item as GeneratedVideo).videoUrl;
+      a.target = '_blank';
+      a.download = `forgex-${item.id}.${type === 'image' ? 'jpg' : 'mp4'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   };
 
   const copyPrompt = () => {
@@ -120,10 +148,18 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{item.aspectRatio}</span>
               </div>
               {type === 'image' && (
-                <div className="flex justify-between">
-                  <span>Style Preset</span>
-                  <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{(item as GeneratedImage).style}</span>
-                </div>
+                <>
+                  <div className="flex justify-between">
+                    <span>AI Model</span>
+                    <span className="font-mono text-amber-400 font-semibold truncate max-w-[150px]" title={(item as GeneratedImage).engine || "Black Forest Labs FLUX"}>
+                      {(item as GeneratedImage).engine || 'Black Forest Labs FLUX'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Style Preset</span>
+                    <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{(item as GeneratedImage).style}</span>
+                  </div>
+                </>
               )}
               {type === 'video' && (
                 <>

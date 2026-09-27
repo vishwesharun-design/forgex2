@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Download, ExternalLink, Code2, Play, EyeOff, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { ForgeXTheme } from '../types';
 
 interface MarkdownRendererProps {
   content: string;
   theme?: ForgeXTheme;
   className?: string;
+  onOpenInCodeStudio?: (code: string, language: string) => void;
+  onOpenInImageStudio?: (imageUrl: string, prompt: string) => void;
+  onViewImageFullscreen?: (imageUrl: string, prompt: string) => void;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   theme = 'dark',
   className = '',
+  onOpenInCodeStudio,
+  onOpenInImageStudio,
+  onViewImageFullscreen,
 }) => {
   const isDark = theme === 'dark';
 
@@ -48,6 +54,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 language={match ? match[1] : 'text'}
                 code={codeString}
                 isDark={isDark}
+                onOpenInCodeStudio={onOpenInCodeStudio}
               />
             );
           },
@@ -190,6 +197,64 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           hr: () => (
             <hr className={`my-3 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`} />
           ),
+          // Embedded AI Images with Black Forest Labs FLUX badge, download and studio jump
+          img: ({ src, alt }: any) => {
+            if (!src) return null;
+            const isFlux = src.includes('flux') || (alt && alt.toLowerCase().includes('flux'));
+            return (
+              <div className="my-3 rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950/80 p-2 max-w-lg shadow-xl group relative">
+                <div 
+                  className="relative rounded-xl overflow-hidden cursor-pointer" 
+                  onClick={() => onViewImageFullscreen?.(src, alt || 'Creation')}
+                >
+                  <img
+                    src={src}
+                    alt={alt || 'Generated Creation'}
+                    className="w-full h-auto rounded-xl object-cover max-h-[420px] transition-transform duration-300 group-hover:scale-[1.01]"
+                    loading="lazy"
+                  />
+                  {isFlux && (
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-amber-500/50 text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1 shadow-sm">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Black Forest Labs FLUX</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between px-1.5 pt-2 pb-0.5 text-xs text-neutral-400 gap-2">
+                  <span className="truncate max-w-[190px] sm:max-w-[260px] font-medium text-neutral-300">
+                    {alt || 'AI Creation'}
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {onOpenInImageStudio && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenInImageStudio(src, alt || '');
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium text-[11px] transition-colors"
+                        title="Open in Image Studio for variations, inpainting & upscaling"
+                      >
+                        <ImageIcon className="w-3 h-3 text-amber-400" />
+                        <span className="hidden sm:inline">Image Studio</span>
+                      </button>
+                    )}
+                    <a
+                      href={src}
+                      download={`forgex-flux-${Date.now()}.jpg`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-semibold text-[11px] transition-colors border border-amber-500/30"
+                      title="Download image"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            );
+          },
         }}
       >
         {content}
@@ -202,16 +267,20 @@ interface CodeBlockProps {
   language: string;
   code: string;
   isDark: boolean;
+  onOpenInCodeStudio?: (code: string, language: string) => void;
 }
 
-const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark }) => {
+const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInCodeStudio }) => {
   const [copied, setCopied] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const isPreviewable = ['html', 'svg', 'javascript', 'js'].includes(language.toLowerCase());
 
   return (
     <div
@@ -221,33 +290,80 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark }) => {
     >
       {/* Code Header Bar */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-neutral-900/90 border-b border-neutral-800/80 text-[11px] text-neutral-400">
-        <span className="font-semibold uppercase tracking-wider text-amber-400/90">
+        <span className="font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
+          <Code2 className="w-3.5 h-3.5 text-amber-400" />
           {language}
         </span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-neutral-800 hover:text-neutral-200 transition-colors text-neutral-400"
-          title="Copy code to clipboard"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400 font-sans">Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" />
-              <span className="font-sans">Copy</span>
-            </>
+        <div className="flex items-center gap-1.5">
+          {isPreviewable && (
+            <button
+              type="button"
+              onClick={() => setShowPreview(!showPreview)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 transition-colors text-[11px]"
+              title={showPreview ? "Hide live preview" : "Run & preview output"}
+            >
+              {showPreview ? <EyeOff className="w-3 h-3 text-amber-400" /> : <Play className="w-3 h-3 text-emerald-400" />}
+              <span className="font-sans">{showPreview ? "Hide" : "Preview"}</span>
+            </button>
           )}
-        </button>
+
+          {onOpenInCodeStudio && (
+            <button
+              type="button"
+              onClick={() => onOpenInCodeStudio(code, language)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors text-[11px]"
+              title="Open and edit in Code Studio"
+            >
+              <ExternalLink className="w-3 h-3" />
+              <span className="font-sans">Code Studio</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-neutral-800 hover:text-neutral-200 transition-colors text-neutral-400"
+            title="Copy code to clipboard"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400 font-sans">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span className="font-sans">Copy</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Code Content */}
       <pre className="p-4 overflow-x-auto text-xs leading-relaxed font-mono text-neutral-200 selection:bg-amber-500/30">
         <code>{code}</code>
       </pre>
+
+      {/* Live Preview Iframe for HTML / SVG / JS */}
+      {showPreview && isPreviewable && (
+        <div className="border-t border-neutral-800 bg-white dark:bg-neutral-950 p-2">
+          <div className="text-[10px] text-neutral-400 pb-1 font-sans flex items-center justify-between">
+            <span className="font-medium">Live Execution Preview:</span>
+            <span className="text-emerald-400 font-mono text-[9px]">Sandboxed</span>
+          </div>
+          <iframe
+            srcDoc={
+              language.toLowerCase() === 'html' || language.toLowerCase() === 'svg'
+                ? code
+                : `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:12px;background:#111;color:#fff;"><div id="output"></div><script>try{${code}}catch(e){document.getElementById('output').innerText = 'Error: ' + e.message;}</script></body></html>`
+            }
+            className="w-full h-56 rounded-lg border border-neutral-800 bg-black"
+            sandbox="allow-scripts"
+            title="Code Preview"
+          />
+        </div>
+      )}
     </div>
   );
 };

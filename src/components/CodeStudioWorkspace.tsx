@@ -52,6 +52,8 @@ interface CodeStudioWorkspaceProps {
   isDark: boolean;
   selectedModel: ForgeXModelId;
   onSelectModel?: (modelId: ForgeXModelId) => void;
+  initialCode?: string;
+  initialLanguage?: CodeLanguage;
 }
 
 const LANGUAGES: { id: CodeLanguage; label: string; ext: string }[] = [
@@ -242,11 +244,23 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   isDark,
   selectedModel,
   onSelectModel,
+  initialCode,
+  initialLanguage,
 }) => {
-  const [language, setLanguage] = useState<CodeLanguage>('html');
-  const [fileName, setFileName] = useState('app.html');
-  const [code, setCode] = useState(STARTER_TEMPLATES.html.code);
+  const [language, setLanguage] = useState<CodeLanguage>(() => initialLanguage || 'html');
+  const [fileName, setFileName] = useState(() => (initialLanguage ? `snippet.${initialLanguage === 'typescript' ? 'ts' : initialLanguage === 'javascript' ? 'js' : initialLanguage}` : 'app.html'));
+  const [code, setCode] = useState(() => initialCode || STARTER_TEMPLATES.html.code);
   const [historyCode, setHistoryCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialCode) {
+      setCode(initialCode);
+      if (initialLanguage) {
+        setLanguage(initialLanguage);
+        setFileName(`snippet.${initialLanguage === 'typescript' ? 'ts' : initialLanguage === 'javascript' ? 'js' : initialLanguage}`);
+      }
+    }
+  }, [initialCode, initialLanguage]);
 
   // AI Controls
   const [activeTab, setActiveTab] = useState<'generate' | 'alter' | 'correct'>('generate');
