@@ -118,6 +118,7 @@ export const imageService = {
       referenceImage?: string;
       customStyle?: string;
       fluxModel?: string;
+      ocrMode?: 'edit' | 'create';
     },
     onProgress?: (progress: number) => void
   ): Promise<GeneratedImage[]> {
@@ -152,8 +153,7 @@ export const imageService = {
 
     const puterAuthToken = puterService.getAuthToken();
 
-    // 1. If referenceImage is provided, prioritize Server-side Gemini Image-to-Image Editing
-    // This strictly preserves the original background, age, height, and remaining subjects!
+    // 1. If referenceImage is provided, prioritize Server-side Gemini Multimodal Image Generation & Editing with Vision OCR
     if (params.referenceImage) {
       try {
         if (onProgress) onProgress(25);
@@ -171,6 +171,7 @@ export const imageService = {
             fluxModel: selectedFluxModel,
             apiKey: apiKey || undefined,
             puterAuthToken: puterAuthToken || undefined,
+            ocrMode: params.ocrMode,
           }),
         });
 
@@ -205,11 +206,17 @@ export const imageService = {
           }
 
           if (sseImages.length > 0) {
+            const enrichedImages = sseImages.map((img) => ({
+              ...img,
+              ocrText: img.ocrText || ocrFoundText,
+              visionAnalysis: img.visionAnalysis || visionSummary,
+              ocrMode: img.ocrMode || params.ocrMode,
+            }));
             if (onProgress) onProgress(100);
             const current = this.getImages();
-            const updated = [...sseImages, ...current];
+            const updated = [...enrichedImages, ...current];
             this.saveImages(updated);
-            return sseImages;
+            return enrichedImages;
           }
         }
       } catch (srvErr) {
@@ -249,6 +256,7 @@ export const imageService = {
             engine: res.engine || 'Black Forest Labs FLUX (Puter)',
             ocrText: ocrFoundText,
             visionAnalysis: visionSummary,
+            ocrMode: params.ocrMode,
           });
         }
       }
@@ -353,11 +361,17 @@ export const imageService = {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.images) && data.images.length > 0) {
+          const enriched = data.images.map((img: any) => ({
+            ...img,
+            ocrText: img.ocrText || ocrFoundText,
+            visionAnalysis: img.visionAnalysis || visionSummary,
+            ocrMode: img.ocrMode || params.ocrMode,
+          }));
           if (onProgress) onProgress(100);
           const current = this.getImages();
-          const updated = [...data.images, ...current];
+          const updated = [...enriched, ...current];
           this.saveImages(updated);
-          return data.images;
+          return enriched;
         } else if (data.error) {
           throw new Error(data.error);
         }

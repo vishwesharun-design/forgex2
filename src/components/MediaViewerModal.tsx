@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Download, Copy, Heart, Sparkles, Zap, Trash2 } from 'lucide-react';
+import { X, Download, Copy, Heart, Sparkles, Zap, Trash2, ScanLine } from 'lucide-react';
 import { GeneratedImage, GeneratedVideo, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { SlideMotionPlayer } from './SlideMotionPlayer';
 
@@ -159,6 +159,29 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     <span>Style Preset</span>
                     <span className={`font-mono ${isDark ? 'text-neutral-200' : 'text-neutral-900 font-semibold'}`}>{(item as GeneratedImage).style}</span>
                   </div>
+                  {(item as GeneratedImage).ocrText && (
+                    <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-amber-500 mb-1">
+                        <span className="flex items-center gap-1.5">
+                          <ScanLine className="w-3.5 h-3.5" />
+                          Vision OCR Text Read
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText((item as GeneratedImage).ocrText || '');
+                          }}
+                          className="hover:text-amber-400 cursor-pointer flex items-center gap-1 text-[11px]"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </button>
+                      </div>
+                      <p className="font-mono text-xs max-h-24 overflow-y-auto whitespace-pre-wrap select-all text-neutral-300">
+                        "{(item as GeneratedImage).ocrText}"
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
               {type === 'video' && (

@@ -83,7 +83,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     modelUsed?: string;
     groundingSources?: any[];
   } | null>(null);
-  const [fullscreenImage, setFullscreenImage] = useState<{ url: string; prompt: string; id?: string; initialEdit?: boolean } | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<{ url: string; prompt: string; id?: string; initialEdit?: boolean; ocrText?: string } | null>(null);
   const [downloadedImageId, setDownloadedImageId] = useState<string | null>(null);
   const [generatingImageState, setGeneratingImageState] = useState<{ prompt: string; progress: number } | null>(null);
 
@@ -1313,7 +1313,13 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id, initialEdit: false });
+                                          setFullscreenImage({
+                                            url: img.imageUrl,
+                                            prompt: img.prompt,
+                                            id: img.id,
+                                            initialEdit: false,
+                                            ocrText: img.ocrText || message.ocrText,
+                                          });
                                         }}
                                         title="View Fullscreen"
                                         className="p-1.5 rounded-lg backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all shadow-md cursor-pointer"
@@ -1488,6 +1494,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         imageUrl={fullscreenImage?.url || ''}
         prompt={fullscreenImage?.prompt || ''}
         initialEdit={fullscreenImage?.initialEdit || false}
+        ocrText={fullscreenImage?.ocrText}
         theme={theme}
         onOpenInImageStudio={(promptText, url) => {
           setFullscreenImage(null);

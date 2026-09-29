@@ -552,6 +552,10 @@ export interface VisionAnalysisResult {
   ageProgressionPrompt?: string;
   subjectRemovalPrompt?: string;
   explanation?: string;
+  ocrElements?: string[];
+  intent?: 'edit' | 'create';
+  editDirectives?: string;
+  mode?: 'edit' | 'create';
 }
 
 // Deep Vision OCR & Multimodal Transformation Intelligence using Gemini 3.8 Flash
@@ -567,6 +571,8 @@ async function analyzeImageWithVision(
     visualDescription: "",
     optimizedPrompt: userInstruction || "A cinematic visual masterpiece",
     explanation: "",
+    ocrElements: [],
+    intent: "create",
   };
 
   const imagePart = await extractImageInlineData(imageStr);
@@ -581,53 +587,79 @@ async function analyzeImageWithVision(
 
   try {
     const ai = getGenAiClient(effectiveKey);
-    const instruction = (userInstruction || "Analyze image, extract all visible text via OCR, and identify all people and subjects").trim();
+    const instruction = (userInstruction || "Analyze image, extract all visible text via Vision OCR, and identify all people, objects and scene elements").trim();
 
     const isRemovalInstruction = /(?:remove|erase|delete|eliminate|take\s+out|take\s+away|crop\s+out|without)\b/i.test(instruction);
 
     const visionPrompt = `You are ForgeX Vision OCR & Multimodal Image Transformation Intelligence.
-Analyze the attached image and the user's creative instruction: "${instruction}".
+Analyze the attached image and the user's prompt/instruction: "${instruction}".
 
 CORE RESPONSIBILITIES:
-1. VISION OCR: Read and transcribe EVERY single word, character, logo, sign, lettering, title, or label visible anywhere in the image. Set "ocrText" to the exact transcribed text. Set "hasText" to true if any text was found.
-2. SUBJECT & FACE DETECTION: Identify and describe all people, subjects, their ages, genders, distinct visual characteristics (such as body paint, silver skin, costumes, clothing, props), and exact spatial positions.
-3. INSTRUCTION-GUIDED DIFFUSION SYNTHESIS:
-   - CRITICAL ZERO-NEGATION RULE FOR SUBJECT REMOVAL:
-     Text-to-image diffusion models (like FLUX) CANNOT understand negative terms like "remove", "without", or "no". If a diffusion prompt mentions "man painted in silver", the generator WILL draw a silver man!
-     THEREFORE:
-     * When the user asks to remove or erase something (e.g. "remove the man painted in silver"), your "optimizedPrompt" and "subjectRemovalPrompt" MUST DESCRIBE ONLY WHAT REMAINS IN POSITIVE VISUAL TERMS!
-     * NEVER include the name, description, colors, or words of the removed subject in the generation prompt! (Do NOT say "silver", do NOT say "man painted in silver", do NOT say "without silver man").
-     * Instead, describe the background scenery, architectural details, ground paving/textures, natural lighting, and any remaining subjects, with the area seamlessly infilled and clean.
-   - AGE PROGRESSION / "HOW WILL HE LOOK AT 20": If the user asks how a person/child will look at 20 (or any other age), create an optimized generation prompt that preserves their EXACT identity (facial bone structure, eye shape and color, ethnic traits, nose shape, lip shape, hair texture) but matured to age 20 (adult facial definition, matured jawline, realistic skin pores, adult hairstyle and stylish modern clothing, 8k photographic studio quality).
-   - SUBJECT REMOVAL / "REMOVE ONE PERSON": Create an infilled scene prompt depicting ONLY the kept person or background, completely omitting the removed person.
-   - OCR RECREATION: If the user wants to extract or work with text, incorporate the exact or modified text cleanly into the prompt.
-   - GENERAL EDITS: If the user requests any other transformation, produce a rich diffusion prompt that retains the reference image's visual identity while executing the change.
-4. EXPLANATION:
-   - Provide a clear, natural explanation addressed directly to the user explaining what you identified in the image, acknowledging their text instruction, and describing what was done.
+1. DEEP VISION OCR:
+   - Read and transcribe EVERY single word, number, character, logo, sign, slogan, lettering, title, or label visible anywhere in the image.
+   - Transcribe typography, handwriting, signage, billboards, book covers, brand names, clothing/t-shirt text, graffiti, license plates, digital displays, packaging, and badges.
+   - Set "ocrText" to the exact transcribed text. Set "hasText" to true if any text was found.
+   - Set "ocrElements" to an array describing each distinct detected text item and where it appears (e.g. ["Sign: 'CAFE OPEN'", "T-Shirt: 'NEW YORK'", "Packaging: 'ORGANIC'"]).
+
+2. SUBJECT & SCENE UNDERSTANDING:
+   - Identify and describe all people, subjects, their ages, distinct visual characteristics, outfits, objects, colors, atmosphere, perspective, and art style.
+   - Set "subjectsDetected" to an array describing each detected subject/element.
+   - Set "visualDescription" to a comprehensive scene description.
+
+3. USER INTENT CLASSIFICATION (EDIT vs CREATE):
+   - "edit": The user wants to modify, transform, inpaint, alter, change text, remove/add subjects, or restyle the attached image.
+   - "create": The user wants to generate a new image inspired by, based on, or incorporating the text/elements from the attached image.
+   - Set "intent" to either "edit" or "create".
+
+4. INSTRUCTION-GUIDED PROMPT SYNTHESIS:
+   - For EDITING:
+     * Provide "editDirectives": concise, precise instructions for what to change and what to keep.
+     * ZERO-NEGATION RULE: If removing an object/person, describe the remaining background/scene in positive terms without negative words like "remove" or "no".
+     * If modifying or replacing text, state the exact new text to display clearly.
+   - For CREATING:
+     * In "optimizedPrompt", synthesize a complete, rich diffusion prompt that weaves in the extracted OCR text and prompt requirements cleanly.
+   - AGE PROGRESSION ("how will he look at 20"):
+     * In "ageProgressionPrompt", describe the subject matured to age 20 while preserving their facial bone structure, ethnic traits, eye shape, and identity.
+   - SUBJECT REMOVAL:
+     * In "subjectRemovalPrompt", describe the infilled scene with the target omitted.
+
+5. USER EXPLANATION:
+   - In "explanation", provide a friendly, clear explanation summarizing what was read via Vision OCR, the detected subjects, and how their request is being fulfilled.
 
 Return ONLY a JSON object:
 {
   "ocrText": "all extracted text from image",
   "hasText": boolean,
-  "subjectsDetected": ["description of subject 1", "description of subject 2"],
+  "ocrElements": ["text element 1", "text element 2"],
+  "subjectsDetected": ["subject 1", "subject 2"],
   "visualDescription": "detailed scene description",
-  "explanation": "friendly, intelligent explanation to user of what was recognized in the image and how their text instruction was fulfilled",
-  "optimizedPrompt": "complete, highly detailed positive prompt for diffusion model to generate the exact requested scene without negative words",
+  "intent": "edit" | "create",
+  "editDirectives": "precise instructions for image editing",
+  "explanation": "friendly, intelligent explanation to user of what was recognized and how their instruction was fulfilled",
+  "optimizedPrompt": "complete, highly detailed positive prompt for diffusion/generation",
   "ageProgressionPrompt": "specific prompt for aging subject to 20",
   "subjectRemovalPrompt": "positive diffusion prompt for removing target subject and infilling scene"
 }`;
 
-    const res = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: {
-        parts: [imagePart, { text: visionPrompt }],
-      },
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
-
-    const reply = res.text?.trim() || "";
+    const candidateVisionModels = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
+    let reply = "";
+    for (const vModel of candidateVisionModels) {
+      try {
+        const res = await ai.models.generateContent({
+          model: vModel,
+          contents: {
+            parts: [imagePart, { text: visionPrompt }],
+          },
+          config: {
+            responseMimeType: "application/json",
+          },
+        });
+        reply = res.text?.trim() || "";
+        if (reply) break;
+      } catch (mErr: any) {
+        console.warn(`Vision model ${vModel} attempt notice:`, mErr?.message || mErr);
+      }
+    }
     if (reply) {
       try {
         const parsed = JSON.parse(reply);
@@ -636,7 +668,7 @@ Return ONLY a JSON object:
           chosenOptimizedPrompt = parsed.subjectRemovalPrompt;
         }
 
-        // Double check: If chosenOptimizedPrompt still starts with "remove", strip it
+        // If chosenOptimizedPrompt still starts with "remove", fallback to visual description
         if (/^remove\s+/i.test(chosenOptimizedPrompt)) {
           chosenOptimizedPrompt = parsed.visualDescription || "A beautiful scenic photograph with clear background, sharp focus, 8k";
         }
@@ -654,6 +686,9 @@ Return ONLY a JSON object:
           optimizedPrompt: chosenOptimizedPrompt,
           ageProgressionPrompt: parsed.ageProgressionPrompt,
           subjectRemovalPrompt: parsed.subjectRemovalPrompt,
+          ocrElements: Array.isArray(parsed.ocrElements) ? parsed.ocrElements : [],
+          intent: parsed.intent === "edit" ? "edit" : "create",
+          editDirectives: parsed.editDirectives || "",
         };
       } catch (err) {
         console.warn("Failed to parse vision response JSON:", err);
@@ -686,15 +721,18 @@ async function generateRealAiImage(
   let visualAnalysisDesc = "";
 
   // 0. If a reference image is provided, run Vision OCR & multimodal understanding
+  let visionResultObj: VisionAnalysisResult | null = null;
   if (referenceImage) {
     try {
-      const visionResult = await analyzeImageWithVision(referenceImage, cleanPrompt, apiKey);
-      if (visionResult.ocrText) {
-        ocrResultText = visionResult.ocrText;
+      visionResultObj = await analyzeImageWithVision(referenceImage, effectiveInstruction, apiKey);
+      if (visionResultObj.ocrText) {
+        ocrResultText = visionResultObj.ocrText;
       }
-      visualAnalysisDesc = visionResult.explanation || visionResult.visualDescription || "";
-      if (visionResult.optimizedPrompt && visionResult.optimizedPrompt !== cleanPrompt) {
-        fullPrompt = visionResult.optimizedPrompt;
+      visualAnalysisDesc = visionResultObj.explanation || visionResultObj.visualDescription || "";
+      if (visionResultObj.optimizedPrompt && visionResultObj.optimizedPrompt !== cleanPrompt) {
+        fullPrompt = visionResultObj.optimizedPrompt;
+      } else if (ocrResultText) {
+        fullPrompt = `${cleanPrompt}. Extracted image text: "${ocrResultText}". Featuring crisp, readable typography.`;
       }
     } catch (visionErr) {
       console.warn("Vision analysis in image pipeline notice:", visionErr);
@@ -729,7 +767,7 @@ async function generateRealAiImage(
   const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
 
   // 1. If reference image is provided and effective Gemini key is available:
-  // Attempt direct multimodal image-to-image editing via gemini-3.1-flash-lite-image / gemini-3.1-flash-image
+  // Attempt direct multimodal image-to-image editing / creation via gemini-3.1-flash-lite-image / gemini-3.1-flash-image
   if (referenceImage && effectiveKey) {
     try {
       const imagePart = await extractImageInlineData(referenceImage);
@@ -738,13 +776,22 @@ async function generateRealAiImage(
         const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
         const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
 
-        const editInstructionPrompt = `You are performing a precise image edit on the attached image.
-USER INSTRUCTION: "${effectiveInstruction}".
+        const editInstructionPrompt = `You are a world-class multimodal image generation and editing intelligence.
+USER REQUEST: "${effectiveInstruction}".
 
-STRICT PRESERVATION DIRECTIVES (DO NOT VIOLATE):
-1. STRICT BACKGROUND PRESERVATION: Keep the background identical. Do not change the architecture, street, floor, ground, wall, trees, lighting, shadows, colors, or atmosphere.
-2. STRICT SUBJECT PRESERVATION: Keep the exact age, height, body proportions, posture, clothing, skin tone, hair, and facial features of all remaining people/subjects completely unchanged. Do not age them, do not make them taller or shorter, and do not change their faces.
-3. PRECISE EDIT ONLY: Edit ONLY what the user explicitly said in "${effectiveInstruction}". If the user asked to remove a subject (such as the man painted in silver), seamlessly inpaint and restore the original background behind them, perfectly matching the original perspective and lighting.`;
+VISION OCR & SCENE CONTEXT:
+${ocrResultText ? `Transcribed text from image (OCR): "${ocrResultText}"` : 'No distinct text in source image.'}
+${visualAnalysisDesc ? `Source scene analysis: ${visualAnalysisDesc}` : ''}
+${visionResultObj?.editDirectives ? `Specific transformation directives: ${visionResultObj.editDirectives}` : ''}
+
+DIRECTIVES:
+1. READ & RECOGNIZE: Carefully inspect the attached image, its text, subject, composition, and style.
+2. EDIT OR CREATE ACCORDING TO PROMPT:
+   - If the user asks to EDIT or MODIFY the attached image (e.g., change/replace text, add/remove objects, alter clothing, recolor, change atmosphere, age a person, transform style, inpaint):
+     Apply the requested edit precisely according to "${effectiveInstruction}". Modify the targeted parts while maintaining realistic visual quality and natural blend. If changing text, render the new text with razor-sharp, readable typography.
+   - If the user asks to CREATE a new image according to the prompt (using the image as reference or inspiration, or incorporating the OCR text):
+     Generate a brand-new, high-fidelity visual composition fulfilling "${effectiveInstruction}", seamlessly integrating any required text or thematic elements.
+3. QUALITY: Deliver crisp 8K resolution detail, realistic lighting, and natural blending.`;
 
         const candidateEditModels = ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"];
         for (const editModel of candidateEditModels) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Pencil, Sparkles, Check, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { X, Download, Pencil, Sparkles, Check, ArrowRight, Image as ImageIcon, ScanLine, Copy } from 'lucide-react';
 import { ForgeXTheme } from '../types';
 
 interface FullscreenImageModalProps {
@@ -9,6 +9,7 @@ interface FullscreenImageModalProps {
   prompt: string;
   theme: ForgeXTheme;
   initialEdit?: boolean;
+  ocrText?: string;
   onOpenInImageStudio?: (prompt: string, imageUrl: string) => void;
   onEditPromptAndRegenerate?: (newPrompt: string) => void;
 }
@@ -20,12 +21,14 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
   prompt,
   theme,
   initialEdit = false,
+  ocrText,
   onOpenInImageStudio,
   onEditPromptAndRegenerate,
 }) => {
   const [isEditingPrompt, setIsEditingPrompt] = useState(initialEdit);
   const [editedPrompt, setEditedPrompt] = useState(prompt);
   const [isDownloaded, setIsDownloaded] = useState(false);
+  const [ocrCopied, setOcrCopied] = useState(false);
 
   useEffect(() => {
     setEditedPrompt(prompt);
@@ -125,9 +128,28 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
         className="w-full flex items-center justify-between gap-3 z-20 pb-3 border-b border-white/10"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Left: Clean subtle icon with zero text */}
+        {/* Left: Clean subtle icon with OCR text pill if available */}
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+          {ocrText && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-mono max-w-sm sm:max-w-md truncate">
+              <ScanLine className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span className="truncate">OCR: "{ocrText}"</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(ocrText);
+                  setOcrCopied(true);
+                  setTimeout(() => setOcrCopied(false), 2000);
+                }}
+                className="hover:text-white p-0.5 text-amber-300 transition-colors ml-1"
+                title="Copy transcribed text"
+              >
+                {ocrCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right: Edit Icon, Download Icon, and Close (X) Icon */}
@@ -215,6 +237,19 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               <span>Open in Image Studio</span>
             </button>
           </div>
+
+          {ocrText && (
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-[11px] text-neutral-400">OCR Text:</span>
+              <button
+                type="button"
+                onClick={() => setEditedPrompt((prev) => (prev ? `${prev}, with text: "${ocrText}"` : `Recreate with text: "${ocrText}"`))}
+                className="text-[11px] px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-mono flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>+ Insert into Prompt</span>
+              </button>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <input

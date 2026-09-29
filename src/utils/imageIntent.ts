@@ -120,14 +120,14 @@ export function detectImageGenerationIntent(
     }
   }
 
-  // 11. Vision OCR / text-to-image extraction and regeneration
+  // 11. Vision OCR / text-to-image extraction, reading, editing, and regeneration
   const ocrMatch = clean.match(
-    /(?:(?:extract\s+text\s+(?:from|in)\s+(?:this\s+)?(?:image|photo|picture)\s+(?:and\s+)?(?:recreate|generate|make|draw)?)|(?:ocr\s+(?:this\s+)?(?:image|photo|picture))|(?:read\s+(?:the\s+)?text\s+(?:in|on|from)\s+(?:this\s+)?(?:image|photo|picture)\s+(?:and\s+)?(?:generate|recreate)?)|(?:recreate\s+(?:this\s+)?(?:image|photo|picture)\s+with\s+(?:the\s+)?text))/i
+    /(?:(?:extract\s+text\s+(?:from|in)\s+(?:this|attached)?\s*(?:image|photo|picture)\s*(?:and\s+)?(?:recreate|generate|make|draw|edit|create)?)|(?:ocr\s+(?:this|attached)?\s*(?:image|photo|picture)?)|(?:read\s+(?:the\s+)?(?:text\s+)?(?:in|on|from|attached)?\s*(?:this|attached)?\s*(?:image|photo|picture)?\s*(?:and\s+)?(?:generate|recreate|edit|create|draw)?)|(?:recreate\s+(?:this|attached)?\s*(?:image|photo|picture)\s+with\s+(?:the\s+)?text)|(?:read\s+attached\s+image\s+and\s+(?:edit|create))|(?:vison|vision)\s*ocr|(?:edit\s+or\s+create\s+according\s+to\s+(?:the\s+)?prompt))/i
   );
   if (ocrMatch) {
     return {
       isImage: true,
-      prompt: clean.replace(/[?!.]+$/, '').trim(),
+      prompt: clean.replace(/[?!.]+$/, '').trim() || 'Extract text via Vision OCR and edit or create according to the prompt',
       isVisionEdit: true,
     };
   }

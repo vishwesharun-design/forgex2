@@ -231,6 +231,9 @@ export interface VisionAnalysisResult {
   ageProgressionPrompt?: string;
   subjectRemovalPrompt?: string;
   explanation?: string;
+  ocrElements?: string[];
+  intent?: 'edit' | 'create';
+  editDirectives?: string;
 }
 
 export interface GeneratedImage {
@@ -247,6 +250,7 @@ export interface GeneratedImage {
   engine?: string;
   ocrText?: string;
   visionAnalysis?: string;
+  ocrMode?: 'edit' | 'create';
 }
 
 export type VideoDuration = '5s' | '10s' | '15s' | '20s' | '30s' | '60s' | string;

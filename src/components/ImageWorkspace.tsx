@@ -95,6 +95,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [targetAge, setTargetAge] = useState<number>(20);
   const [visionResult, setVisionResult] = useState<VisionAnalysisResult | null>(null);
   const [isAnalyzingVision, setIsAnalyzingVision] = useState(false);
+  const [ocrMode, setOcrMode] = useState<'edit' | 'create'>('edit');
   const [ocrCopied, setOcrCopied] = useState(false);
   const [selectedFluxModel, setSelectedFluxModel] = useState<string>(() => puterService.getDefaultFluxModel());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -154,6 +155,9 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
       const res = await imageService.analyzeImageWithVision(referenceImage, customInstruction || prompt);
       if (res) {
         setVisionResult(res);
+        if (res.intent) {
+          setOcrMode(res.intent);
+        }
         if (res.ocrText && (!prompt || prompt.trim() === '')) {
           setPrompt(`Recreate image preserving text: "${res.ocrText.slice(0, 100)}"`);
         }
@@ -229,12 +233,14 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
     try {
       const newImages = await imageService.generateImages({
         prompt: cleanPrompt,
+        originalInstruction: prompt || cleanPrompt,
         aspectRatio,
         count: imageCount,
         style,
         modelId: selectedModelId,
         referenceImage: referenceImage || undefined,
         fluxModel: selectedFluxModel,
+        ocrMode: referenceImage ? ocrMode : undefined,
       });
       onUpdateImages(imageService.getImages());
       checkPuterAuth();
@@ -323,10 +329,13 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
     // Auto-analyze with Gemini Vision OCR & Subject Intelligence
     setIsAnalyzingVision(true);
     imageService
-      .analyzeImageWithVision(dataUrl, prompt || 'Inspect image, extract all visible text via OCR, and identify subjects')
+      .analyzeImageWithVision(dataUrl, prompt || 'Inspect image, extract all visible text via Vision OCR, and identify subjects')
       .then((res) => {
         if (res) {
           setVisionResult(res);
+          if (res.intent) {
+            setOcrMode(res.intent);
+          }
           if (res.ocrText && (!prompt || prompt.trim() === '')) {
             setPrompt(`Recreate image preserving text: "${res.ocrText.slice(0, 100)}"`);
           }
@@ -790,19 +799,41 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
 
           {/* Reference Image Vision AI & OCR Smart Inspector Bar */}
           {referenceImage && (
-            <div className={`mb-4 p-3 sm:p-4 rounded-2xl border flex flex-col gap-2.5 transition-all ${
-              isDark ? 'bg-neutral-950/80 border-amber-500/30' : 'bg-amber-50/70 border-amber-200'
+            <div className={`mb-5 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border flex flex-col gap-3.5 transition-all shadow-md ${
+              isDark ? 'bg-neutral-950/90 border-amber-500/30 shadow-black/40' : 'bg-amber-50/80 border-amber-200 shadow-amber-500/5'
             }`}>
+              {/* Header: Photo info, Vision OCR badge & Controls */}
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <img src={referenceImage} alt="Ref" className="w-9 h-9 rounded-xl object-cover border border-amber-500/40 shadow-sm" />
+                <div className="flex items-center gap-3">
+                  <div className="relative group">
+                    <img src={referenceImage} alt="Ref" className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl object-cover border-2 border-amber-500/50 shadow-md group-hover:scale-105 transition-transform" />
+                    <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-amber-500 text-neutral-950 shadow">
+                      <ScanLine className="w-2.5 h-2.5" />
+                    </div>
+                  </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-amber-500 dark:text-amber-400">Reference Photo Active</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-500 font-semibold">Vision OCR Ready</span>
+                      <span className="text-xs sm:text-sm font-bold text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
+                        <ScanLine className="w-4 h-4 text-amber-500" />
+                        Vision OCR Active
+                      </span>
+                      {isAnalyzingVision ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold animate-pulse flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                          Scanning Text...
+                        </span>
+                      ) : visionResult?.hasText ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
+                          ✓ Text Read ({visionResult.ocrText.length} chars)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 font-semibold">
+                          Vision AI Ready
+                        </span>
+                      )}
                     </div>
-                    <p className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                      Select an instant transformation or describe your edit below
+                    <p className={`text-[11px] mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      Read attached image to edit text/scene or create a brand-new image according to prompt
                     </p>
                   </div>
                 </div>
@@ -812,18 +843,18 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                     type="button"
                     disabled={isAnalyzingVision}
                     onClick={() => handleAnalyzeVision()}
-                    title="Deep inspect image with Gemini Vision AI & OCR"
-                    className="px-2.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                    title="Deep re-inspect image with Gemini Vision AI & OCR"
+                    className="px-2.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     {isAnalyzingVision ? (
                       <>
-                        <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                        <span>Analyzing...</span>
+                        <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                        <span className="hidden sm:inline">Scanning...</span>
                       </>
                     ) : (
                       <>
-                        <ScanLine className="w-3 h-3" />
-                        <span>Vision OCR & Inspect</span>
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Re-Scan OCR</span>
                       </>
                     )}
                   </button>
@@ -835,12 +866,165 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                       setVisionResult(null);
                     }}
                     className="p-1.5 rounded-xl hover:bg-neutral-500/20 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                    title="Remove reference image"
+                    title="Remove attached image"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
+
+              {/* Mode Toggle: Read & Edit vs Read & Create New */}
+              <div className="flex items-center gap-2 p-1 rounded-xl bg-neutral-900/60 dark:bg-neutral-900/80 border border-neutral-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setOcrMode('edit')}
+                  className={`flex-1 py-1.5 px-3 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    ocrMode === 'edit'
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  <span>Read & Edit Image</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOcrMode('create')}
+                  className={`flex-1 py-1.5 px-3 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    ocrMode === 'create'
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Read & Create New</span>
+                </button>
+              </div>
+
+              <div className="text-[11px] text-neutral-400 px-1 -mt-1">
+                {ocrMode === 'edit' ? (
+                  <span>🎨 <strong>Read & Edit Mode:</strong> Reads the text & elements in the attached image and applies your edit prompt (change text, inpaint, alter subjects, restyle).</span>
+                ) : (
+                  <span>✨ <strong>Read & Create Mode:</strong> Reads the text & theme in the attached image and generates a brand-new image composition inspired by or featuring the OCR text.</span>
+                )}
+              </div>
+
+              {/* Vision OCR Transcribed Text Hub */}
+              {visionResult && (
+                <div className={`p-3 rounded-2xl border text-xs flex flex-col gap-2.5 ${
+                  isDark ? 'bg-neutral-900/95 border-neutral-800 text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
+                }`}>
+                  {visionResult.ocrText ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-amber-500 text-xs flex items-center gap-1.5">
+                          <ScanLine className="w-3.5 h-3.5" />
+                          Extracted Vision OCR Text:
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(visionResult.ocrText);
+                              setOcrCopied(true);
+                              setTimeout(() => setOcrCopied(false), 2000);
+                            }}
+                            className="text-[11px] px-2 py-0.5 rounded-lg border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            {ocrCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            <span>{ocrCopied ? 'Copied' : 'Copy Text'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Transcribed text box */}
+                      <div className={`p-2.5 rounded-xl font-mono text-xs max-h-28 overflow-y-auto select-all whitespace-pre-wrap leading-relaxed border ${
+                        isDark ? 'bg-black/60 border-neutral-800 text-neutral-200' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+                      }`}>
+                        "{visionResult.ocrText}"
+                      </div>
+
+                      {/* OCR Prompt Quick Actions */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[11px] text-neutral-400 mr-1">Use with Prompt:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPrompt((prev) => (prev ? `${prev}, with text: "${visionResult.ocrText}"` : `Recreate image with text: "${visionResult.ocrText}"`));
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-semibold border border-amber-500/30 flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <span>+ Insert in Prompt</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOcrMode('edit');
+                            setPrompt(`Change the text in the image from "${visionResult.ocrText.slice(0, 32)}" to "FORGEX"`);
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-semibold border border-amber-500/30 flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Replace Text to...</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPrompt(`Recreate this image with razor-sharp clean typography: "${visionResult.ocrText}"`);
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-semibold border border-amber-500/30 flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>Recreate with Typography</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-neutral-400 flex items-center gap-2">
+                      <ScanLine className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>No text detected in this image. Vision AI has analyzed the visual scene, objects, and lighting for editing or recreation according to your prompt.</span>
+                    </div>
+                  )}
+
+                  {/* Detected Text Elements */}
+                  {visionResult.ocrElements && visionResult.ocrElements.length > 0 && (
+                    <div className="pt-1 border-t border-neutral-800/80">
+                      <span className="font-semibold text-amber-500 text-[11px] block mb-1">Detected Text Elements:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {visionResult.ocrElements.map((elem, idx) => (
+                          <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-neutral-800 text-amber-300 border border-neutral-700">
+                            {elem}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Detected Subjects & Scene */}
+                  {visionResult.subjectsDetected && visionResult.subjectsDetected.length > 0 && (
+                    <div className="pt-1 border-t border-neutral-800/80">
+                      <span className="font-semibold text-amber-500 text-[11px] block mb-1">Subjects & Scene Detected:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {visionResult.subjectsDetected.map((sub, idx) => (
+                          <span key={idx} className="text-[11px] px-2 py-0.5 rounded-lg bg-neutral-800 text-neutral-300 border border-neutral-700">
+                            {sub}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vision AI Explanation */}
+                  {visionResult.explanation && (
+                    <p className="text-[11px] text-neutral-400 leading-relaxed italic border-t border-neutral-800/80 pt-1.5">
+                      💡 {visionResult.explanation}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Quick Action Chips */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-amber-500/15">
@@ -908,44 +1092,6 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                   <span>Cutout / Remove BG</span>
                 </button>
               </div>
-
-              {/* Display Vision Intelligence Insights if available */}
-              {visionResult && (
-                <div className={`p-2.5 rounded-xl border text-xs flex flex-col gap-1.5 ${
-                  isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
-                }`}>
-                  {visionResult.ocrText && (
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="font-semibold text-amber-500 text-[11px] block">Extracted Text (OCR):</span>
-                        <p className="font-mono text-xs truncate max-w-lg select-all">"{visionResult.ocrText}"</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPrompt((prev) => (prev ? `${prev}, with text: "${visionResult.ocrText}"` : `Recreate image with text: "${visionResult.ocrText}"`));
-                        }}
-                        className="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold hover:bg-amber-500/30 whitespace-nowrap cursor-pointer"
-                      >
-                        Insert Text
-                      </button>
-                    </div>
-                  )}
-
-                  {visionResult.subjectsDetected && visionResult.subjectsDetected.length > 0 && (
-                    <div>
-                      <span className="font-semibold text-amber-500 text-[11px] block mb-1">Subjects Detected by Vision AI:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {visionResult.subjectsDetected.map((sub, idx) => (
-                          <span key={idx} className="text-[11px] px-2 py-0.5 rounded-lg bg-neutral-800 text-neutral-300 border border-neutral-700">
-                            {sub}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
@@ -1253,6 +1399,12 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500 text-neutral-950 font-bold shadow-sm">
                         {img.engine?.includes('FLUX') ? 'FLUX' : modelMeta.badge}
                       </span>
+                      {img.ocrText && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/90 text-white font-bold flex items-center gap-1 shadow-sm border border-emerald-400/40" title={`Vision OCR: ${img.ocrText}`}>
+                          <ScanLine className="w-2.5 h-2.5" />
+                          <span>OCR</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* Top Right: Favorite & Delete */}
@@ -1350,9 +1502,24 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                     </p>
 
                     {img.ocrText && (
-                      <div className="mt-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono text-amber-500 dark:text-amber-400 truncate flex items-center gap-1.5" title={`OCR: ${img.ocrText}`}>
-                        <ScanLine className="w-3 h-3 shrink-0" />
-                        <span className="truncate">OCR: {img.ocrText}</span>
+                      <div className="mt-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono text-amber-500 dark:text-amber-400 flex items-center justify-between gap-1.5" title={`OCR: ${img.ocrText}`}>
+                        <div className="flex items-center gap-1.5 truncate">
+                          <ScanLine className="w-3 h-3 shrink-0" />
+                          <span className="truncate">OCR: {img.ocrText}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(img.ocrText || '');
+                            setCopiedId(img.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className="p-1 hover:text-amber-300 text-neutral-400 shrink-0 cursor-pointer transition-colors"
+                          title="Copy OCR Text"
+                        >
+                          {copiedId === img.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        </button>
                       </div>
                     )}
 

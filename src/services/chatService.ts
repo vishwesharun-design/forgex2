@@ -1,4 +1,4 @@
-import { ChatMessage, ChatSession, ForgeXModelId, FORGEX_MODELS, GeneratedImage } from '../types';
+import { ChatMessage, ChatSession, ForgeXModelId, FORGEX_MODELS, GeneratedImage, VisionAnalysisResult } from '../types';
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 import { generateExpertChatReply } from './knowledgeEngine';
@@ -187,12 +187,13 @@ export const chatService = {
       let generatedImagesForTurn: GeneratedImage[] = [];
       let visionExplanation = '';
       let effectivePrompt = imgIntent.prompt || 'Enhance and synthesize this image with high fidelity';
+      let visionResult: VisionAnalysisResult | null = null;
 
       // If an image is attached, run Vision analysis first to get intelligent subject removal / OCR / prompt synthesis
       if (attachedImage?.url) {
         if (onImageProgress) onImageProgress(10);
         try {
-          const visionResult = await imageService.analyzeImageWithVision(attachedImage.url, userContent);
+          visionResult = await imageService.analyzeImageWithVision(attachedImage.url, userContent);
           if (visionResult) {
             const isRemoval = /(?:remove|erase|delete|eliminate|take\s+out|take\s+away|crop\s+out|without)\b/i.test(userContent);
             const candidate = isRemoval && visionResult.subjectRemovalPrompt
@@ -214,6 +215,10 @@ export const chatService = {
       }
 
       try {
+        const ocrModeValue: 'edit' | 'create' = 
+          visionResult?.intent || 
+          (/(?:edit|modify|alter|change|replace|inpaint|remove|erase|age|swap)\b/i.test(userContent) ? 'edit' : 'create');
+
         const generated = await imageService.generateImages(
           {
             prompt: effectivePrompt,
@@ -223,6 +228,7 @@ export const chatService = {
             style: 'None', // Obey exact prompt fidelity without conflicting style injections
             modelId,
             referenceImage: attachedImage?.url,
+            ocrMode: ocrModeValue,
           },
           onImageProgress
         );
