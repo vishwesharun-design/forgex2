@@ -19,7 +19,14 @@ import {
   Scissors,
   Eraser,
   RefreshCw,
-  Palette
+  Palette,
+  FileText,
+  UserCheck,
+  Clock,
+  ScanLine,
+  ArrowRight,
+  Paperclip,
+  Clipboard
 } from 'lucide-react';
 import { 
   GeneratedImage, 
@@ -27,7 +34,8 @@ import {
   ImageStyle, 
   ForgeXModelId, 
   ForgeXTheme, 
-  FORGEX_MODELS 
+  FORGEX_MODELS,
+  VisionAnalysisResult
 } from '../types';
 import { imageService } from '../services/imageService';
 import { puterService, PUTER_FLUX_CONFIG } from '../services/puterService';
@@ -42,7 +50,16 @@ interface ImageWorkspaceProps {
   onViewFullscreen: (image: GeneratedImage) => void;
 }
 
-type StudioTool = 'text2img' | 'img2img' | 'inpaint' | 'removeBg' | 'removeObj' | 'upscale' | 'transform';
+type StudioTool = 
+  | 'text2img' 
+  | 'img2img' 
+  | 'ageProgression' 
+  | 'removeObj' 
+  | 'visionOcr' 
+  | 'inpaint' 
+  | 'removeBg' 
+  | 'upscale' 
+  | 'transform';
 
 const ASPECT_RATIOS: ImageAspectRatio[] = ['1:1', '16:9', '9:16', '4:3'];
 const IMAGE_COUNTS: number[] = [1, 2, 4];
@@ -74,10 +91,16 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState<number>(24);
-  const [objectToRemove, setObjectToRemove] = useState<string>('');
+  const [objectToRemove, setObjectToRemove] = useState<string>('one person');
+  const [targetAge, setTargetAge] = useState<number>(20);
+  const [visionResult, setVisionResult] = useState<VisionAnalysisResult | null>(null);
+  const [isAnalyzingVision, setIsAnalyzingVision] = useState(false);
+  const [ocrCopied, setOcrCopied] = useState(false);
   const [selectedFluxModel, setSelectedFluxModel] = useState<string>(() => puterService.getDefaultFluxModel());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [puterUser, setPuterUser] = useState<any>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [pasteNotification, setPasteNotification] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isDark = theme === 'dark';
@@ -120,23 +143,86 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
     }
   };
 
+  const handleAnalyzeVision = async (customInstruction?: string) => {
+    if (!referenceImage) {
+      fileInputRef.current?.click();
+      return;
+    }
+    setIsAnalyzingVision(true);
+    setErrorMessage(null);
+    try {
+      const res = await imageService.analyzeImageWithVision(referenceImage, customInstruction || prompt);
+      if (res) {
+        setVisionResult(res);
+        if (res.ocrText && (!prompt || prompt.trim() === '')) {
+          setPrompt(`Recreate image preserving text: "${res.ocrText.slice(0, 100)}"`);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Vision analysis failed:', err);
+    } finally {
+      setIsAnalyzingVision(false);
+    }
+  };
+
+  const handleSetAgeProgression = (age = 20) => {
+    setTargetAge(age);
+    setActiveStudioTool('ageProgression');
+    setPrompt(`Generate the same image on how he/she will look like at ${age}, preserving identical facial landmarks, bone structure, eye shape, and ethnic identity with adult facial maturity.`);
+    if (referenceImage && !visionResult) {
+      handleAnalyzeVision(`How will the person in this image look like at ${age}`);
+    }
+  };
+
+  const handleSetRemovePerson = (which = 'one person') => {
+    setActiveStudioTool('removeObj');
+    setObjectToRemove(which);
+    setPrompt(`Remove ${which} from this image, keeping only the primary subject with seamless natural background inpainting.`);
+    if (referenceImage && !visionResult) {
+      handleAnalyzeVision(`Remove ${which} from this image and inpaint background`);
+    }
+  };
+
+  const handleSetVisionOcr = () => {
+    setActiveStudioTool('visionOcr');
+    if (referenceImage) {
+      handleAnalyzeVision('Extract all text via Vision OCR');
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage(null);
     let cleanPrompt = prompt.trim();
-    if (!cleanPrompt) {
-      if (activeStudioTool === 'removeBg') cleanPrompt = 'Isolate foreground subject against transparent studio background, sharp cutout edges';
-      else if (activeStudioTool === 'upscale') cleanPrompt = 'Enhance photorealistic micro-details, 8K ultra-clarity HDR upscale';
-      else if (activeStudioTool === 'removeObj') cleanPrompt = `Remove ${objectToRemove || 'unwanted background elements'}, natural seamless infill`;
-      else cleanPrompt = 'A surreal futuristic monolith radiating amber thunder energy across dark mirror dunes, 8k cinematic masterpiece';
-    }
 
-    if (activeStudioTool === 'removeBg') {
-      cleanPrompt = `Clean foreground cutout, removed background: ${cleanPrompt}`;
-    } else if (activeStudioTool === 'upscale') {
-      cleanPrompt = `8K high-resolution remaster: ${cleanPrompt}`;
-    } else if (activeStudioTool === 'removeObj' && objectToRemove) {
-      cleanPrompt = `Inpainted object removal (${objectToRemove}): ${cleanPrompt}`;
+    if (!cleanPrompt) {
+      if (activeStudioTool === 'ageProgression') {
+        cleanPrompt = `Generate the same image on how he/she will look like at ${targetAge}, preserving identical facial landmarks, bone structure, eye shape, and ethnic identity with adult maturity.`;
+      } else if (activeStudioTool === 'removeObj') {
+        cleanPrompt = `Remove ${objectToRemove || 'one person'} from this image, keeping only the remaining subject with seamless natural infilled background.`;
+      } else if (activeStudioTool === 'visionOcr') {
+        cleanPrompt = visionResult?.ocrText
+          ? `Recreate image with the extracted text: "${visionResult.ocrText}"`
+          : 'Extract text via Vision OCR and recreate with clean typography';
+      } else if (activeStudioTool === 'removeBg') {
+        cleanPrompt = 'Isolate foreground subject against transparent studio background, sharp cutout edges';
+      } else if (activeStudioTool === 'upscale') {
+        cleanPrompt = 'Enhance photorealistic micro-details, 8K ultra-clarity HDR upscale';
+      } else {
+        cleanPrompt = 'A surreal futuristic monolith radiating amber thunder energy across dark mirror dunes, 8k cinematic masterpiece';
+      }
+    } else {
+      if (activeStudioTool === 'ageProgression' && !cleanPrompt.toLowerCase().includes('age') && !cleanPrompt.toLowerCase().includes(String(targetAge))) {
+        cleanPrompt = `${cleanPrompt}, aged to ${targetAge} years old, preserving facial bone structure and identity`;
+      } else if (activeStudioTool === 'removeObj' && !cleanPrompt.toLowerCase().includes('remove')) {
+        cleanPrompt = `Remove ${objectToRemove || 'one person'}: ${cleanPrompt}`;
+      } else if (activeStudioTool === 'removeBg') {
+        cleanPrompt = `Clean foreground cutout, removed background: ${cleanPrompt}`;
+      } else if (activeStudioTool === 'upscale') {
+        cleanPrompt = `8K high-resolution remaster: ${cleanPrompt}`;
+      }
     }
 
     setIsGenerating(true);
@@ -225,18 +311,169 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
     onUpdateImages(updated);
   };
 
+  const handleSetNewReferenceImage = (dataUrl: string, sourceName = 'Image') => {
+    setReferenceImage(dataUrl);
+    setVisionResult(null);
+    if (activeStudioTool === 'text2img') {
+      setActiveStudioTool('img2img');
+    }
+    setPasteNotification(`${sourceName} attached! Gemini Vision OCR & analysis running...`);
+    setTimeout(() => setPasteNotification(null), 4000);
+
+    // Auto-analyze with Gemini Vision OCR & Subject Intelligence
+    setIsAnalyzingVision(true);
+    imageService
+      .analyzeImageWithVision(dataUrl, prompt || 'Inspect image, extract all visible text via OCR, and identify subjects')
+      .then((res) => {
+        if (res) {
+          setVisionResult(res);
+          if (res.ocrText && (!prompt || prompt.trim() === '')) {
+            setPrompt(`Recreate image preserving text: "${res.ocrText.slice(0, 100)}"`);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Auto vision analysis notice:', err);
+      })
+      .finally(() => {
+        setIsAnalyzingVision(false);
+      });
+  };
+
   const handleUploadReference = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          setReferenceImage(event.target.result as string);
+          handleSetNewReferenceImage(event.target.result as string, file.name || 'Image');
         }
       };
       reader.readAsDataURL(file);
     }
+    e.target.value = '';
   };
+
+  const handlePasteImage = (e: React.ClipboardEvent | ClipboardEvent) => {
+    const clipboardData = (e as any).clipboardData;
+    if (!clipboardData) return;
+
+    let handled = false;
+    const items = clipboardData.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            handled = true;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              if (ev.target?.result) {
+                handleSetNewReferenceImage(ev.target.result as string, 'Pasted clipboard image');
+              }
+            };
+            reader.readAsDataURL(file);
+            break;
+          }
+        }
+      }
+    }
+
+    if (!handled && clipboardData.files && clipboardData.files.length > 0) {
+      for (let i = 0; i < clipboardData.files.length; i++) {
+        const file = clipboardData.files[i];
+        if (file.type.startsWith('image/')) {
+          handled = true;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            if (ev.target?.result) {
+              handleSetNewReferenceImage(ev.target.result as string, file.name || 'Pasted image');
+            }
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handlePasteButtonClick = async () => {
+    try {
+      if (navigator.clipboard && (navigator.clipboard as any).read) {
+        const items = await (navigator.clipboard as any).read();
+        for (const item of items) {
+          const imageType = item.types.find((t: string) => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              if (ev.target?.result) {
+                handleSetNewReferenceImage(ev.target.result as string, 'Pasted clipboard image');
+              }
+            };
+            reader.readAsDataURL(blob);
+            return;
+          }
+        }
+      }
+      setPasteNotification('Press Ctrl+V (or Cmd+V) to paste an image from your clipboard');
+      setTimeout(() => setPasteNotification(null), 3500);
+    } catch {
+      setPasteNotification('Press Ctrl+V (or Cmd+V) to paste an image from your clipboard');
+      setTimeout(() => setPasteNotification(null), 3500);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const file = e.dataTransfer.files[i];
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            if (ev.target?.result) {
+              handleSetNewReferenceImage(ev.target.result as string, file.name || 'Dropped image');
+            }
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    }
+  };
+
+  // Global paste listener: captures image pasted anywhere within the Studio
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (e.clipboardData && e.clipboardData.items) {
+        let hasImage = false;
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          if (e.clipboardData.items[i].type.startsWith('image/')) {
+            hasImage = true;
+            break;
+          }
+        }
+        if (hasImage) {
+          handlePasteImage(e);
+        }
+      }
+    };
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [prompt, activeStudioTool]);
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
@@ -287,7 +524,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               </button>
 
               <div className="flex items-center gap-1.5">
-                <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>FLUX:</span>
+                <span className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Engine:</span>
                 <select
                   id="select-flux-model"
                   value={selectedFluxModel}
@@ -342,9 +579,11 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
             {[
               { id: 'text2img', label: 'Text to Image', icon: Sparkles },
               { id: 'img2img', label: 'Image to Image', icon: Wand2 },
-              { id: 'inpaint', label: 'Inpaint / Edit', icon: Edit3 },
+              { id: 'ageProgression', label: 'Age Progression (At 20)', icon: Clock },
+              { id: 'removeObj', label: 'Remove Person / Object', icon: Eraser },
+              { id: 'visionOcr', label: 'Vision OCR & Recreate', icon: ScanLine },
               { id: 'removeBg', label: 'Remove Background', icon: Scissors },
-              { id: 'removeObj', label: 'Remove Object', icon: Eraser },
+              { id: 'inpaint', label: 'Inpaint / Edit', icon: Edit3 },
               { id: 'upscale', label: 'Upscale & Enhance', icon: Zap },
               { id: 'transform', label: 'Style Transform', icon: Palette },
             ].map((tool) => {
@@ -356,11 +595,18 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                   type="button"
                   onClick={() => {
                     setActiveStudioTool(tool.id as StudioTool);
-                    if (tool.id === 'img2img' && !referenceImage) {
+                    if ((tool.id === 'img2img' || tool.id === 'ageProgression' || tool.id === 'removeObj' || tool.id === 'visionOcr') && !referenceImage) {
                       fileInputRef.current?.click();
                     }
+                    if (tool.id === 'ageProgression') {
+                      handleSetAgeProgression(targetAge);
+                    } else if (tool.id === 'removeObj') {
+                      handleSetRemovePerson(objectToRemove);
+                    } else if (tool.id === 'visionOcr') {
+                      handleSetVisionOcr();
+                    }
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all cursor-pointer ${
                     isActive
                       ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
                       : isDark
@@ -375,17 +621,149 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
             })}
           </div>
 
-          {/* Contextual tool controls if removeObj or inpaint */}
+          {/* Contextual tool controls: Age Progression */}
+          {activeStudioTool === 'ageProgression' && (
+            <div className="mb-4 p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col gap-2.5 text-xs animate-in fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" />
+                  Age Progression (e.g. How will he look like at 20):
+                </span>
+                <span className="font-mono text-amber-300 font-bold text-sm">Target Age: {targetAge} Years Old</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[12, 16, 18, 20, 25, 30, 40, 50, 60].map((age) => (
+                  <button
+                    key={age}
+                    type="button"
+                    onClick={() => handleSetAgeProgression(age)}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-all ${
+                      targetAge === age
+                        ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                        : isDark
+                        ? 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:text-white'
+                        : 'bg-white border-neutral-200 text-neutral-700 hover:text-black'
+                    }`}
+                  >
+                    Age {age}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                Gemini Vision AI inspects facial bone structure, ethnic traits, eye shape, and landmarks from your reference image, accurately synthesizing how the individual will look aged to {targetAge}.
+              </p>
+            </div>
+          )}
+
+          {/* Contextual tool controls: Remove Person / Object */}
           {activeStudioTool === 'removeObj' && (
-            <div className="mb-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-center gap-3">
-              <Eraser className="w-4 h-4 text-amber-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="Name or describe the object to erase / remove (e.g. 'watermark', 'person on left', 'telephone pole')..."
-                value={objectToRemove}
-                onChange={(e) => setObjectToRemove(e.target.value)}
-                className={`w-full text-xs bg-transparent border-none focus:outline-none ${isDark ? 'text-white' : 'text-neutral-900'}`}
-              />
+            <div className="mb-4 p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col gap-2.5 text-xs animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                  <Eraser className="w-4 h-4" />
+                  Subject Removal & Inpainting:
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  'one person',
+                  'person on left',
+                  'person on right',
+                  'second person',
+                  'background people',
+                  'unwanted objects',
+                ].map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    onClick={() => handleSetRemovePerson(choice)}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold capitalize transition-all ${
+                      objectToRemove === choice
+                        ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                        : isDark
+                        ? 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:text-white'
+                        : 'bg-white border-neutral-200 text-neutral-700 hover:text-black'
+                    }`}
+                  >
+                    {choice}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="text"
+                  placeholder="Custom target to erase (e.g. 'the person standing next to him', 'sunglasses', 'watermark')..."
+                  value={objectToRemove}
+                  onChange={(e) => {
+                    setObjectToRemove(e.target.value);
+                    setPrompt(`Remove ${e.target.value || 'one person'} from this image, keeping only the remaining subject with seamless infilled background.`);
+                  }}
+                  className={`w-full text-xs px-3 py-1.5 rounded-xl border outline-none ${
+                    isDark
+                      ? 'bg-neutral-950 border-neutral-800 text-white focus:border-amber-500'
+                      : 'bg-white border-neutral-200 text-neutral-900 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Contextual tool controls: Vision OCR & Text Recreation */}
+          {activeStudioTool === 'visionOcr' && (
+            <div className="mb-4 p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col gap-2.5 text-xs animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                  <ScanLine className="w-4 h-4" />
+                  Vision OCR & Text Extraction:
+                </span>
+                {referenceImage && (
+                  <button
+                    type="button"
+                    disabled={isAnalyzingVision}
+                    onClick={() => handleAnalyzeVision('Extract all text via Vision OCR')}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500 text-neutral-950 font-bold flex items-center gap-1 hover:bg-amber-400 cursor-pointer"
+                  >
+                    {isAnalyzingVision ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                        <span>Scanning Text...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Scan Text (OCR)</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {visionResult?.ocrText ? (
+                <div className={`p-2.5 rounded-xl border font-mono text-xs flex flex-col gap-1.5 ${
+                  isDark ? 'bg-neutral-950 border-neutral-800 text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-amber-500 text-[11px]">Transcribed OCR Content:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(visionResult.ocrText);
+                        setOcrCopied(true);
+                        setTimeout(() => setOcrCopied(false), 2000);
+                      }}
+                      className="text-[11px] text-neutral-400 hover:text-amber-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {ocrCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{ocrCopied ? 'Copied' : 'Copy Text'}</span>
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap select-all max-h-28 overflow-y-auto">{visionResult.ocrText}</p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-neutral-400">
+                  Upload an image with text, signs, logos, or typography. ForgeX Vision OCR reads every word with sub-pixel precision and incorporates it into your prompt.
+                </p>
+              )}
             </div>
           )}
 
@@ -410,30 +788,277 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
             </div>
           )}
 
-          {/* Large Prompt Box as specified in Section 13 */}
-          <div className="relative mb-5">
+          {/* Reference Image Vision AI & OCR Smart Inspector Bar */}
+          {referenceImage && (
+            <div className={`mb-4 p-3 sm:p-4 rounded-2xl border flex flex-col gap-2.5 transition-all ${
+              isDark ? 'bg-neutral-950/80 border-amber-500/30' : 'bg-amber-50/70 border-amber-200'
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <img src={referenceImage} alt="Ref" className="w-9 h-9 rounded-xl object-cover border border-amber-500/40 shadow-sm" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-amber-500 dark:text-amber-400">Reference Photo Active</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-500 font-semibold">Vision OCR Ready</span>
+                    </div>
+                    <p className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      Select an instant transformation or describe your edit below
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={isAnalyzingVision}
+                    onClick={() => handleAnalyzeVision()}
+                    title="Deep inspect image with Gemini Vision AI & OCR"
+                    className="px-2.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    {isAnalyzingVision ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Analyzing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ScanLine className="w-3 h-3" />
+                        <span>Vision OCR & Inspect</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReferenceImage(null);
+                      setVisionResult(null);
+                    }}
+                    className="p-1.5 rounded-xl hover:bg-neutral-500/20 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    title="Remove reference image"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Action Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-amber-500/15">
+                <span className="text-[11px] text-neutral-500 font-medium mr-1">Quick Actions:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetAgeProgression(20)}
+                  className={`text-xs px-2.5 py-1 rounded-xl border font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                    activeStudioTool === 'ageProgression'
+                      ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                      : isDark
+                      ? 'bg-neutral-900 border-neutral-800 text-amber-300 hover:border-amber-500'
+                      : 'bg-white border-neutral-200 text-amber-700 hover:border-amber-500'
+                  }`}
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>Age to 20</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSetRemovePerson('one person')}
+                  className={`text-xs px-2.5 py-1 rounded-xl border font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                    activeStudioTool === 'removeObj'
+                      ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                      : isDark
+                      ? 'bg-neutral-900 border-neutral-800 text-amber-300 hover:border-amber-500'
+                      : 'bg-white border-neutral-200 text-amber-700 hover:border-amber-500'
+                  }`}
+                >
+                  <Eraser className="w-3 h-3" />
+                  <span>Remove One Person</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSetVisionOcr()}
+                  className={`text-xs px-2.5 py-1 rounded-xl border font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                    activeStudioTool === 'visionOcr'
+                      ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                      : isDark
+                      ? 'bg-neutral-900 border-neutral-800 text-amber-300 hover:border-amber-500'
+                      : 'bg-white border-neutral-200 text-amber-700 hover:border-amber-500'
+                  }`}
+                >
+                  <ScanLine className="w-3 h-3" />
+                  <span>Scan Text (OCR)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveStudioTool('removeBg');
+                    setPrompt('Isolate foreground subject against transparent studio background, sharp cutout edges');
+                  }}
+                  className={`text-xs px-2.5 py-1 rounded-xl border font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                    activeStudioTool === 'removeBg'
+                      ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                      : isDark
+                      ? 'bg-neutral-900 border-neutral-800 text-amber-300 hover:border-amber-500'
+                      : 'bg-white border-neutral-200 text-amber-700 hover:border-amber-500'
+                  }`}
+                >
+                  <Scissors className="w-3 h-3" />
+                  <span>Cutout / Remove BG</span>
+                </button>
+              </div>
+
+              {/* Display Vision Intelligence Insights if available */}
+              {visionResult && (
+                <div className={`p-2.5 rounded-xl border text-xs flex flex-col gap-1.5 ${
+                  isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
+                }`}>
+                  {visionResult.ocrText && (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-semibold text-amber-500 text-[11px] block">Extracted Text (OCR):</span>
+                        <p className="font-mono text-xs truncate max-w-lg select-all">"{visionResult.ocrText}"</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPrompt((prev) => (prev ? `${prev}, with text: "${visionResult.ocrText}"` : `Recreate image with text: "${visionResult.ocrText}"`));
+                        }}
+                        className="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold hover:bg-amber-500/30 whitespace-nowrap cursor-pointer"
+                      >
+                        Insert Text
+                      </button>
+                    </div>
+                  )}
+
+                  {visionResult.subjectsDetected && visionResult.subjectsDetected.length > 0 && (
+                    <div>
+                      <span className="font-semibold text-amber-500 text-[11px] block mb-1">Subjects Detected by Vision AI:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {visionResult.subjectsDetected.map((sub, idx) => (
+                          <span key={idx} className="text-[11px] px-2 py-0.5 rounded-lg bg-neutral-800 text-neutral-300 border border-neutral-700">
+                            {sub}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notification banner for paste or attach actions */}
+          {pasteNotification && (
+            <div className="mb-3 px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs flex items-center justify-between animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-pulse" />
+                <span>{pasteNotification}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasteNotification(null)}
+                className="hover:text-amber-200 text-neutral-400"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Large Prompt Box with Paste, Attach & Drag-and-Drop */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`relative mb-5 rounded-2xl border transition-all ${
+              isDraggingOver
+                ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30'
+                : isDark
+                ? 'bg-neutral-950 border-neutral-800 focus-within:border-amber-500'
+                : 'bg-neutral-50 border-neutral-200 focus-within:border-amber-500'
+            }`}
+          >
+            {isDraggingOver && (
+              <div className="absolute inset-0 z-20 rounded-2xl bg-amber-500/20 backdrop-blur-[2px] border-2 border-dashed border-amber-500 flex flex-col items-center justify-center pointer-events-none">
+                <Upload className="w-8 h-8 text-amber-400 animate-bounce mb-1" />
+                <span className="text-xs font-bold text-amber-300">Drop image here to attach & run Vision OCR</span>
+              </div>
+            )}
+
+            {/* Prompt textarea */}
             <textarea
               id="image-prompt-textarea"
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the image you want to create..."
-              className={`w-full p-4 rounded-2xl border text-sm leading-relaxed outline-none transition-all resize-none ${
-                isDark
-                  ? 'bg-neutral-950 border-neutral-800 focus:border-amber-500 text-white placeholder:text-neutral-500'
-                  : 'bg-neutral-50 border-neutral-200 focus:border-amber-500 text-neutral-900 placeholder:text-neutral-400'
+              onPaste={handlePasteImage}
+              placeholder="Describe the image to create or transform (e.g. 'how will he looklike at 20', 'remove one person', 'extract text & recreate')... Tip: You can also paste any image (Ctrl+V) or drop it here!"
+              className={`w-full p-4 pb-2 bg-transparent text-sm leading-relaxed outline-none resize-none transition-all ${
+                isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-400'
               }`}
             />
 
-            {referenceImage && (
-              <div className="absolute right-3 bottom-3 flex items-center gap-2 px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-xs text-amber-400">
-                <img src={referenceImage} alt="Ref" className="w-4 h-4 rounded object-cover" />
-                <span>Reference active</span>
-                <button onClick={() => setReferenceImage(null)} className="hover:text-white">
-                  <X className="w-3 h-3" />
+            {/* Bottom Actions Bar inside Prompt Box */}
+            <div className={`px-3 py-2 border-t flex flex-wrap items-center justify-between gap-2 text-xs ${
+              isDark ? 'border-neutral-800/80 bg-neutral-950/60' : 'border-neutral-200/80 bg-neutral-100/60'
+            }`}>
+              {/* Left: Attach & Paste Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload an image from your device"
+                  className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all font-medium cursor-pointer ${
+                    referenceImage
+                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                      : isDark
+                      ? 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-amber-500/50 hover:text-white'
+                      : 'border-neutral-300 bg-white text-neutral-700 hover:border-amber-500/50 hover:text-neutral-900'
+                  }`}
+                >
+                  <Paperclip className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{referenceImage ? 'Change Image' : 'Attach Image'}</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handlePasteButtonClick}
+                  title="Paste image directly from clipboard (or press Ctrl+V / Cmd+V)"
+                  className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all font-medium cursor-pointer ${
+                    isDark
+                      ? 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-amber-500/50 hover:text-white'
+                      : 'border-neutral-300 bg-white text-neutral-700 hover:border-amber-500/50 hover:text-neutral-900'
+                  }`}
+                >
+                  <Clipboard className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Paste Image</span>
+                </button>
+
+                <span className="hidden sm:inline text-[11px] text-neutral-500">
+                  (Or press Ctrl+V / Cmd+V to paste)
+                </span>
               </div>
-            )}
+
+              {/* Right: Quick clear or reference indicator */}
+              <div className="flex items-center gap-2">
+                {referenceImage && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[11px] text-emerald-400 font-medium">Image Loaded</span>
+                  </div>
+                )}
+                {prompt && (
+                  <button
+                    type="button"
+                    onClick={() => setPrompt('')}
+                    className="text-[11px] text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
+                  >
+                    Clear text
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Control Settings Grid */}
@@ -551,12 +1176,12 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               {isGenerating ? (
                 <>
                   <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
-                  <span>Synthesizing ({activeFluxModelInfo.badge} via Puter)...</span>
+                  <span>Synthesizing Image...</span>
                 </>
               ) : (
                 <>
                   <Zap className="w-4 h-4 fill-neutral-950" />
-                  <span>Generate Image (FLUX)</span>
+                  <span>Generate Image</span>
                 </>
               )}
             </button>
@@ -723,6 +1348,14 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                     <p className={`text-xs line-clamp-2 leading-relaxed ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                       {img.prompt}
                     </p>
+
+                    {img.ocrText && (
+                      <div className="mt-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono text-amber-500 dark:text-amber-400 truncate flex items-center gap-1.5" title={`OCR: ${img.ocrText}`}>
+                        <ScanLine className="w-3 h-3 shrink-0" />
+                        <span className="truncate">OCR: {img.ocrText}</span>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between mt-3 text-[11px] text-neutral-500">
                       <span className="text-amber-500/90 font-medium truncate max-w-[170px]" title={img.engine || "Black Forest Labs FLUX"}>
                         {img.engine || 'Black Forest Labs FLUX'}

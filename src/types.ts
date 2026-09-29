@@ -195,6 +195,7 @@ export interface ChatMessage {
   }[];
   generatedImages?: GeneratedImage[];
   isGeneratingImage?: boolean;
+  ocrText?: string;
 }
 
 export interface ChatSession {
@@ -221,6 +222,17 @@ export type ImageStyle =
   | 'Pixel Art' 
   | 'Custom';
 
+export interface VisionAnalysisResult {
+  ocrText: string;
+  hasText: boolean;
+  subjectsDetected: string[];
+  visualDescription: string;
+  optimizedPrompt: string;
+  ageProgressionPrompt?: string;
+  subjectRemovalPrompt?: string;
+  explanation?: string;
+}
+
 export interface GeneratedImage {
   id: string;
   prompt: string;
@@ -233,6 +245,8 @@ export interface GeneratedImage {
   referenceImage?: string;
   customStyle?: string;
   engine?: string;
+  ocrText?: string;
+  visionAnalysis?: string;
 }
 
 export type VideoDuration = '5s' | '10s' | '15s' | '20s' | '30s' | '60s' | string;

@@ -495,7 +495,178 @@ async function* generateContentStreamResilient(
   throw lastError || new Error("All streaming models failed.");
 }
 
-// Generate prompt-specific real AI image using Black Forest Labs FLUX / Imagen 3 pipeline
+interface ExtractedImagePart {
+  inlineData: {
+    mimeType: string;
+    data: string;
+  };
+}
+
+async function extractImageInlineData(imageStr: string): Promise<ExtractedImagePart | null> {
+  try {
+    if (!imageStr || typeof imageStr !== "string") return null;
+    const trimmed = imageStr.trim();
+    if (trimmed.startsWith("data:")) {
+      const match = trimmed.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match && match[2]) {
+        return {
+          inlineData: {
+            mimeType: match[1] || "image/jpeg",
+            data: match[2],
+          },
+        };
+      }
+    } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const res = await fetch(trimmed, { signal: AbortSignal.timeout(6000) });
+      if (res.ok) {
+        const buffer = await res.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString("base64");
+        const mimeType = res.headers.get("content-type") || "image/jpeg";
+        return {
+          inlineData: {
+            mimeType,
+            data: base64,
+          },
+        };
+      }
+    } else if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 100) {
+      return {
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: trimmed,
+        },
+      };
+    }
+  } catch (err) {
+    console.warn("Failed to extract image inline data:", err);
+  }
+  return null;
+}
+
+export interface VisionAnalysisResult {
+  ocrText: string;
+  hasText: boolean;
+  subjectsDetected: string[];
+  visualDescription: string;
+  optimizedPrompt: string;
+  ageProgressionPrompt?: string;
+  subjectRemovalPrompt?: string;
+  explanation?: string;
+}
+
+// Deep Vision OCR & Multimodal Transformation Intelligence using Gemini 3.8 Flash
+async function analyzeImageWithVision(
+  imageStr: string,
+  userInstruction?: string,
+  apiKey?: string
+): Promise<VisionAnalysisResult> {
+  const defaultOutput: VisionAnalysisResult = {
+    ocrText: "",
+    hasText: false,
+    subjectsDetected: [],
+    visualDescription: "",
+    optimizedPrompt: userInstruction || "A cinematic visual masterpiece",
+    explanation: "",
+  };
+
+  const imagePart = await extractImageInlineData(imageStr);
+  if (!imagePart) {
+    return defaultOutput;
+  }
+
+  const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
+  if (!effectiveKey) {
+    return defaultOutput;
+  }
+
+  try {
+    const ai = getGenAiClient(effectiveKey);
+    const instruction = (userInstruction || "Analyze image, extract all visible text via OCR, and identify all people and subjects").trim();
+
+    const isRemovalInstruction = /(?:remove|erase|delete|eliminate|take\s+out|take\s+away|crop\s+out|without)\b/i.test(instruction);
+
+    const visionPrompt = `You are ForgeX Vision OCR & Multimodal Image Transformation Intelligence.
+Analyze the attached image and the user's creative instruction: "${instruction}".
+
+CORE RESPONSIBILITIES:
+1. VISION OCR: Read and transcribe EVERY single word, character, logo, sign, lettering, title, or label visible anywhere in the image. Set "ocrText" to the exact transcribed text. Set "hasText" to true if any text was found.
+2. SUBJECT & FACE DETECTION: Identify and describe all people, subjects, their ages, genders, distinct visual characteristics (such as body paint, silver skin, costumes, clothing, props), and exact spatial positions.
+3. INSTRUCTION-GUIDED DIFFUSION SYNTHESIS:
+   - CRITICAL ZERO-NEGATION RULE FOR SUBJECT REMOVAL:
+     Text-to-image diffusion models (like FLUX) CANNOT understand negative terms like "remove", "without", or "no". If a diffusion prompt mentions "man painted in silver", the generator WILL draw a silver man!
+     THEREFORE:
+     * When the user asks to remove or erase something (e.g. "remove the man painted in silver"), your "optimizedPrompt" and "subjectRemovalPrompt" MUST DESCRIBE ONLY WHAT REMAINS IN POSITIVE VISUAL TERMS!
+     * NEVER include the name, description, colors, or words of the removed subject in the generation prompt! (Do NOT say "silver", do NOT say "man painted in silver", do NOT say "without silver man").
+     * Instead, describe the background scenery, architectural details, ground paving/textures, natural lighting, and any remaining subjects, with the area seamlessly infilled and clean.
+   - AGE PROGRESSION / "HOW WILL HE LOOK AT 20": If the user asks how a person/child will look at 20 (or any other age), create an optimized generation prompt that preserves their EXACT identity (facial bone structure, eye shape and color, ethnic traits, nose shape, lip shape, hair texture) but matured to age 20 (adult facial definition, matured jawline, realistic skin pores, adult hairstyle and stylish modern clothing, 8k photographic studio quality).
+   - SUBJECT REMOVAL / "REMOVE ONE PERSON": Create an infilled scene prompt depicting ONLY the kept person or background, completely omitting the removed person.
+   - OCR RECREATION: If the user wants to extract or work with text, incorporate the exact or modified text cleanly into the prompt.
+   - GENERAL EDITS: If the user requests any other transformation, produce a rich diffusion prompt that retains the reference image's visual identity while executing the change.
+4. EXPLANATION:
+   - Provide a clear, natural explanation addressed directly to the user explaining what you identified in the image, acknowledging their text instruction, and describing what was done.
+
+Return ONLY a JSON object:
+{
+  "ocrText": "all extracted text from image",
+  "hasText": boolean,
+  "subjectsDetected": ["description of subject 1", "description of subject 2"],
+  "visualDescription": "detailed scene description",
+  "explanation": "friendly, intelligent explanation to user of what was recognized in the image and how their text instruction was fulfilled",
+  "optimizedPrompt": "complete, highly detailed positive prompt for diffusion model to generate the exact requested scene without negative words",
+  "ageProgressionPrompt": "specific prompt for aging subject to 20",
+  "subjectRemovalPrompt": "positive diffusion prompt for removing target subject and infilling scene"
+}`;
+
+    const res = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: {
+        parts: [imagePart, { text: visionPrompt }],
+      },
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    const reply = res.text?.trim() || "";
+    if (reply) {
+      try {
+        const parsed = JSON.parse(reply);
+        let chosenOptimizedPrompt = parsed.optimizedPrompt || instruction;
+        if (isRemovalInstruction && parsed.subjectRemovalPrompt) {
+          chosenOptimizedPrompt = parsed.subjectRemovalPrompt;
+        }
+
+        // Double check: If chosenOptimizedPrompt still starts with "remove", strip it
+        if (/^remove\s+/i.test(chosenOptimizedPrompt)) {
+          chosenOptimizedPrompt = parsed.visualDescription || "A beautiful scenic photograph with clear background, sharp focus, 8k";
+        }
+
+        const explanation = parsed.explanation || (parsed.visualDescription
+          ? `I've analyzed the image (${parsed.visualDescription.slice(0, 120)}...) and updated the scene according to your request.`
+          : `I've analyzed your image and processed your request: "${instruction}".`);
+
+        return {
+          ocrText: parsed.ocrText || "",
+          hasText: Boolean(parsed.hasText || (parsed.ocrText && parsed.ocrText.trim().length > 0)),
+          subjectsDetected: Array.isArray(parsed.subjectsDetected) ? parsed.subjectsDetected : [],
+          visualDescription: parsed.visualDescription || "",
+          explanation,
+          optimizedPrompt: chosenOptimizedPrompt,
+          ageProgressionPrompt: parsed.ageProgressionPrompt,
+          subjectRemovalPrompt: parsed.subjectRemovalPrompt,
+        };
+      } catch (err) {
+        console.warn("Failed to parse vision response JSON:", err);
+      }
+    }
+  } catch (err) {
+    console.warn("Vision OCR / subject analysis notice:", err);
+  }
+
+  return defaultOutput;
+}
+
+// Generate prompt-specific real AI image using Black Forest Labs FLUX / Imagen 3 / Gemini Vision pipeline
 async function generateRealAiImage(
   prompt: string, 
   style: string, 
@@ -504,17 +675,39 @@ async function generateRealAiImage(
   customStyleDesc?: string,
   fluxModel?: string,
   apiKey?: string,
-  puterAuthToken?: string
-): Promise<{ imageUrl: string; engine: string }> {
+  puterAuthToken?: string,
+  referenceImage?: string,
+  originalInstruction?: string
+): Promise<{ imageUrl: string; engine: string; ocrText?: string; visionAnalysis?: string }> {
   const cleanPrompt = (prompt || "A cinematic visual masterpiece").trim();
+  const effectiveInstruction = (originalInstruction || cleanPrompt).trim();
   let fullPrompt = cleanPrompt;
+  let ocrResultText = "";
+  let visualAnalysisDesc = "";
+
+  // 0. If a reference image is provided, run Vision OCR & multimodal understanding
+  if (referenceImage) {
+    try {
+      const visionResult = await analyzeImageWithVision(referenceImage, cleanPrompt, apiKey);
+      if (visionResult.ocrText) {
+        ocrResultText = visionResult.ocrText;
+      }
+      visualAnalysisDesc = visionResult.explanation || visionResult.visualDescription || "";
+      if (visionResult.optimizedPrompt && visionResult.optimizedPrompt !== cleanPrompt) {
+        fullPrompt = visionResult.optimizedPrompt;
+      }
+    } catch (visionErr) {
+      console.warn("Vision analysis in image pipeline notice:", visionErr);
+    }
+  }
+
   if (style && style !== "None") {
     const styleDesc = customStyleDesc?.trim() || STYLE_PROMPTS[style] || `${style} style`;
-    if (styleDesc) {
-      fullPrompt = `${cleanPrompt}, ${styleDesc}`;
+    if (styleDesc && !fullPrompt.includes(styleDesc)) {
+      fullPrompt = `${fullPrompt}, ${styleDesc}`;
     }
-  } else if (customStyleDesc?.trim()) {
-    fullPrompt = `${cleanPrompt}, ${customStyleDesc.trim()}`;
+  } else if (customStyleDesc?.trim() && !fullPrompt.includes(customStyleDesc.trim())) {
+    fullPrompt = `${fullPrompt}, ${customStyleDesc.trim()}`;
   }
 
   let width = 1024;
@@ -533,7 +726,64 @@ async function generateRealAiImage(
     height = 1024;
   }
 
-  // 1. If Puter auth token is available, generate with official Black Forest Labs FLUX via Puter SDK
+  const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
+
+  // 1. If reference image is provided and effective Gemini key is available:
+  // Attempt direct multimodal image-to-image editing via gemini-3.1-flash-lite-image / gemini-3.1-flash-image
+  if (referenceImage && effectiveKey) {
+    try {
+      const imagePart = await extractImageInlineData(referenceImage);
+      if (imagePart) {
+        const ai = getGenAiClient(effectiveKey);
+        const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
+        const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
+
+        const editInstructionPrompt = `You are performing a precise image edit on the attached image.
+USER INSTRUCTION: "${effectiveInstruction}".
+
+STRICT PRESERVATION DIRECTIVES (DO NOT VIOLATE):
+1. STRICT BACKGROUND PRESERVATION: Keep the background identical. Do not change the architecture, street, floor, ground, wall, trees, lighting, shadows, colors, or atmosphere.
+2. STRICT SUBJECT PRESERVATION: Keep the exact age, height, body proportions, posture, clothing, skin tone, hair, and facial features of all remaining people/subjects completely unchanged. Do not age them, do not make them taller or shorter, and do not change their faces.
+3. PRECISE EDIT ONLY: Edit ONLY what the user explicitly said in "${effectiveInstruction}". If the user asked to remove a subject (such as the man painted in silver), seamlessly inpaint and restore the original background behind them, perfectly matching the original perspective and lighting.`;
+
+        const candidateEditModels = ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"];
+        for (const editModel of candidateEditModels) {
+          try {
+            const imageEditRes = await ai.models.generateContent({
+              model: editModel,
+              contents: {
+                parts: [
+                  imagePart,
+                  { text: editInstructionPrompt },
+                ],
+              },
+              config: {
+                imageConfig: {
+                  aspectRatio: targetRatio as any,
+                },
+              },
+            });
+            for (const part of imageEditRes.candidates?.[0]?.content?.parts || []) {
+              if (part.inlineData?.data) {
+                return {
+                  imageUrl: `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`,
+                  engine: "Gemini Vision Image Editing",
+                  ocrText: ocrResultText,
+                  visionAnalysis: visualAnalysisDesc,
+                };
+              }
+            }
+          } catch (modelErr) {
+            console.warn(`[Gemini Img2Img] Model ${editModel} notice:`, modelErr);
+          }
+        }
+      }
+    } catch (editErr) {
+      console.warn("[Gemini Vision Img2Img] Notice, trying Puter / Imagen pipeline:", editErr);
+    }
+  }
+
+  // 2. If Puter auth token is available, generate with official Black Forest Labs FLUX via Puter SDK
   if (puterAuthToken) {
     try {
       const puterModule = await import("@heyputer/puter.js");
@@ -541,17 +791,24 @@ async function generateRealAiImage(
       if (puter && typeof puter.setAuthToken === "function" && puter.ai?.txt2img) {
         puter.setAuthToken(puterAuthToken);
         const targetModel = fluxModel || "black-forest-labs/flux-1.1-pro";
-        const puterRes = await puter.ai.txt2img(fullPrompt, {
+        const puterOptions: Record<string, any> = {
           model: targetModel,
           width,
           height,
-        });
+        };
+        if (referenceImage) {
+          puterOptions.image_url = referenceImage;
+          puterOptions.input_image = referenceImage;
+        }
+        const puterRes = await puter.ai.txt2img(fullPrompt, puterOptions);
         const resAny = puterRes as any;
         const url = typeof puterRes === "string" ? puterRes : resAny?.src || resAny?.url;
         if (url) {
           return {
             imageUrl: url,
             engine: "Black Forest Labs FLUX (Puter)",
+            ocrText: ocrResultText,
+            visionAnalysis: visualAnalysisDesc,
           };
         }
       }
@@ -560,7 +817,7 @@ async function generateRealAiImage(
     }
   }
 
-  // 2. Official Black Forest Labs BFL API (if BFL_API_KEY is configured)
+  // 3. Official Black Forest Labs BFL API (if BFL_API_KEY is configured)
   const bflKey = process.env.BFL_API_KEY?.trim();
   if (bflKey) {
     try {
@@ -580,7 +837,6 @@ async function generateRealAiImage(
       if (bflRes.ok) {
         const bflData = (await bflRes.json()) as any;
         if (bflData.id && bflData.polling_url) {
-          // Poll for completion (up to 30 seconds)
           for (let poll = 0; poll < 15; poll++) {
             await new Promise((r) => setTimeout(r, 2000));
             const pollRes = await fetch(bflData.polling_url, {
@@ -592,6 +848,8 @@ async function generateRealAiImage(
                 return {
                   imageUrl: pollData.result.sample,
                   engine: "Black Forest Labs FLUX 1.1 Pro (BFL API)",
+                  ocrText: ocrResultText,
+                  visionAnalysis: visualAnalysisDesc,
                 };
               }
             }
@@ -603,8 +861,7 @@ async function generateRealAiImage(
     }
   }
 
-  // 3. Google Imagen 3 (High-Fidelity Diffusion) if API key is provided
-  const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
+  // 4. Google Imagen 3 (High-Fidelity Diffusion) if API key is provided
   if (effectiveKey) {
     try {
       const ai = getGenAiClient(effectiveKey);
@@ -624,6 +881,8 @@ async function generateRealAiImage(
         return {
           imageUrl: `data:image/jpeg;base64,${imgBytes}`,
           engine: "Google Imagen 3 (High Fidelity)",
+          ocrText: ocrResultText,
+          visionAnalysis: visualAnalysisDesc,
         };
       }
     } catch (_err) {}
@@ -1409,6 +1668,7 @@ async function startServer() {
     try {
       const {
         prompt,
+        originalInstruction,
         aspectRatio = "16:9",
         count = 1,
         style = "Cinematic",
@@ -1429,6 +1689,9 @@ async function startServer() {
       sendEvent({ progress: 15, stage: "initializing", message: "Initializing Black Forest Labs FLUX latent space..." });
 
       // Stage 2: Prompt conditioning & Cross Attention
+      if (referenceImage) {
+        sendEvent({ progress: 25, stage: "vision_ocr", message: "Inspecting image with Gemini Vision AI & OCR..." });
+      }
       sendEvent({ progress: 35, stage: "diffusion_setup", message: `Encoding prompt: "${cleanPrompt.slice(0, 40)}..."` });
 
       const numToGen = Math.min(Math.max(count || 1, 1), 4);
@@ -1442,7 +1705,18 @@ async function startServer() {
         });
 
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
+        const genResult = await generateRealAiImage(
+          cleanPrompt,
+          style,
+          aspectRatio,
+          seed,
+          customStyle,
+          fluxModel,
+          apiKey,
+          puterAuthToken,
+          referenceImage,
+          originalInstruction
+        );
 
         generatedImagesList.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1456,6 +1730,8 @@ async function startServer() {
           isFavorite: false,
           referenceImage,
           engine: genResult.engine || "Black Forest Labs FLUX.1",
+          ocrText: genResult.ocrText,
+          visionAnalysis: genResult.visionAnalysis,
         });
       }
 
@@ -1477,11 +1753,34 @@ async function startServer() {
     }
   });
 
-  // Image Generation Endpoint (Black Forest Labs FLUX)
+  // Dedicated Vision OCR & Visual Analysis Endpoint
+  app.post("/api/vision/analyze", async (req: Request, res: Response) => {
+    try {
+      const { image, prompt, task } = req.body;
+      if (!image) {
+        return res.status(400).json({ error: "Image is required for Vision OCR analysis" });
+      }
+      const apiKey = getEffectiveApiKey(req);
+      const instruction = prompt || task || "Perform deep vision OCR, extract all text, identify subjects and describe the image";
+      const analysis = await analyzeImageWithVision(image, instruction, apiKey);
+      return res.json({
+        success: true,
+        result: analysis,
+      });
+    } catch (err: unknown) {
+      console.error("Error in /api/vision/analyze:", err);
+      return res.status(500).json({
+        error: err instanceof Error ? err.message : "Vision OCR analysis failed",
+      });
+    }
+  });
+
+  // Image Generation Endpoint (Black Forest Labs FLUX / Gemini Vision)
   app.post("/api/generate-image", async (req: Request, res: Response) => {
     try {
       const {
         prompt,
+        originalInstruction,
         aspectRatio = "16:9",
         count = 1,
         style = "Cinematic",
@@ -1500,7 +1799,18 @@ async function startServer() {
 
       for (let i = 0; i < numToGen; i++) {
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
+        const genResult = await generateRealAiImage(
+          cleanPrompt,
+          style,
+          aspectRatio,
+          seed,
+          customStyle,
+          fluxModel,
+          apiKey,
+          puterAuthToken,
+          referenceImage,
+          originalInstruction
+        );
         results.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
           prompt: cleanPrompt,
@@ -1513,6 +1823,8 @@ async function startServer() {
           isFavorite: false,
           referenceImage,
           engine: genResult.engine || "Black Forest Labs FLUX.1",
+          ocrText: genResult.ocrText,
+          visionAnalysis: genResult.visionAnalysis,
         });
       }
 
