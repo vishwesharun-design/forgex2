@@ -86,37 +86,64 @@ export const documentService = {
     else if (ext === 'docx') fileType = 'docx';
     else if (ext === 'pptx') fileType = 'pptx';
     else if (ext === 'csv') fileType = 'csv';
-    else if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) fileType = 'image';
+    else if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) fileType = 'image';
     else if (['md', 'markdown'].includes(ext)) fileType = 'markdown';
 
     let textContent = '';
     let previewUrl: string | undefined = undefined;
+    let base64Data: string | undefined = undefined;
+    let mimeType: string = file.type || '';
+
+    // Convert file to Base64 data URL for multimodal binary processing (PDF & Images)
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve((e.target?.result as string) || '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+
+    if (dataUrl && dataUrl.includes(',')) {
+      base64Data = dataUrl.split(',')[1];
+      const detectedMime = dataUrl.split(',')[0].replace(/^data:/, '').split(';')[0];
+      if (detectedMime) mimeType = detectedMime;
+    }
 
     if (fileType === 'image') {
-      previewUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve((e.target?.result as string) || '');
-        reader.readAsDataURL(file);
-      });
-      textContent = `[Image Document: ${file.name}, Dimensions / Optical Visual Document for Multi-modal analysis]`;
-    } else {
+      previewUrl = dataUrl;
+      mimeType = mimeType || 'image/jpeg';
+      textContent = `[Image Document: ${file.name}]`;
+    } else if (fileType === 'pdf') {
+      mimeType = 'application/pdf';
       try {
         const rawText = await file.text();
-        // If PDF or binary doc, extract readable text streams
-        if (fileType === 'pdf' || fileType === 'docx' || fileType === 'pptx') {
-          // Clean non-printable bytes to retain UTF-8 human text
-          const cleanAscii = rawText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ');
-          // Find coherent words
-          const words = cleanAscii.match(/[A-Za-z0-9,.:;'"\-\(\)\/\$%\s]{4,}/g) || [];
-          textContent = words.join(' ').slice(0, 30000);
-          if (textContent.length < 50) {
-            textContent = `Extracted binary document metadata: ${file.name} (${(file.size / 1024).toFixed(1)} KB). Contains formatted document structure ready for neural query inspection.`;
-          }
+        const textMatches = rawText.match(/[A-Za-z0-9,.:;'"\-\(\)\/\$%\s]{4,}/g) || [];
+        textContent = textMatches.join(' ').slice(0, 30000);
+      } catch (_e) {
+        textContent = `[PDF Document: ${file.name}]`;
+      }
+    } else if (fileType === 'docx' || fileType === 'pptx') {
+      try {
+        const rawText = await file.text();
+        // Extract text from Office XML tags <w:t> or <a:t> if present
+        const xmlTextMatches = rawText.match(/<[wa]:t[^>]*>([^<]+)<\/[wa]:t>/g);
+        if (xmlTextMatches && xmlTextMatches.length > 0) {
+          textContent = xmlTextMatches
+            .map((t) => t.replace(/<[^>]+>/g, ''))
+            .join(' ')
+            .slice(0, 35000);
         } else {
-          textContent = rawText;
+          const words = rawText.match(/[A-Za-z0-9,.:;'"\-\(\)\/\$%\s]{4,}/g) || [];
+          textContent = words.join(' ').slice(0, 30000);
         }
+      } catch (_e) {
+        textContent = `[Document: ${file.name}]`;
+      }
+    } else {
+      // Plain text, markdown, csv, json, code
+      try {
+        textContent = await file.text();
       } catch (_readErr) {
-        textContent = `File ${file.name} uploaded successfully (${(file.size / 1024).toFixed(1)} KB).`;
+        textContent = `[File ${file.name} uploaded]`;
       }
     }
 
@@ -127,6 +154,8 @@ export const documentService = {
       fileSize: size,
       uploadTime: Date.now(),
       textContent: textContent.trim(),
+      base64Data,
+      mimeType,
       previewUrl,
     };
 
@@ -153,6 +182,8 @@ export const documentService = {
           name: d.name,
           fileType: d.fileType,
           textContent: d.textContent,
+          base64Data: d.base64Data,
+          mimeType: d.mimeType,
         })),
         query: params.query,
         prompt: params.prompt,

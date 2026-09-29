@@ -66,19 +66,40 @@ function getEffectiveApiKey(req: Request): string | undefined {
 
 // Ultra-fast, highly accurate model cascades:
 // gemini-3.1-flash-lite delivers ~1s first-token latency with zero deliberation lag.
-// gemini-3.8-flash delivers premier multimodal reasoning with ThinkingLevel.LOW for high accuracy without delay.
-const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
-const PREMIER_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+// gemini-flash-latest and gemini-3.8-flash provide high-tier reasoning.
+const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+const PREMIER_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
 const RESILIENT_MODELS = FAST_MODELS;
 
+// Model-level quota tracking to bypass exhausted models without blocking requests
+const modelQuotaExhaustedUntil = new Map<string, number>();
+
+function isModelAvailable(model: string): boolean {
+  const until = modelQuotaExhaustedUntil.get(model);
+  if (!until) return true;
+  if (Date.now() > until) {
+    modelQuotaExhaustedUntil.delete(model);
+    return true;
+  }
+  return false;
+}
+
+function markModelQuotaExhausted(model: string): void {
+  // Mark model exhausted for 15 minutes cooldown
+  modelQuotaExhaustedUntil.set(model, Date.now() + 15 * 60 * 1000);
+}
+
 function getModelCascade(modelId?: string): string[] {
-  if (modelId === "forge-1" || modelId === "forge-1.5" || modelId === "forge-2") {
-    return FAST_MODELS;
-  }
+  let baseList = FAST_MODELS;
   if (modelId === "forge-2-ultra" || modelId === "forge-2-pro") {
-    return PREMIER_MODELS;
+    baseList = PREMIER_MODELS;
   }
-  return FAST_MODELS;
+  // Order models so available (non-quota-exhausted) models are tried first
+  return [...baseList].sort((a, b) => {
+    const aAvail = isModelAvailable(a) ? 0 : 1;
+    const bAvail = isModelAvailable(b) ? 0 : 1;
+    return aAvail - bAvail;
+  });
 }
 
 function buildModelConfig(model: string, baseConfig?: any): any {
@@ -363,6 +384,41 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
   return result;
 }
 
+// Search Grounding Circuit Breaker to prevent 429 quota exhaustion loops
+let isSearchGroundingQuotaExhausted = false;
+let searchGroundingExhaustedUntil = 0;
+
+function isSearchGroundingAvailable(): boolean {
+  if (isSearchGroundingQuotaExhausted) {
+    if (Date.now() > searchGroundingExhaustedUntil) {
+      isSearchGroundingQuotaExhausted = false;
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
+function markSearchGroundingQuotaExhausted(): void {
+  isSearchGroundingQuotaExhausted = true;
+  // Cooldown for 15 minutes before re-attempting live Google Search grounding
+  searchGroundingExhaustedUntil = Date.now() + 15 * 60 * 1000;
+}
+
+function isQuotaExhaustedError(err: any): boolean {
+  if (!err) return false;
+  const status = err.status || err.code || err.statusCode || err.error?.code;
+  if (status === 429) return true;
+  const message = String(err.message || err.error?.message || err).toLowerCase();
+  return (
+    message.includes("quota") ||
+    message.includes("429") ||
+    message.includes("resource_exhausted") ||
+    message.includes("rate_limit") ||
+    message.includes("rate limit")
+  );
+}
+
 async function generateContentResilient(
   ai: GoogleGenAI,
   request: {
@@ -372,10 +428,19 @@ async function generateContentResilient(
   preferredModels: string[] = FAST_MODELS
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
+  let activeConfig = { ...request.config };
+
+  // If search grounding quota is known to be exhausted, do not attach googleSearch tool
+  if (!isSearchGroundingAvailable() && activeConfig.tools) {
+    activeConfig.tools = activeConfig.tools.filter((t: any) => !t.googleSearch);
+    if (activeConfig.tools.length === 0) {
+      delete activeConfig.tools;
+    }
+  }
 
   for (const model of preferredModels) {
     try {
-      const modelConfig = buildModelConfig(model, request.config);
+      const modelConfig = buildModelConfig(model, activeConfig);
       const response = await ai.models.generateContent({
         model,
         contents: request.contents,
@@ -388,12 +453,15 @@ async function generateContentResilient(
       }
     } catch (err: any) {
       lastError = err;
-      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
-      if (request.config?.tools && request.config.tools.length > 0) {
+      // If error occurred with tools (e.g. search quota 429), mark search quota exhausted and strip tools for all models
+      if (activeConfig.tools && activeConfig.tools.length > 0) {
+        if (isQuotaExhaustedError(err)) {
+          markSearchGroundingQuotaExhausted();
+        }
+        activeConfig = { ...activeConfig };
+        delete activeConfig.tools;
         try {
-          const configWithoutTools = { ...request.config };
-          delete configWithoutTools.tools;
-          const retryConfig = buildModelConfig(model, configWithoutTools);
+          const retryConfig = buildModelConfig(model, activeConfig);
           const response = await ai.models.generateContent({
             model,
             contents: request.contents,
@@ -423,10 +491,19 @@ async function* generateContentStreamResilient(
   preferredModels: string[] = FAST_MODELS
 ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
   let lastError: any = null;
+  let activeConfig = { ...request.config };
+
+  // If search grounding quota is known to be exhausted, do not attach googleSearch tool
+  if (!isSearchGroundingAvailable() && activeConfig.tools) {
+    activeConfig.tools = activeConfig.tools.filter((t: any) => !t.googleSearch);
+    if (activeConfig.tools.length === 0) {
+      delete activeConfig.tools;
+    }
+  }
 
   for (const model of preferredModels) {
     try {
-      const modelConfig = buildModelConfig(model, request.config);
+      const modelConfig = buildModelConfig(model, activeConfig);
       const responseStream = await ai.models.generateContentStream({
         model,
         contents: request.contents,
@@ -454,12 +531,15 @@ async function* generateContentStreamResilient(
       }
     } catch (err: any) {
       lastError = err;
-      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
-      if (request.config?.tools && request.config.tools.length > 0) {
+      // If error occurred with tools (e.g. search quota 429), mark search quota exhausted and strip tools for all models
+      if (activeConfig.tools && activeConfig.tools.length > 0) {
+        if (isQuotaExhaustedError(err)) {
+          markSearchGroundingQuotaExhausted();
+        }
+        activeConfig = { ...activeConfig };
+        delete activeConfig.tools;
         try {
-          const configWithoutTools = { ...request.config };
-          delete configWithoutTools.tools;
-          const retryConfig = buildModelConfig(model, configWithoutTools);
+          const retryConfig = buildModelConfig(model, activeConfig);
           const responseStream = await ai.models.generateContentStream({
             model,
             contents: request.contents,
@@ -641,7 +721,7 @@ Return ONLY a JSON object:
   "subjectRemovalPrompt": "positive diffusion prompt for removing target subject and infilling scene"
 }`;
 
-    const candidateVisionModels = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
+    const candidateVisionModels = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
     let reply = "";
     for (const vModel of candidateVisionModels) {
       try {
@@ -1124,7 +1204,7 @@ async function startServer() {
       timestamp: Date.now(),
       modelsSupported: [
         "veo-3.1-lite-generate-preview",
-        "veo-2.0-generate-001",
+        "veo-3.1-generate-preview",
         "gemini-3.1-flash-lite-image",
         "gemini-3.1-flash-image",
         "gemini-3.8-flash",
@@ -1246,12 +1326,12 @@ async function startServer() {
             parts: currentParts,
           });
 
-          // If search is needed, attach googleSearch tool for dynamic search grounding
+          // If search is needed and quota is available, attach googleSearch tool for dynamic search grounding
           const requestConfig: any = {
             systemInstruction: enhancedSystemInstruction,
           };
 
-          if (searchIntent.shouldSearch) {
+          if (searchIntent.shouldSearch && isSearchGroundingAvailable()) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
@@ -1413,10 +1493,14 @@ async function startServer() {
         if (typeof (res as any).flush === "function") {
           (res as any).flush();
         }
+        liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
       const modelCascade = getModelCascade(modelId);
       const forgexSystemInstruction = customSystemInstruction || FORGEX_SYSTEM_INSTRUCTION;
+      const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
+        ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
+        : forgexSystemInstruction;
 
       // Try streaming with live Gemini candidate keys
       for (const currentKey of candidateKeys) {
@@ -1464,10 +1548,10 @@ async function startServer() {
           });
 
           const requestConfig: any = {
-            systemInstruction: forgexSystemInstruction,
+            systemInstruction: enhancedSystemInstruction,
           };
 
-          if (searchIntent.shouldSearch) {
+          if (searchIntent.shouldSearch && isSearchGroundingAvailable()) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
@@ -1607,9 +1691,9 @@ async function startServer() {
           let response;
           // Ultra-fast and high-quota multimodal models for robust audio transcription
           const candidateModels = [
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite",
+            "gemini-3.5-transcribe",
             "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
             "gemini-flash-latest",
           ];
           let lastErr: any = null;
@@ -2019,41 +2103,62 @@ async function startServer() {
 
       const apiKey = getEffectiveApiKey(req);
       let reportAnswer = "";
-      const sources: { title: string; url: string; snippet: string; sourceDomain?: string }[] = [];
+      const sources: { title: string; url: string; snippet?: string; sourceDomain?: string }[] = [];
       const searchQueriesUsed: string[] = [];
+
+      // 1. Pre-fetch real-time multi-source web grounding
+      let liveGrounding: WebGroundingResult = {
+        searchedWeb: false,
+        searchQueries: [],
+        groundingSources: [],
+      };
+      try {
+        liveGrounding = await performLiveWebGrounding(cleanQuery);
+        if (liveGrounding.groundingSources.length > 0) {
+          sources.push(...liveGrounding.groundingSources);
+          searchQueriesUsed.push(cleanQuery);
+        }
+      } catch (groundingErr) {
+        // Continue if web grounding encounters network issues
+      }
+
+      const deepResearchPrompt = `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n\n` +
+        (liveGrounding.groundingContext ? `=== REAL-TIME WEB RESEARCH & EVIDENCE ===\n${liveGrounding.groundingContext}\n\n` : "") +
+        `Instructions for the report structure:\n` +
+        `1. Start with a direct, comprehensive executive summary and core answer.\n` +
+        `2. Provide a 'Key Findings' section with bulleted facts, statistics, and verifiable takeaways.\n` +
+        `3. Provide in-depth thematic sections breaking down mechanisms, evidence, industry/academic context, and future outlook.\n` +
+        `4. Ensure all factual claims are backed by rigorous web research and cite sources accurately.\n\n` +
+        `Depth level requested: ${depth.toUpperCase()}`;
 
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
           const candModels = RESILIENT_MODELS;
+          let tryGoogleSearch = isSearchGroundingAvailable();
 
           for (const cand of candModels) {
             try {
+              const config: any = {
+                systemInstruction: "You are an elite deep research engine. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
+                thinkingConfig: {
+                  thinkingLevel: ThinkingLevel.LOW,
+                },
+              };
+
+              if (tryGoogleSearch) {
+                config.tools = [{ googleSearch: {} }];
+              }
+
               const result = await ai.models.generateContent({
                 model: cand,
                 contents: [
                   {
                     role: "user",
-                    parts: [
-                      {
-                        text: `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n\n` +
-                          `Instructions for the report structure:\n` +
-                          `1. Start with a direct, comprehensive executive summary and core answer.\n` +
-                          `2. Provide a 'Key Findings' section with bulleted facts, statistics, and verifiable takeaways.\n` +
-                          `3. Provide in-depth thematic sections breaking down mechanisms, evidence, industry/academic context, and future outlook.\n` +
-                          `4. Ensure all factual claims are backed by rigorous web research and cite sources accurately.\n\n` +
-                          `Depth level requested: ${depth.toUpperCase()}`
-                      }
-                    ]
+                    parts: [{ text: deepResearchPrompt }]
                   }
                 ],
-                config: {
-                  tools: [{ googleSearch: {} }],
-                  systemInstruction: "You are an elite deep research engine. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
-                  thinkingConfig: {
-                    thinkingLevel: ThinkingLevel.LOW,
-                  },
-                }
+                config,
               });
 
               const candidate = result.candidates?.[0];
@@ -2063,7 +2168,9 @@ async function startServer() {
                 reportAnswer = text;
                 const grounding = candidate?.groundingMetadata;
                 if (grounding?.webSearchQueries) {
-                  searchQueriesUsed.push(...grounding.webSearchQueries);
+                  for (const q of grounding.webSearchQueries) {
+                    if (!searchQueriesUsed.includes(q)) searchQueriesUsed.push(q);
+                  }
                 }
                 if (grounding?.groundingChunks) {
                   for (const chunk of grounding.groundingChunks) {
@@ -2075,23 +2182,55 @@ async function startServer() {
                       } catch {
                         domain = "Web Source";
                       }
-                      sources.push({
-                        title: chunk.web.title || domain || "Web Source",
-                        url: uri,
-                        snippet: chunk.web.title || `Information retrieved from ${domain}`,
-                        sourceDomain: domain,
-                      });
+                      if (!sources.some((s) => s.url === uri)) {
+                        sources.push({
+                          title: chunk.web.title || domain || "Web Source",
+                          url: uri,
+                          snippet: chunk.web.title || `Information retrieved from ${domain}`,
+                          sourceDomain: domain,
+                        });
+                      }
                     }
                   }
                 }
                 break;
               }
-            } catch (err) {
-              console.warn(`Deep research search attempt on ${cand} notice:`, err);
+            } catch (err: any) {
+              if (isQuotaExhaustedError(err)) {
+                markSearchGroundingQuotaExhausted();
+              }
+              // If failed with search tool, immediately disable search tool for remaining attempts and retry
+              if (tryGoogleSearch) {
+                tryGoogleSearch = false;
+                try {
+                  const retryResult = await ai.models.generateContent({
+                    model: cand,
+                    contents: [
+                      {
+                        role: "user",
+                        parts: [{ text: deepResearchPrompt }]
+                      }
+                    ],
+                    config: {
+                      systemInstruction: "You are an elite deep research engine. Analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
+                      thinkingConfig: {
+                        thinkingLevel: ThinkingLevel.LOW,
+                      },
+                    },
+                  });
+                  const retryText = retryResult.text || retryResult.candidates?.[0]?.content?.parts?.[0]?.text;
+                  if (retryText) {
+                    reportAnswer = retryText;
+                    break;
+                  }
+                } catch {
+                  // Continue to next model
+                }
+              }
             }
           }
         } catch (e) {
-          console.warn("Deep research live search fallback triggered:", e);
+          // Fallback to procedural synthesis below
         }
       }
 

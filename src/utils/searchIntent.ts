@@ -83,6 +83,15 @@ export function detectWebSearchIntent(
     return { shouldSearch: false, searchQuery: '', reason: 'Universal conceptual science/humanities.' };
   }
 
+  // 6. User feelings, emotional expressions, personal states & greetings (Answer immediately with empathy, NOT web search)
+  if (
+    /(?:i\s*(?:feel|am\s+feeling|'m\s+feeling|felt)|i\s*am\s+(?:so\s+)?(?:sad|happy|depressed|anxious|stressed|lonely|angry|upset|exhausted|tired|burned\s*out|overwhelmed|excited|scared|nervous|bored|hopeless|worried|confused|crying|hurt|grateful|proud)|my\s+(?:dog|cat|pet|friend|partner|mom|dad|family|relative)\s+(?:passed|died|hurt|sick)|i\s+had\s+a\s+(?:bad|rough|terrible|horrible|great|wonderful|hard|tough|long)\s+day|thank\s+you|thanks|hello|hi|hey|good\s+(?:morning|afternoon|evening|night)|how\s+are\s+you|how\s+do\s+you\s+feel|i\s+need\s+(?:a\s+friend|someone\s+to\s+talk\s+to|advice|comfort|support|to\s+vent|help\s+calming\s+down)|nobody\s+(?:likes|cares|understands)\s+me|i\s+hate\s+myself|cheer\s+me\s+up|tell\s+me\s+something\s+(?:nice|positive|uplifting))/i.test(
+      clean
+    )
+  ) {
+    return { shouldSearch: false, searchQuery: '', reason: 'Emotional or personal expression answered directly with empathy.' };
+  }
+
   // POSITIVE SIGNALS: Queries that REQUIRE current, up-to-date, or external information
   let shouldSearch = false;
   let triggerReason = '';

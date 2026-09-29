@@ -389,6 +389,8 @@ export interface DocumentItem {
   fileSize: number;
   uploadTime: number;
   textContent: string;
+  base64Data?: string;
+  mimeType?: string;
   previewUrl?: string;
   summary?: string;
   keyPoints?: string[];
