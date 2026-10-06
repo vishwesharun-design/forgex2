@@ -1,9 +1,19 @@
 import { VoiceOption } from '../types';
 
+export const GEMINI_AI_VOICES: VoiceOption[] = [
+  { id: 'gemini-Zephyr', name: 'Zephyr (Gemini AI · Warm & Natural)', lang: 'en-US' },
+  { id: 'gemini-Aoede', name: 'Aoede (Gemini AI · Lively & Expressive)', lang: 'en-US' },
+  { id: 'gemini-Kore', name: 'Kore (Gemini AI · Soothing & Clear)', lang: 'en-US' },
+  { id: 'gemini-Puck', name: 'Puck (Gemini AI · Charismatic & Upbeat)', lang: 'en-US' },
+  { id: 'gemini-Fenrir', name: 'Fenrir (Gemini AI · Deep & Authoritative)', lang: 'en-US' },
+  { id: 'gemini-Charon', name: 'Charon (Gemini AI · Calm & Resonant)', lang: 'en-US' },
+];
+
 export class VoiceController {
   private recognition: any = null;
   private isListening: boolean = false;
   private isSpeaking: boolean = false;
+  private selectedVoiceUri: string = 'gemini-Zephyr';
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private mediaStream: MediaStream | null = null;
   private mediaRecorder: MediaRecorder | null = null;
@@ -11,6 +21,9 @@ export class VoiceController {
   private audioContext: AudioContext | null = null;
   private animFrameId: number | null = null;
   private restartTimer: any = null;
+  private speechSafetyTimer: any = null;
+  private currentAudio: HTMLAudioElement | null = null;
+  private audioSourceNode: MediaElementAudioSourceNode | null = null;
   private onTranscriptUpdate?: (text: string, isFinal: boolean) => void;
   private onStatusChange?: (
     status: 'idle' | 'listening' | 'thinking' | 'speaking' | 'unsupported',
@@ -23,30 +36,43 @@ export class VoiceController {
   constructor() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.onvoiceschanged = () => {
-        // Cached voices ready
+        // Update cached voices
       };
     }
   }
 
   public isSupported(): boolean {
-    return typeof window !== 'undefined' && (
-      'SpeechRecognition' in window ||
-      'webkitSpeechRecognition' in window ||
-      Boolean(navigator.mediaDevices?.getUserMedia)
+    return (
+      typeof window !== 'undefined' &&
+      (Boolean(navigator.mediaDevices?.getUserMedia) ||
+        'SpeechRecognition' in window ||
+        'webkitSpeechRecognition' in window)
     );
   }
 
   public getVoices(): VoiceOption[] {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return [];
-    const list = window.speechSynthesis.getVoices();
-    return list.map((v) => ({
-      id: v.voiceURI,
-      name: `${v.name} (${v.lang})`,
-      lang: v.lang,
-    }));
+    const list: VoiceOption[] = [...GEMINI_AI_VOICES];
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        const sysVoices = window.speechSynthesis.getVoices();
+        for (const v of sysVoices) {
+          list.push({
+            id: v.voiceURI,
+            name: `${v.name} (${v.lang})`,
+            lang: v.lang,
+          });
+        }
+      } catch {}
+    }
+    return list;
+  }
+
+  public getSelectedVoiceUri(): string {
+    return this.selectedVoiceUri;
   }
 
   public setVoiceByUri(uri: string): void {
+    this.selectedVoiceUri = uri;
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     const list = window.speechSynthesis.getVoices();
     this.selectedVoice = list.find((v) => v.voiceURI === uri) || null;
@@ -160,7 +186,7 @@ export class VoiceController {
           this.onLevelUpdate?.(level);
 
           // Barge-in Voice Activity Detection: If user speaks while AI is talking, immediately cut off AI!
-          if (this.isSpeaking && level > 22) {
+          if (this.isSpeaking && level > 24) {
             consecutiveVoiceHits++;
             if (consecutiveVoiceHits >= 2) {
               this.interruptSpeaking();
@@ -185,6 +211,8 @@ export class VoiceController {
           ? 'audio/webm;codecs=opus'
           : MediaRecorder.isTypeSupported('audio/webm')
           ? 'audio/webm'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
           : '';
 
         if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
@@ -269,10 +297,9 @@ export class VoiceController {
           return;
         }
         if (error === 'not-allowed' || error === 'service-not-allowed') {
-          this.onStatusChange?.('unsupported', 'Microphone access blocked. Please re-allow microphone access in your browser.');
+          console.warn('Speech recognition notice:', error);
           return;
         }
-        console.warn('Speech recognition notice:', error);
       };
 
       recognition.onend = () => {
@@ -327,8 +354,6 @@ export class VoiceController {
         this.mediaRecorder.stop();
       } catch {}
     }
-
-    // Do NOT stop mediaStream tracks here! Keep the warm hardware microphone session alive!
   }
 
   public async stopListening(): Promise<string> {
@@ -372,7 +397,8 @@ export class VoiceController {
     if (this.audioChunks.length > 0) {
       try {
         this.onStatusChange?.('thinking');
-        const fullBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
+        const fullBlob = new Blob(this.audioChunks, { type: mimeType });
         const reader = new FileReader();
         const base64Promise = new Promise<string>((resolve, reject) => {
           reader.onloadend = () => resolve(reader.result as string);
@@ -380,6 +406,7 @@ export class VoiceController {
         });
         reader.readAsDataURL(fullBlob);
         const dataUrl = await base64Promise;
+        const pureBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1].trim() : dataUrl.trim();
 
         const storedApiKey = localStorage.getItem('forgex_api_key') || '';
         const res = await fetch('/api/transcribe', {
@@ -389,8 +416,8 @@ export class VoiceController {
             ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
           },
           body: JSON.stringify({
-            audioBase64: dataUrl,
-            mimeType: 'audio/webm',
+            audioBase64: pureBase64,
+            mimeType: mimeType.split(';')[0],
           }),
         });
 
@@ -466,7 +493,11 @@ export class VoiceController {
   }
 
   public isCurrentlySpeaking(): boolean {
-    return this.isSpeaking || (typeof window !== 'undefined' && Boolean(window.speechSynthesis?.speaking));
+    return (
+      this.isSpeaking ||
+      Boolean(this.currentAudio && !this.currentAudio.paused) ||
+      (typeof window !== 'undefined' && Boolean(window.speechSynthesis?.speaking))
+    );
   }
 
   public isCurrentlyListening(): boolean {
@@ -474,65 +505,237 @@ export class VoiceController {
   }
 
   public interruptSpeaking(): void {
+    if (this.speechSafetyTimer) {
+      clearTimeout(this.speechSafetyTimer);
+      this.speechSafetyTimer = null;
+    }
+
+    let wasSpeaking = this.isSpeaking;
+
+    // 1. Stop HTMLAudioElement (Gemini TTS)
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.src = '';
+      } catch {}
+      this.currentAudio = null;
+      wasSpeaking = true;
+    }
+
+    // 2. Stop browser SpeechSynthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const wasSpeaking = this.isSpeaking || window.speechSynthesis.speaking;
-      window.speechSynthesis.cancel();
-      this.isSpeaking = false;
-      if (wasSpeaking && this.onInterruptCallback) {
-        try {
-          this.onInterruptCallback();
-        } catch {}
-      }
+      try {
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+          wasSpeaking = true;
+        }
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+
+    this.isSpeaking = false;
+    this.onLevelUpdate?.(0);
+
+    if (wasSpeaking && this.onInterruptCallback) {
+      try {
+        this.onInterruptCallback();
+      } catch {}
     }
   }
 
-  public speak(text: string, onComplete?: () => void): void {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
+  // Primary Speech Dispatcher: First attempts real Gemini AI Voice (/api/tts),
+  // with instant automatic fallback to SpeechSynthesis and Web Audio if offline.
+  public async speak(text: string, onComplete?: () => void): Promise<void> {
+    this.interruptSpeaking();
+
+    const cleanSpeech = text
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[*#_~\[\]\(\)\{\}]/g, '')
+      .replace(/https?:\/\/\S+/g, 'link')
+      .trim();
+
+    if (!cleanSpeech) {
       onComplete?.();
       return;
     }
 
-    this.interruptSpeaking();
+    this.isSpeaking = true;
+    this.onStatusChange?.('speaking');
 
-    // Clean markdown symbols for natural speech
-    const speechText = text
-      .replace(/[#*`_~\[\]\(\)\{\}]/g, '')
-      .replace(/https?:\/\/\S+/g, 'link')
-      .slice(0, 1200);
+    // 1. Attempt High-Fidelity Gemini TTS via /api/tts
+    try {
+      const storedApiKey = localStorage.getItem('forgex_api_key') || '';
+      const chosenVoice = this.selectedVoiceUri.replace(/^gemini-/i, '') || 'Zephyr';
 
-    const utterance = new SpeechSynthesisUtterance(speechText);
-    if (this.selectedVoice) {
-      utterance.voice = this.selectedVoice;
-    } else {
-      const list = window.speechSynthesis.getVoices();
-      if (list.length > 0) {
-        const engVoice = list.find((v) => v.lang.startsWith('en')) || list[0];
-        utterance.voice = engVoice;
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
+        },
+        body: JSON.stringify({
+          text: cleanSpeech,
+          voiceName: chosenVoice,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.audioBase64) {
+          await this.playAudioBase64(data.audioBase64, data.mimeType || 'audio/wav', onComplete);
+          return;
+        }
       }
+    } catch (ttsErr) {
+      console.log('Gemini TTS synthesis notice, switching to browser speech synthesis:', ttsErr);
     }
 
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
+    // 2. Resilient Browser SpeechSynthesis Fallback
+    this.speakWithSpeechSynthesis(cleanSpeech, onComplete);
+  }
 
-    utterance.onstart = () => {
-      this.isSpeaking = true;
-      this.onStatusChange?.('speaking');
-    };
+  // Plays base64 WAV audio with waveform audio reactivity
+  private async playAudioBase64(base64Data: string, mimeType: string, onComplete?: () => void): Promise<void> {
+    return new Promise<void>((resolve) => {
+      try {
+        const audio = new Audio(`data:${mimeType};base64,${base64Data}`);
+        this.currentAudio = audio;
 
-    utterance.onend = () => {
+        // Visual equalizer animation during playback
+        let waveInterval: any = null;
+        const startWave = () => {
+          waveInterval = setInterval(() => {
+            if (!this.isSpeaking) {
+              clearInterval(waveInterval);
+              return;
+            }
+            // Dynamic voice amplitude modulation between 35 and 90
+            const randomLevel = Math.floor(40 + Math.random() * 45);
+            this.onLevelUpdate?.(randomLevel);
+          }, 80);
+        };
+
+        const cleanup = () => {
+          if (waveInterval) clearInterval(waveInterval);
+          this.currentAudio = null;
+          this.isSpeaking = false;
+          this.onLevelUpdate?.(0);
+          this.onStatusChange?.('idle');
+          onComplete?.();
+          resolve();
+        };
+
+        audio.onplay = () => {
+          this.isSpeaking = true;
+          this.onStatusChange?.('speaking');
+          startWave();
+        };
+
+        audio.onended = cleanup;
+        audio.onerror = () => {
+          if (waveInterval) clearInterval(waveInterval);
+          // If audio tag fails, fall back to browser speech synthesis
+          this.speakWithSpeechSynthesis(this.lastCapturedText, onComplete);
+          resolve();
+        };
+
+        audio.play().catch((playErr) => {
+          console.warn('Audio play notice:', playErr);
+          if (waveInterval) clearInterval(waveInterval);
+          this.speakWithSpeechSynthesis(this.lastCapturedText, onComplete);
+          resolve();
+        });
+      } catch (err) {
+        console.warn('playAudioBase64 error:', err);
+        this.speakWithSpeechSynthesis(this.lastCapturedText, onComplete);
+        resolve();
+      }
+    });
+  }
+
+  // Browser SpeechSynthesis fallback with Chrome iframe fixes
+  private speakWithSpeechSynthesis(text: string, onComplete?: () => void): void {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
       this.isSpeaking = false;
       this.onStatusChange?.('idle');
       onComplete?.();
-    };
+      return;
+    }
 
-    utterance.onerror = () => {
+    try {
+      window.speechSynthesis.cancel();
+      // Chrome iframe bug fix: resume paused speech synthesis
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      const speechText = text.slice(0, 1000);
+      const utterance = new SpeechSynthesisUtterance(speechText);
+
+      if (this.selectedVoice) {
+        utterance.voice = this.selectedVoice;
+      } else {
+        const list = window.speechSynthesis.getVoices();
+        if (list.length > 0) {
+          const engVoice = list.find((v) => v.lang.startsWith('en')) || list[0];
+          utterance.voice = engVoice;
+        }
+      }
+
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+
+      let waveInterval: any = null;
+      const startWave = () => {
+        waveInterval = setInterval(() => {
+          if (!this.isSpeaking) {
+            clearInterval(waveInterval);
+            return;
+          }
+          const randomLevel = Math.floor(35 + Math.random() * 40);
+          this.onLevelUpdate?.(randomLevel);
+        }, 80);
+      };
+
+      const finish = () => {
+        if (this.speechSafetyTimer) {
+          clearTimeout(this.speechSafetyTimer);
+          this.speechSafetyTimer = null;
+        }
+        if (waveInterval) clearInterval(waveInterval);
+        this.isSpeaking = false;
+        this.onLevelUpdate?.(0);
+        this.onStatusChange?.('idle');
+        onComplete?.();
+      };
+
+      utterance.onstart = () => {
+        this.isSpeaking = true;
+        this.onStatusChange?.('speaking');
+        startWave();
+      };
+
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      // Safety timeout: In case browser drops utterance in background/iframe
+      const timeoutMs = Math.max(3500, speechText.length * 80);
+      this.speechSafetyTimer = setTimeout(() => {
+        if (this.isSpeaking) {
+          window.speechSynthesis.cancel();
+          finish();
+        }
+      }, timeoutMs);
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('SpeechSynthesis error:', e);
       this.isSpeaking = false;
       this.onStatusChange?.('idle');
       onComplete?.();
-    };
-
-    window.speechSynthesis.speak(utterance);
+    }
   }
 }
 
 export const voiceController = new VoiceController();
+

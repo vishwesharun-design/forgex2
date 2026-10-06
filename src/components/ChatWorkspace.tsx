@@ -27,8 +27,7 @@ import {
   Download,
   Code2,
   Maximize2,
-  Pencil,
-  Clipboard
+  Pencil
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
@@ -83,7 +82,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     modelUsed?: string;
     groundingSources?: any[];
   } | null>(null);
-  const [fullscreenImage, setFullscreenImage] = useState<{ url: string; prompt: string; id?: string; initialEdit?: boolean; ocrText?: string } | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<{ url: string; prompt: string; id?: string; initialEdit?: boolean } | null>(null);
   const [downloadedImageId, setDownloadedImageId] = useState<string | null>(null);
   const [generatingImageState, setGeneratingImageState] = useState<{ prompt: string; progress: number } | null>(null);
 
@@ -449,17 +448,13 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setStreamingReply(null);
 
     // Check for image generation intent vs web search vs general chat
-    const hasImageAttachment = filesToAttach.some((f) => f.type === 'image' || (f.url && f.url.startsWith('data:image')));
-    const imgIntent = detectImageGenerationIntent(text, hasImageAttachment);
+    const imgIntent = detectImageGenerationIntent(text);
     const localSearchIntent = detectWebSearchIntent(text);
 
     if (imgIntent.isImage) {
       setSearchingQuery(null);
       setSearchedForQueryDuringTurn(null);
-      setGeneratingImageState({
-        prompt: imgIntent.prompt,
-        progress: hasImageAttachment ? 15 : 10,
-      });
+      setGeneratingImageState({ prompt: imgIntent.prompt, progress: 10 });
     } else if (localSearchIntent.shouldSearch) {
       const q = localSearchIntent.searchQuery || text;
       setSearchingQuery(q);
@@ -545,75 +540,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
-  const attachImageFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const url = event.target?.result as string;
-      setAttachedFiles((prev) => [
-        ...prev,
-        {
-          type: 'image',
-          name: file.name && file.name !== 'image.png' ? file.name : `pasted-image-${Date.now().toString().slice(-4)}.png`,
-          url,
-        },
-      ]);
-    };
-    reader.readAsDataURL(file);
-  };
-
   const handleAttachFile = (e: React.ChangeEvent<HTMLInputElement>, type: 'file' | 'image') => {
     const file = e.target.files?.[0];
     if (file) {
       if (type === 'image' && file.type.startsWith('image/')) {
-        attachImageFile(file);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const url = event.target?.result as string;
+          setAttachedFiles((prev) => [...prev, { type, name: file.name, url }]);
+        };
+        reader.readAsDataURL(file);
       } else {
         setAttachedFiles((prev) => [...prev, { type, name: file.name }]);
-      }
-    }
-    e.target.value = '';
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement | HTMLDivElement>) => {
-    const clipboardData = e.clipboardData;
-    if (!clipboardData) return;
-
-    let foundImage = false;
-    if (clipboardData.items) {
-      for (let i = 0; i < clipboardData.items.length; i++) {
-        const item = clipboardData.items[i];
-        if (item.type.indexOf('image') !== -1) {
-          const file = item.getAsFile();
-          if (file) {
-            foundImage = true;
-            attachImageFile(file);
-          }
-        }
-      }
-    }
-
-    if (!foundImage && clipboardData.files && clipboardData.files.length > 0) {
-      for (let i = 0; i < clipboardData.files.length; i++) {
-        const file = clipboardData.files[i];
-        if (file.type.startsWith('image/')) {
-          foundImage = true;
-          attachImageFile(file);
-        }
-      }
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer && e.dataTransfer.files) {
-      for (let i = 0; i < e.dataTransfer.files.length; i++) {
-        const file = e.dataTransfer.files[i];
-        if (file.type.startsWith('image/')) {
-          attachImageFile(file);
-        }
       }
     }
   };
@@ -681,22 +619,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {/* ChatGPT Style Rounded Capsule Input Container */}
         <div
           id="chat-input-container"
-          onPaste={handlePaste}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
           className={`relative rounded-3xl p-2 sm:p-2.5 border transition-all duration-200 shadow-sm flex items-center gap-2 ${
             isDark
               ? 'bg-neutral-900/90 border-neutral-800 focus-within:border-neutral-700 shadow-black/40'
               : 'bg-white border-neutral-300 focus-within:border-neutral-400 shadow-neutral-200/60'
           }`}
         >
-          {/* Plus Attach Menu on Left */}
-          <div className="relative shrink-0 flex items-center">
+          {/* Plus Attach Button on Left */}
+          <div className="relative shrink-0">
             <button
               id="btn-chat-attach"
               type="button"
               onClick={() => setAttachMenuOpen(!attachMenuOpen)}
-              title="Add attachment"
+              title="Attach files or images"
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
                 isDark
                   ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
@@ -722,11 +657,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     imageInputRef.current?.click();
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-amber-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-amber-600'
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
                   }`}
                 >
                   <ImageIcon className="w-4 h-4 text-amber-500" />
-                  <span>Attach Image</span>
+                  <span>Upload Image</span>
                 </button>
                 <button
                   type="button"
@@ -735,11 +670,40 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     fileInputRef.current?.click();
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-blue-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-blue-600'
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
                   }`}
                 >
                   <FileText className="w-4 h-4 text-blue-500" />
                   <span>Upload Document</span>
+                </button>
+                <div className={`my-1 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setInputText('/image ');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-amber-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-amber-600'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>Generate Image (FLUX)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setInputText('Write clean TypeScript code to ');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-blue-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-blue-600'
+                  }`}
+                >
+                  <Code2 className="w-4 h-4 text-blue-500" />
+                  <span>Write Code</span>
                 </button>
               </div>
             )}
@@ -754,7 +718,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
               placeholder={
                 voiceModeState === 'listening' || isListening
                   ? 'Listening...'
@@ -894,7 +857,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
             {/* Quick Capability Chips */}
             <div className="flex flex-wrap items-center justify-center gap-2 max-w-xl mx-auto mb-4">
-
               <button
                 type="button"
                 onClick={() => {
@@ -908,7 +870,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Create Image</span>
+                <span>Create Image (FLUX)</span>
               </button>
 
               <button
@@ -1098,14 +1060,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         message.generatedImages.length > 0
                       );
 
-                      // If message contains generated image(s) with NO text, display as clean standalone card
-                      if (hasImages && (!message.content || !message.content.trim())) {
+                      // If message contains generated image(s), display ONLY the image with zero assistant text chatter and zero prompt
+                      if (hasImages) {
                         return (
                           <div className="flex flex-col gap-3 max-w-xl w-full animate-in fade-in duration-200">
                             {message.generatedImages!.map((img) => (
-                              <React.Fragment key={img.id}>
-                                <div
-                                  className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border shadow-lg group cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.008] ${
+                              <div
+                                key={img.id}
+                                className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border shadow-lg group cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.008] ${
                                   isDark
                                     ? 'border-neutral-800 bg-neutral-900/80 hover:border-amber-500/50'
                                     : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/50'
@@ -1165,49 +1127,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                                   </button>
                                 </div>
                               </div>
-
-                              {/* OCR Text Extraction Card if detected by Vision OCR */}
-                              {(img.ocrText || message.ocrText) && (
-                                <div
-                                  className={`p-3 rounded-2xl border text-xs flex flex-col gap-1.5 transition-colors ${
-                                    isDark
-                                      ? 'bg-neutral-900/95 border-amber-500/30 text-neutral-200'
-                                      : 'bg-amber-50/80 border-amber-200/90 text-neutral-800 shadow-2xs'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
-                                      <Sparkles className="w-3.5 h-3.5" />
-                                      Vision OCR Extracted Text
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => copyToClipboard(img.ocrText || message.ocrText || '', `ocr-${img.id}`)}
-                                      className="text-[11px] text-neutral-400 hover:text-amber-500 flex items-center gap-1 cursor-pointer transition-colors"
-                                    >
-                                      {copiedMessageId === `ocr-${img.id}` ? (
-                                        <>
-                                          <Check className="w-3 h-3 text-emerald-500" />
-                                          <span className="text-emerald-500">Copied</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Copy className="w-3 h-3" />
-                                          <span>Copy Text</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                  <p className="font-mono text-xs whitespace-pre-wrap select-all leading-relaxed">
-                                    {img.ocrText || message.ocrText}
-                                  </p>
-                                </div>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      );
-                    }
+                            ))}
+                          </div>
+                        );
+                      }
 
                       return (
                         <div
@@ -1268,105 +1191,20 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                           {message.generatedImages && message.generatedImages.length > 0 && (
                             <div className="mt-3.5 space-y-3">
                               {message.generatedImages.map((img) => (
-                                <React.Fragment key={img.id}>
-                                  <div
-                                    className={`relative rounded-2xl overflow-hidden border shadow-md group cursor-pointer ${
-                                      isDark ? 'border-neutral-800 bg-neutral-950/80 hover:border-amber-500/50' : 'border-neutral-200 bg-neutral-100 hover:border-amber-500/50'
-                                    }`}
-                                    onClick={() => setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id, initialEdit: false })}
-                                    title="Click to view full screen, edit or download"
-                                  >
-                                    <img
-                                      src={img.imageUrl}
-                                      alt={img.prompt}
-                                      className="w-full h-auto rounded-xl object-cover max-h-96 transition-transform duration-300 group-hover:scale-[1.01]"
-                                    />
-                                    {/* Floating Quick Actions on Image */}
-                                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id, initialEdit: true });
-                                        }}
-                                        title="Edit image"
-                                        className="p-1.5 rounded-lg backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all shadow-md cursor-pointer"
-                                      >
-                                        <Pencil className="w-3.5 h-3.5 text-amber-400" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDownloadImage(img.imageUrl, img.id);
-                                        }}
-                                        title="Download image"
-                                        className="p-1.5 rounded-lg backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all shadow-md cursor-pointer"
-                                      >
-                                        {downloadedImageId === img.id ? (
-                                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                        ) : (
-                                          <Download className="w-3.5 h-3.5 text-white" />
-                                        )}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setFullscreenImage({
-                                            url: img.imageUrl,
-                                            prompt: img.prompt,
-                                            id: img.id,
-                                            initialEdit: false,
-                                            ocrText: img.ocrText || message.ocrText,
-                                          });
-                                        }}
-                                        title="View Fullscreen"
-                                        className="p-1.5 rounded-lg backdrop-blur-md bg-black/60 hover:bg-black/80 text-white border border-white/20 transition-all shadow-md cursor-pointer"
-                                      >
-                                        <Maximize2 className="w-3.5 h-3.5 text-white" />
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* OCR Text Extraction Card if detected */}
-                                  {(img.ocrText || message.ocrText) && (
-                                    <div
-                                      className={`p-2.5 rounded-xl border text-xs flex flex-col gap-1 transition-colors ${
-                                        isDark
-                                          ? 'bg-neutral-900/95 border-amber-500/30 text-neutral-200'
-                                          : 'bg-amber-50/80 border-amber-200/90 text-neutral-800 shadow-2xs'
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1.5 text-[11px]">
-                                          <Sparkles className="w-3 h-3" />
-                                          Vision OCR Extracted Text
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => copyToClipboard(img.ocrText || message.ocrText || '', `ocr-${img.id}`)}
-                                          className="text-[11px] text-neutral-400 hover:text-amber-500 flex items-center gap-1 cursor-pointer transition-colors"
-                                        >
-                                          {copiedMessageId === `ocr-${img.id}` ? (
-                                            <>
-                                              <Check className="w-3 h-3 text-emerald-500" />
-                                              <span className="text-emerald-500">Copied</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Copy className="w-3 h-3" />
-                                              <span>Copy</span>
-                                            </>
-                                          )}
-                                        </button>
-                                      </div>
-                                      <p className="font-mono text-xs whitespace-pre-wrap select-all leading-relaxed">
-                                        {img.ocrText || message.ocrText}
-                                      </p>
-                                    </div>
-                                  )}
-                                </React.Fragment>
+                                <div
+                                  key={img.id}
+                                  className={`relative rounded-2xl overflow-hidden border shadow-md group cursor-pointer ${
+                                    isDark ? 'border-neutral-800 bg-neutral-950/80' : 'border-neutral-200 bg-neutral-100'
+                                  }`}
+                                  onClick={() => setFullscreenImage({ url: img.imageUrl, prompt: img.prompt, id: img.id })}
+                                  title="Click to view full screen, edit or download"
+                                >
+                                  <img
+                                    src={img.imageUrl}
+                                    alt={img.prompt}
+                                    className="w-full h-auto rounded-xl object-cover max-h-72 transition-transform duration-300 group-hover:scale-[1.01]"
+                                  />
+                                </div>
                               ))}
                             </div>
                           )}
@@ -1494,7 +1332,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         imageUrl={fullscreenImage?.url || ''}
         prompt={fullscreenImage?.prompt || ''}
         initialEdit={fullscreenImage?.initialEdit || false}
-        ocrText={fullscreenImage?.ocrText}
         theme={theme}
         onOpenInImageStudio={(promptText, url) => {
           setFullscreenImage(null);

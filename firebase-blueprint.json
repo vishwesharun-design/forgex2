@@ -171,9 +171,33 @@
         "createdAt": { "type": "number" }
       },
       "required": ["id", "title", "creatorName", "creatorEmail", "systemPrompt"]
+    },
+    "VaultDocument": {
+      "title": "VaultDocument",
+      "description": "User uploaded knowledge base document, note, or web page excerpt for RAG grounding",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "charCount": { "type": "number" },
+        "sourceUrl": { "type": "string" },
+        "summary": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "title", "content"]
     }
   },
   "firestore": {
+    "/users/{userId}/vault/{docId}": {
+      "schema": "VaultDocument",
+      "description": "Private knowledge vault documents and notes for AI grounding"
+    },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile with private credentials and storage metrics"

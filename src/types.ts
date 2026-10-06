@@ -74,7 +74,23 @@ export type ActiveWorkspace =
   | 'canvas'
   | 'projects'
   | 'data_analysis'
+  | 'vault'
   | (string & {});
+
+export interface VaultDocument {
+  id: string;
+  userId?: string;
+  title: string;
+  content: string;
+  category: 'document' | 'webpage' | 'notes' | 'code';
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+  charCount: number;
+  sourceUrl?: string;
+  summary?: string;
+  isActive: boolean; // toggled on/off for active grounding in Chat & Deep Research
+}
 
 export interface UserStudioProfile {
   studioName: string;
@@ -195,7 +211,6 @@ export interface ChatMessage {
   }[];
   generatedImages?: GeneratedImage[];
   isGeneratingImage?: boolean;
-  ocrText?: string;
 }
 
 export interface ChatSession {
@@ -222,20 +237,6 @@ export type ImageStyle =
   | 'Pixel Art' 
   | 'Custom';
 
-export interface VisionAnalysisResult {
-  ocrText: string;
-  hasText: boolean;
-  subjectsDetected: string[];
-  visualDescription: string;
-  optimizedPrompt: string;
-  ageProgressionPrompt?: string;
-  subjectRemovalPrompt?: string;
-  explanation?: string;
-  ocrElements?: string[];
-  intent?: 'edit' | 'create';
-  editDirectives?: string;
-}
-
 export interface GeneratedImage {
   id: string;
   prompt: string;
@@ -248,9 +249,6 @@ export interface GeneratedImage {
   referenceImage?: string;
   customStyle?: string;
   engine?: string;
-  ocrText?: string;
-  visionAnalysis?: string;
-  ocrMode?: 'edit' | 'create';
 }
 
 export type VideoDuration = '5s' | '10s' | '15s' | '20s' | '30s' | '60s' | string;
@@ -357,8 +355,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultVideoDuration: '10s',
   autoEnhancePrompts: true,
   enableAnimations: true,
-  enableStarBackground: true,
-  themeEffect: 'connected_dots',
+  enableStarBackground: false,
+  themeEffect: 'none',
   reduceMotion: false,
 };
 
@@ -389,8 +387,6 @@ export interface DocumentItem {
   fileSize: number;
   uploadTime: number;
   textContent: string;
-  base64Data?: string;
-  mimeType?: string;
   previewUrl?: string;
   summary?: string;
   keyPoints?: string[];

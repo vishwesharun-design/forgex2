@@ -66,40 +66,19 @@ function getEffectiveApiKey(req: Request): string | undefined {
 
 // Ultra-fast, highly accurate model cascades:
 // gemini-3.1-flash-lite delivers ~1s first-token latency with zero deliberation lag.
-// gemini-flash-latest and gemini-3.8-flash provide high-tier reasoning.
-const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
-const PREMIER_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+// gemini-3.8-flash delivers premier multimodal reasoning with ThinkingLevel.LOW for high accuracy without delay.
+const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+const PREMIER_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
 const RESILIENT_MODELS = FAST_MODELS;
 
-// Model-level quota tracking to bypass exhausted models without blocking requests
-const modelQuotaExhaustedUntil = new Map<string, number>();
-
-function isModelAvailable(model: string): boolean {
-  const until = modelQuotaExhaustedUntil.get(model);
-  if (!until) return true;
-  if (Date.now() > until) {
-    modelQuotaExhaustedUntil.delete(model);
-    return true;
-  }
-  return false;
-}
-
-function markModelQuotaExhausted(model: string): void {
-  // Mark model exhausted for 15 minutes cooldown
-  modelQuotaExhaustedUntil.set(model, Date.now() + 15 * 60 * 1000);
-}
-
 function getModelCascade(modelId?: string): string[] {
-  let baseList = FAST_MODELS;
-  if (modelId === "forge-2-ultra" || modelId === "forge-2-pro") {
-    baseList = PREMIER_MODELS;
+  if (modelId === "forge-1" || modelId === "forge-1.5" || modelId === "forge-2") {
+    return FAST_MODELS;
   }
-  // Order models so available (non-quota-exhausted) models are tried first
-  return [...baseList].sort((a, b) => {
-    const aAvail = isModelAvailable(a) ? 0 : 1;
-    const bAvail = isModelAvailable(b) ? 0 : 1;
-    return aAvail - bAvail;
-  });
+  if (modelId === "forge-2-ultra" || modelId === "forge-2-pro") {
+    return PREMIER_MODELS;
+  }
+  return FAST_MODELS;
 }
 
 function buildModelConfig(model: string, baseConfig?: any): any {
@@ -384,41 +363,6 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
   return result;
 }
 
-// Search Grounding Circuit Breaker to prevent 429 quota exhaustion loops
-let isSearchGroundingQuotaExhausted = false;
-let searchGroundingExhaustedUntil = 0;
-
-function isSearchGroundingAvailable(): boolean {
-  if (isSearchGroundingQuotaExhausted) {
-    if (Date.now() > searchGroundingExhaustedUntil) {
-      isSearchGroundingQuotaExhausted = false;
-      return true;
-    }
-    return false;
-  }
-  return true;
-}
-
-function markSearchGroundingQuotaExhausted(): void {
-  isSearchGroundingQuotaExhausted = true;
-  // Cooldown for 15 minutes before re-attempting live Google Search grounding
-  searchGroundingExhaustedUntil = Date.now() + 15 * 60 * 1000;
-}
-
-function isQuotaExhaustedError(err: any): boolean {
-  if (!err) return false;
-  const status = err.status || err.code || err.statusCode || err.error?.code;
-  if (status === 429) return true;
-  const message = String(err.message || err.error?.message || err).toLowerCase();
-  return (
-    message.includes("quota") ||
-    message.includes("429") ||
-    message.includes("resource_exhausted") ||
-    message.includes("rate_limit") ||
-    message.includes("rate limit")
-  );
-}
-
 async function generateContentResilient(
   ai: GoogleGenAI,
   request: {
@@ -428,19 +372,10 @@ async function generateContentResilient(
   preferredModels: string[] = FAST_MODELS
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
-  let activeConfig = { ...request.config };
-
-  // If search grounding quota is known to be exhausted, do not attach googleSearch tool
-  if (!isSearchGroundingAvailable() && activeConfig.tools) {
-    activeConfig.tools = activeConfig.tools.filter((t: any) => !t.googleSearch);
-    if (activeConfig.tools.length === 0) {
-      delete activeConfig.tools;
-    }
-  }
 
   for (const model of preferredModels) {
     try {
-      const modelConfig = buildModelConfig(model, activeConfig);
+      const modelConfig = buildModelConfig(model, request.config);
       const response = await ai.models.generateContent({
         model,
         contents: request.contents,
@@ -453,15 +388,12 @@ async function generateContentResilient(
       }
     } catch (err: any) {
       lastError = err;
-      // If error occurred with tools (e.g. search quota 429), mark search quota exhausted and strip tools for all models
-      if (activeConfig.tools && activeConfig.tools.length > 0) {
-        if (isQuotaExhaustedError(err)) {
-          markSearchGroundingQuotaExhausted();
-        }
-        activeConfig = { ...activeConfig };
-        delete activeConfig.tools;
+      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
+      if (request.config?.tools && request.config.tools.length > 0) {
         try {
-          const retryConfig = buildModelConfig(model, activeConfig);
+          const configWithoutTools = { ...request.config };
+          delete configWithoutTools.tools;
+          const retryConfig = buildModelConfig(model, configWithoutTools);
           const response = await ai.models.generateContent({
             model,
             contents: request.contents,
@@ -491,19 +423,10 @@ async function* generateContentStreamResilient(
   preferredModels: string[] = FAST_MODELS
 ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
   let lastError: any = null;
-  let activeConfig = { ...request.config };
-
-  // If search grounding quota is known to be exhausted, do not attach googleSearch tool
-  if (!isSearchGroundingAvailable() && activeConfig.tools) {
-    activeConfig.tools = activeConfig.tools.filter((t: any) => !t.googleSearch);
-    if (activeConfig.tools.length === 0) {
-      delete activeConfig.tools;
-    }
-  }
 
   for (const model of preferredModels) {
     try {
-      const modelConfig = buildModelConfig(model, activeConfig);
+      const modelConfig = buildModelConfig(model, request.config);
       const responseStream = await ai.models.generateContentStream({
         model,
         contents: request.contents,
@@ -531,15 +454,12 @@ async function* generateContentStreamResilient(
       }
     } catch (err: any) {
       lastError = err;
-      // If error occurred with tools (e.g. search quota 429), mark search quota exhausted and strip tools for all models
-      if (activeConfig.tools && activeConfig.tools.length > 0) {
-        if (isQuotaExhaustedError(err)) {
-          markSearchGroundingQuotaExhausted();
-        }
-        activeConfig = { ...activeConfig };
-        delete activeConfig.tools;
+      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
+      if (request.config?.tools && request.config.tools.length > 0) {
         try {
-          const retryConfig = buildModelConfig(model, activeConfig);
+          const configWithoutTools = { ...request.config };
+          delete configWithoutTools.tools;
+          const retryConfig = buildModelConfig(model, configWithoutTools);
           const responseStream = await ai.models.generateContentStream({
             model,
             contents: request.contents,
@@ -575,213 +495,7 @@ async function* generateContentStreamResilient(
   throw lastError || new Error("All streaming models failed.");
 }
 
-interface ExtractedImagePart {
-  inlineData: {
-    mimeType: string;
-    data: string;
-  };
-}
-
-async function extractImageInlineData(imageStr: string): Promise<ExtractedImagePart | null> {
-  try {
-    if (!imageStr || typeof imageStr !== "string") return null;
-    const trimmed = imageStr.trim();
-    if (trimmed.startsWith("data:")) {
-      const match = trimmed.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-      if (match && match[2]) {
-        return {
-          inlineData: {
-            mimeType: match[1] || "image/jpeg",
-            data: match[2],
-          },
-        };
-      }
-    } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      const res = await fetch(trimmed, { signal: AbortSignal.timeout(6000) });
-      if (res.ok) {
-        const buffer = await res.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString("base64");
-        const mimeType = res.headers.get("content-type") || "image/jpeg";
-        return {
-          inlineData: {
-            mimeType,
-            data: base64,
-          },
-        };
-      }
-    } else if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 100) {
-      return {
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: trimmed,
-        },
-      };
-    }
-  } catch (err) {
-    console.warn("Failed to extract image inline data:", err);
-  }
-  return null;
-}
-
-export interface VisionAnalysisResult {
-  ocrText: string;
-  hasText: boolean;
-  subjectsDetected: string[];
-  visualDescription: string;
-  optimizedPrompt: string;
-  ageProgressionPrompt?: string;
-  subjectRemovalPrompt?: string;
-  explanation?: string;
-  ocrElements?: string[];
-  intent?: 'edit' | 'create';
-  editDirectives?: string;
-  mode?: 'edit' | 'create';
-}
-
-// Deep Vision OCR & Multimodal Transformation Intelligence using Gemini 3.8 Flash
-async function analyzeImageWithVision(
-  imageStr: string,
-  userInstruction?: string,
-  apiKey?: string
-): Promise<VisionAnalysisResult> {
-  const defaultOutput: VisionAnalysisResult = {
-    ocrText: "",
-    hasText: false,
-    subjectsDetected: [],
-    visualDescription: "",
-    optimizedPrompt: userInstruction || "A cinematic visual masterpiece",
-    explanation: "",
-    ocrElements: [],
-    intent: "create",
-  };
-
-  const imagePart = await extractImageInlineData(imageStr);
-  if (!imagePart) {
-    return defaultOutput;
-  }
-
-  const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
-  if (!effectiveKey) {
-    return defaultOutput;
-  }
-
-  try {
-    const ai = getGenAiClient(effectiveKey);
-    const instruction = (userInstruction || "Analyze image, extract all visible text via Vision OCR, and identify all people, objects and scene elements").trim();
-
-    const isRemovalInstruction = /(?:remove|erase|delete|eliminate|take\s+out|take\s+away|crop\s+out|without)\b/i.test(instruction);
-
-    const visionPrompt = `You are ForgeX Vision OCR & Multimodal Image Transformation Intelligence.
-Analyze the attached image and the user's prompt/instruction: "${instruction}".
-
-CORE RESPONSIBILITIES:
-1. DEEP VISION OCR:
-   - Read and transcribe EVERY single word, number, character, logo, sign, slogan, lettering, title, or label visible anywhere in the image.
-   - Transcribe typography, handwriting, signage, billboards, book covers, brand names, clothing/t-shirt text, graffiti, license plates, digital displays, packaging, and badges.
-   - Set "ocrText" to the exact transcribed text. Set "hasText" to true if any text was found.
-   - Set "ocrElements" to an array describing each distinct detected text item and where it appears (e.g. ["Sign: 'CAFE OPEN'", "T-Shirt: 'NEW YORK'", "Packaging: 'ORGANIC'"]).
-
-2. SUBJECT & SCENE UNDERSTANDING:
-   - Identify and describe all people, subjects, their ages, distinct visual characteristics, outfits, objects, colors, atmosphere, perspective, and art style.
-   - Set "subjectsDetected" to an array describing each detected subject/element.
-   - Set "visualDescription" to a comprehensive scene description.
-
-3. USER INTENT CLASSIFICATION (EDIT vs CREATE):
-   - "edit": The user wants to modify, transform, inpaint, alter, change text, remove/add subjects, or restyle the attached image.
-   - "create": The user wants to generate a new image inspired by, based on, or incorporating the text/elements from the attached image.
-   - Set "intent" to either "edit" or "create".
-
-4. INSTRUCTION-GUIDED PROMPT SYNTHESIS:
-   - For EDITING:
-     * Provide "editDirectives": concise, precise instructions for what to change and what to keep.
-     * ZERO-NEGATION RULE: If removing an object/person, describe the remaining background/scene in positive terms without negative words like "remove" or "no".
-     * If modifying or replacing text, state the exact new text to display clearly.
-   - For CREATING:
-     * In "optimizedPrompt", synthesize a complete, rich diffusion prompt that weaves in the extracted OCR text and prompt requirements cleanly.
-   - AGE PROGRESSION ("how will he look at 20"):
-     * In "ageProgressionPrompt", describe the subject matured to age 20 while preserving their facial bone structure, ethnic traits, eye shape, and identity.
-   - SUBJECT REMOVAL:
-     * In "subjectRemovalPrompt", describe the infilled scene with the target omitted.
-
-5. USER EXPLANATION:
-   - In "explanation", provide a friendly, clear explanation summarizing what was read via Vision OCR, the detected subjects, and how their request is being fulfilled.
-
-Return ONLY a JSON object:
-{
-  "ocrText": "all extracted text from image",
-  "hasText": boolean,
-  "ocrElements": ["text element 1", "text element 2"],
-  "subjectsDetected": ["subject 1", "subject 2"],
-  "visualDescription": "detailed scene description",
-  "intent": "edit" | "create",
-  "editDirectives": "precise instructions for image editing",
-  "explanation": "friendly, intelligent explanation to user of what was recognized and how their instruction was fulfilled",
-  "optimizedPrompt": "complete, highly detailed positive prompt for diffusion/generation",
-  "ageProgressionPrompt": "specific prompt for aging subject to 20",
-  "subjectRemovalPrompt": "positive diffusion prompt for removing target subject and infilling scene"
-}`;
-
-    const candidateVisionModels = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
-    let reply = "";
-    for (const vModel of candidateVisionModels) {
-      try {
-        const res = await ai.models.generateContent({
-          model: vModel,
-          contents: {
-            parts: [imagePart, { text: visionPrompt }],
-          },
-          config: {
-            responseMimeType: "application/json",
-          },
-        });
-        reply = res.text?.trim() || "";
-        if (reply) break;
-      } catch (mErr: any) {
-        console.warn(`Vision model ${vModel} attempt notice:`, mErr?.message || mErr);
-      }
-    }
-    if (reply) {
-      try {
-        const parsed = JSON.parse(reply);
-        let chosenOptimizedPrompt = parsed.optimizedPrompt || instruction;
-        if (isRemovalInstruction && parsed.subjectRemovalPrompt) {
-          chosenOptimizedPrompt = parsed.subjectRemovalPrompt;
-        }
-
-        // If chosenOptimizedPrompt still starts with "remove", fallback to visual description
-        if (/^remove\s+/i.test(chosenOptimizedPrompt)) {
-          chosenOptimizedPrompt = parsed.visualDescription || "A beautiful scenic photograph with clear background, sharp focus, 8k";
-        }
-
-        const explanation = parsed.explanation || (parsed.visualDescription
-          ? `I've analyzed the image (${parsed.visualDescription.slice(0, 120)}...) and updated the scene according to your request.`
-          : `I've analyzed your image and processed your request: "${instruction}".`);
-
-        return {
-          ocrText: parsed.ocrText || "",
-          hasText: Boolean(parsed.hasText || (parsed.ocrText && parsed.ocrText.trim().length > 0)),
-          subjectsDetected: Array.isArray(parsed.subjectsDetected) ? parsed.subjectsDetected : [],
-          visualDescription: parsed.visualDescription || "",
-          explanation,
-          optimizedPrompt: chosenOptimizedPrompt,
-          ageProgressionPrompt: parsed.ageProgressionPrompt,
-          subjectRemovalPrompt: parsed.subjectRemovalPrompt,
-          ocrElements: Array.isArray(parsed.ocrElements) ? parsed.ocrElements : [],
-          intent: parsed.intent === "edit" ? "edit" : "create",
-          editDirectives: parsed.editDirectives || "",
-        };
-      } catch (err) {
-        console.warn("Failed to parse vision response JSON:", err);
-      }
-    }
-  } catch (err) {
-    console.warn("Vision OCR / subject analysis notice:", err);
-  }
-
-  return defaultOutput;
-}
-
-// Generate prompt-specific real AI image using Black Forest Labs FLUX / Imagen 3 / Gemini Vision pipeline
+// Generate prompt-specific real AI image using Black Forest Labs FLUX / Imagen 3 pipeline
 async function generateRealAiImage(
   prompt: string, 
   style: string, 
@@ -790,42 +504,17 @@ async function generateRealAiImage(
   customStyleDesc?: string,
   fluxModel?: string,
   apiKey?: string,
-  puterAuthToken?: string,
-  referenceImage?: string,
-  originalInstruction?: string
-): Promise<{ imageUrl: string; engine: string; ocrText?: string; visionAnalysis?: string }> {
+  puterAuthToken?: string
+): Promise<{ imageUrl: string; engine: string }> {
   const cleanPrompt = (prompt || "A cinematic visual masterpiece").trim();
-  const effectiveInstruction = (originalInstruction || cleanPrompt).trim();
   let fullPrompt = cleanPrompt;
-  let ocrResultText = "";
-  let visualAnalysisDesc = "";
-
-  // 0. If a reference image is provided, run Vision OCR & multimodal understanding
-  let visionResultObj: VisionAnalysisResult | null = null;
-  if (referenceImage) {
-    try {
-      visionResultObj = await analyzeImageWithVision(referenceImage, effectiveInstruction, apiKey);
-      if (visionResultObj.ocrText) {
-        ocrResultText = visionResultObj.ocrText;
-      }
-      visualAnalysisDesc = visionResultObj.explanation || visionResultObj.visualDescription || "";
-      if (visionResultObj.optimizedPrompt && visionResultObj.optimizedPrompt !== cleanPrompt) {
-        fullPrompt = visionResultObj.optimizedPrompt;
-      } else if (ocrResultText) {
-        fullPrompt = `${cleanPrompt}. Extracted image text: "${ocrResultText}". Featuring crisp, readable typography.`;
-      }
-    } catch (visionErr) {
-      console.warn("Vision analysis in image pipeline notice:", visionErr);
-    }
-  }
-
   if (style && style !== "None") {
     const styleDesc = customStyleDesc?.trim() || STYLE_PROMPTS[style] || `${style} style`;
-    if (styleDesc && !fullPrompt.includes(styleDesc)) {
-      fullPrompt = `${fullPrompt}, ${styleDesc}`;
+    if (styleDesc) {
+      fullPrompt = `${cleanPrompt}, ${styleDesc}`;
     }
-  } else if (customStyleDesc?.trim() && !fullPrompt.includes(customStyleDesc.trim())) {
-    fullPrompt = `${fullPrompt}, ${customStyleDesc.trim()}`;
+  } else if (customStyleDesc?.trim()) {
+    fullPrompt = `${cleanPrompt}, ${customStyleDesc.trim()}`;
   }
 
   let width = 1024;
@@ -844,73 +533,7 @@ async function generateRealAiImage(
     height = 1024;
   }
 
-  const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
-
-  // 1. If reference image is provided and effective Gemini key is available:
-  // Attempt direct multimodal image-to-image editing / creation via gemini-3.1-flash-lite-image / gemini-3.1-flash-image
-  if (referenceImage && effectiveKey) {
-    try {
-      const imagePart = await extractImageInlineData(referenceImage);
-      if (imagePart) {
-        const ai = getGenAiClient(effectiveKey);
-        const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
-        const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
-
-        const editInstructionPrompt = `You are a world-class multimodal image generation and editing intelligence.
-USER REQUEST: "${effectiveInstruction}".
-
-VISION OCR & SCENE CONTEXT:
-${ocrResultText ? `Transcribed text from image (OCR): "${ocrResultText}"` : 'No distinct text in source image.'}
-${visualAnalysisDesc ? `Source scene analysis: ${visualAnalysisDesc}` : ''}
-${visionResultObj?.editDirectives ? `Specific transformation directives: ${visionResultObj.editDirectives}` : ''}
-
-DIRECTIVES:
-1. READ & RECOGNIZE: Carefully inspect the attached image, its text, subject, composition, and style.
-2. EDIT OR CREATE ACCORDING TO PROMPT:
-   - If the user asks to EDIT or MODIFY the attached image (e.g., change/replace text, add/remove objects, alter clothing, recolor, change atmosphere, age a person, transform style, inpaint):
-     Apply the requested edit precisely according to "${effectiveInstruction}". Modify the targeted parts while maintaining realistic visual quality and natural blend. If changing text, render the new text with razor-sharp, readable typography.
-   - If the user asks to CREATE a new image according to the prompt (using the image as reference or inspiration, or incorporating the OCR text):
-     Generate a brand-new, high-fidelity visual composition fulfilling "${effectiveInstruction}", seamlessly integrating any required text or thematic elements.
-3. QUALITY: Deliver crisp 8K resolution detail, realistic lighting, and natural blending.`;
-
-        const candidateEditModels = ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"];
-        for (const editModel of candidateEditModels) {
-          try {
-            const imageEditRes = await ai.models.generateContent({
-              model: editModel,
-              contents: {
-                parts: [
-                  imagePart,
-                  { text: editInstructionPrompt },
-                ],
-              },
-              config: {
-                imageConfig: {
-                  aspectRatio: targetRatio as any,
-                },
-              },
-            });
-            for (const part of imageEditRes.candidates?.[0]?.content?.parts || []) {
-              if (part.inlineData?.data) {
-                return {
-                  imageUrl: `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`,
-                  engine: "Gemini Vision Image Editing",
-                  ocrText: ocrResultText,
-                  visionAnalysis: visualAnalysisDesc,
-                };
-              }
-            }
-          } catch (modelErr) {
-            console.warn(`[Gemini Img2Img] Model ${editModel} notice:`, modelErr);
-          }
-        }
-      }
-    } catch (editErr) {
-      console.warn("[Gemini Vision Img2Img] Notice, trying Puter / Imagen pipeline:", editErr);
-    }
-  }
-
-  // 2. If Puter auth token is available, generate with official Black Forest Labs FLUX via Puter SDK
+  // 1. If Puter auth token is available, generate with official Black Forest Labs FLUX via Puter SDK
   if (puterAuthToken) {
     try {
       const puterModule = await import("@heyputer/puter.js");
@@ -918,24 +541,17 @@ DIRECTIVES:
       if (puter && typeof puter.setAuthToken === "function" && puter.ai?.txt2img) {
         puter.setAuthToken(puterAuthToken);
         const targetModel = fluxModel || "black-forest-labs/flux-1.1-pro";
-        const puterOptions: Record<string, any> = {
+        const puterRes = await puter.ai.txt2img(fullPrompt, {
           model: targetModel,
           width,
           height,
-        };
-        if (referenceImage) {
-          puterOptions.image_url = referenceImage;
-          puterOptions.input_image = referenceImage;
-        }
-        const puterRes = await puter.ai.txt2img(fullPrompt, puterOptions);
+        });
         const resAny = puterRes as any;
         const url = typeof puterRes === "string" ? puterRes : resAny?.src || resAny?.url;
         if (url) {
           return {
             imageUrl: url,
             engine: "Black Forest Labs FLUX (Puter)",
-            ocrText: ocrResultText,
-            visionAnalysis: visualAnalysisDesc,
           };
         }
       }
@@ -944,7 +560,7 @@ DIRECTIVES:
     }
   }
 
-  // 3. Official Black Forest Labs BFL API (if BFL_API_KEY is configured)
+  // 2. Official Black Forest Labs BFL API (if BFL_API_KEY is configured)
   const bflKey = process.env.BFL_API_KEY?.trim();
   if (bflKey) {
     try {
@@ -964,6 +580,7 @@ DIRECTIVES:
       if (bflRes.ok) {
         const bflData = (await bflRes.json()) as any;
         if (bflData.id && bflData.polling_url) {
+          // Poll for completion (up to 30 seconds)
           for (let poll = 0; poll < 15; poll++) {
             await new Promise((r) => setTimeout(r, 2000));
             const pollRes = await fetch(bflData.polling_url, {
@@ -975,8 +592,6 @@ DIRECTIVES:
                 return {
                   imageUrl: pollData.result.sample,
                   engine: "Black Forest Labs FLUX 1.1 Pro (BFL API)",
-                  ocrText: ocrResultText,
-                  visionAnalysis: visualAnalysisDesc,
                 };
               }
             }
@@ -988,7 +603,8 @@ DIRECTIVES:
     }
   }
 
-  // 4. Google Imagen 3 (High-Fidelity Diffusion) if API key is provided
+  // 3. Google Imagen 3 (High-Fidelity Diffusion) if API key is provided
+  const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
   if (effectiveKey) {
     try {
       const ai = getGenAiClient(effectiveKey);
@@ -1008,8 +624,6 @@ DIRECTIVES:
         return {
           imageUrl: `data:image/jpeg;base64,${imgBytes}`,
           engine: "Google Imagen 3 (High Fidelity)",
-          ocrText: ocrResultText,
-          visionAnalysis: visualAnalysisDesc,
         };
       }
     } catch (_err) {}
@@ -1204,7 +818,7 @@ async function startServer() {
       timestamp: Date.now(),
       modelsSupported: [
         "veo-3.1-lite-generate-preview",
-        "veo-3.1-generate-preview",
+        "veo-2.0-generate-001",
         "gemini-3.1-flash-lite-image",
         "gemini-3.1-flash-image",
         "gemini-3.8-flash",
@@ -1272,7 +886,9 @@ async function startServer() {
         liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
-      const forgexSystemInstruction = customSystemInstruction || FORGEX_SYSTEM_INSTRUCTION;
+      const forgexSystemInstruction = customSystemInstruction
+        ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${customSystemInstruction}`
+        : FORGEX_SYSTEM_INSTRUCTION;
       const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
         ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
         : forgexSystemInstruction;
@@ -1326,12 +942,12 @@ async function startServer() {
             parts: currentParts,
           });
 
-          // If search is needed and quota is available, attach googleSearch tool for dynamic search grounding
+          // If search is needed, attach googleSearch tool for dynamic search grounding
           const requestConfig: any = {
             systemInstruction: enhancedSystemInstruction,
           };
 
-          if (searchIntent.shouldSearch && isSearchGroundingAvailable()) {
+          if (searchIntent.shouldSearch) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
@@ -1493,14 +1109,12 @@ async function startServer() {
         if (typeof (res as any).flush === "function") {
           (res as any).flush();
         }
-        liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
       const modelCascade = getModelCascade(modelId);
-      const forgexSystemInstruction = customSystemInstruction || FORGEX_SYSTEM_INSTRUCTION;
-      const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
-        ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
-        : forgexSystemInstruction;
+      const forgexSystemInstruction = customSystemInstruction
+        ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${customSystemInstruction}`
+        : FORGEX_SYSTEM_INSTRUCTION;
 
       // Try streaming with live Gemini candidate keys
       for (const currentKey of candidateKeys) {
@@ -1548,10 +1162,10 @@ async function startServer() {
           });
 
           const requestConfig: any = {
-            systemInstruction: enhancedSystemInstruction,
+            systemInstruction: forgexSystemInstruction,
           };
 
-          if (searchIntent.shouldSearch && isSearchGroundingAvailable()) {
+          if (searchIntent.shouldSearch) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
@@ -1691,9 +1305,9 @@ async function startServer() {
           let response;
           // Ultra-fast and high-quota multimodal models for robust audio transcription
           const candidateModels = [
-            "gemini-3.5-transcribe",
-            "gemini-3.8-flash",
             "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash",
             "gemini-flash-latest",
           ];
           let lastErr: any = null;
@@ -1799,7 +1413,6 @@ async function startServer() {
     try {
       const {
         prompt,
-        originalInstruction,
         aspectRatio = "16:9",
         count = 1,
         style = "Cinematic",
@@ -1820,9 +1433,6 @@ async function startServer() {
       sendEvent({ progress: 15, stage: "initializing", message: "Initializing Black Forest Labs FLUX latent space..." });
 
       // Stage 2: Prompt conditioning & Cross Attention
-      if (referenceImage) {
-        sendEvent({ progress: 25, stage: "vision_ocr", message: "Inspecting image with Gemini Vision AI & OCR..." });
-      }
       sendEvent({ progress: 35, stage: "diffusion_setup", message: `Encoding prompt: "${cleanPrompt.slice(0, 40)}..."` });
 
       const numToGen = Math.min(Math.max(count || 1, 1), 4);
@@ -1836,18 +1446,7 @@ async function startServer() {
         });
 
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(
-          cleanPrompt,
-          style,
-          aspectRatio,
-          seed,
-          customStyle,
-          fluxModel,
-          apiKey,
-          puterAuthToken,
-          referenceImage,
-          originalInstruction
-        );
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
 
         generatedImagesList.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1861,8 +1460,6 @@ async function startServer() {
           isFavorite: false,
           referenceImage,
           engine: genResult.engine || "Black Forest Labs FLUX.1",
-          ocrText: genResult.ocrText,
-          visionAnalysis: genResult.visionAnalysis,
         });
       }
 
@@ -1884,34 +1481,11 @@ async function startServer() {
     }
   });
 
-  // Dedicated Vision OCR & Visual Analysis Endpoint
-  app.post("/api/vision/analyze", async (req: Request, res: Response) => {
-    try {
-      const { image, prompt, task } = req.body;
-      if (!image) {
-        return res.status(400).json({ error: "Image is required for Vision OCR analysis" });
-      }
-      const apiKey = getEffectiveApiKey(req);
-      const instruction = prompt || task || "Perform deep vision OCR, extract all text, identify subjects and describe the image";
-      const analysis = await analyzeImageWithVision(image, instruction, apiKey);
-      return res.json({
-        success: true,
-        result: analysis,
-      });
-    } catch (err: unknown) {
-      console.error("Error in /api/vision/analyze:", err);
-      return res.status(500).json({
-        error: err instanceof Error ? err.message : "Vision OCR analysis failed",
-      });
-    }
-  });
-
-  // Image Generation Endpoint (Black Forest Labs FLUX / Gemini Vision)
+  // Image Generation Endpoint (Black Forest Labs FLUX)
   app.post("/api/generate-image", async (req: Request, res: Response) => {
     try {
       const {
         prompt,
-        originalInstruction,
         aspectRatio = "16:9",
         count = 1,
         style = "Cinematic",
@@ -1930,18 +1504,7 @@ async function startServer() {
 
       for (let i = 0; i < numToGen; i++) {
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(
-          cleanPrompt,
-          style,
-          aspectRatio,
-          seed,
-          customStyle,
-          fluxModel,
-          apiKey,
-          puterAuthToken,
-          referenceImage,
-          originalInstruction
-        );
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
         results.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
           prompt: cleanPrompt,
@@ -1954,8 +1517,6 @@ async function startServer() {
           isFavorite: false,
           referenceImage,
           engine: genResult.engine || "Black Forest Labs FLUX.1",
-          ocrText: genResult.ocrText,
-          visionAnalysis: genResult.visionAnalysis,
         });
       }
 
@@ -2103,62 +1664,41 @@ async function startServer() {
 
       const apiKey = getEffectiveApiKey(req);
       let reportAnswer = "";
-      const sources: { title: string; url: string; snippet?: string; sourceDomain?: string }[] = [];
+      const sources: { title: string; url: string; snippet: string; sourceDomain?: string }[] = [];
       const searchQueriesUsed: string[] = [];
-
-      // 1. Pre-fetch real-time multi-source web grounding
-      let liveGrounding: WebGroundingResult = {
-        searchedWeb: false,
-        searchQueries: [],
-        groundingSources: [],
-      };
-      try {
-        liveGrounding = await performLiveWebGrounding(cleanQuery);
-        if (liveGrounding.groundingSources.length > 0) {
-          sources.push(...liveGrounding.groundingSources);
-          searchQueriesUsed.push(cleanQuery);
-        }
-      } catch (groundingErr) {
-        // Continue if web grounding encounters network issues
-      }
-
-      const deepResearchPrompt = `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n\n` +
-        (liveGrounding.groundingContext ? `=== REAL-TIME WEB RESEARCH & EVIDENCE ===\n${liveGrounding.groundingContext}\n\n` : "") +
-        `Instructions for the report structure:\n` +
-        `1. Start with a direct, comprehensive executive summary and core answer.\n` +
-        `2. Provide a 'Key Findings' section with bulleted facts, statistics, and verifiable takeaways.\n` +
-        `3. Provide in-depth thematic sections breaking down mechanisms, evidence, industry/academic context, and future outlook.\n` +
-        `4. Ensure all factual claims are backed by rigorous web research and cite sources accurately.\n\n` +
-        `Depth level requested: ${depth.toUpperCase()}`;
 
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
           const candModels = RESILIENT_MODELS;
-          let tryGoogleSearch = isSearchGroundingAvailable();
 
           for (const cand of candModels) {
             try {
-              const config: any = {
-                systemInstruction: "You are an elite deep research engine. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
-                thinkingConfig: {
-                  thinkingLevel: ThinkingLevel.LOW,
-                },
-              };
-
-              if (tryGoogleSearch) {
-                config.tools = [{ googleSearch: {} }];
-              }
-
               const result = await ai.models.generateContent({
                 model: cand,
                 contents: [
                   {
                     role: "user",
-                    parts: [{ text: deepResearchPrompt }]
+                    parts: [
+                      {
+                        text: `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n\n` +
+                          `Instructions for the report structure:\n` +
+                          `1. Start with a direct, comprehensive executive summary and core answer.\n` +
+                          `2. Provide a 'Key Findings' section with bulleted facts, statistics, and verifiable takeaways.\n` +
+                          `3. Provide in-depth thematic sections breaking down mechanisms, evidence, industry/academic context, and future outlook.\n` +
+                          `4. Ensure all factual claims are backed by rigorous web research and cite sources accurately.\n\n` +
+                          `Depth level requested: ${depth.toUpperCase()}`
+                      }
+                    ]
                   }
                 ],
-                config,
+                config: {
+                  tools: [{ googleSearch: {} }],
+                  systemInstruction: "You are an elite deep research engine. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
+                  thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.LOW,
+                  },
+                }
               });
 
               const candidate = result.candidates?.[0];
@@ -2168,9 +1708,7 @@ async function startServer() {
                 reportAnswer = text;
                 const grounding = candidate?.groundingMetadata;
                 if (grounding?.webSearchQueries) {
-                  for (const q of grounding.webSearchQueries) {
-                    if (!searchQueriesUsed.includes(q)) searchQueriesUsed.push(q);
-                  }
+                  searchQueriesUsed.push(...grounding.webSearchQueries);
                 }
                 if (grounding?.groundingChunks) {
                   for (const chunk of grounding.groundingChunks) {
@@ -2182,55 +1720,23 @@ async function startServer() {
                       } catch {
                         domain = "Web Source";
                       }
-                      if (!sources.some((s) => s.url === uri)) {
-                        sources.push({
-                          title: chunk.web.title || domain || "Web Source",
-                          url: uri,
-                          snippet: chunk.web.title || `Information retrieved from ${domain}`,
-                          sourceDomain: domain,
-                        });
-                      }
+                      sources.push({
+                        title: chunk.web.title || domain || "Web Source",
+                        url: uri,
+                        snippet: chunk.web.title || `Information retrieved from ${domain}`,
+                        sourceDomain: domain,
+                      });
                     }
                   }
                 }
                 break;
               }
-            } catch (err: any) {
-              if (isQuotaExhaustedError(err)) {
-                markSearchGroundingQuotaExhausted();
-              }
-              // If failed with search tool, immediately disable search tool for remaining attempts and retry
-              if (tryGoogleSearch) {
-                tryGoogleSearch = false;
-                try {
-                  const retryResult = await ai.models.generateContent({
-                    model: cand,
-                    contents: [
-                      {
-                        role: "user",
-                        parts: [{ text: deepResearchPrompt }]
-                      }
-                    ],
-                    config: {
-                      systemInstruction: "You are an elite deep research engine. Analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
-                      thinkingConfig: {
-                        thinkingLevel: ThinkingLevel.LOW,
-                      },
-                    },
-                  });
-                  const retryText = retryResult.text || retryResult.candidates?.[0]?.content?.parts?.[0]?.text;
-                  if (retryText) {
-                    reportAnswer = retryText;
-                    break;
-                  }
-                } catch {
-                  // Continue to next model
-                }
-              }
+            } catch (err) {
+              console.warn(`Deep research search attempt on ${cand} notice:`, err);
             }
           }
         } catch (e) {
-          // Fallback to procedural synthesis below
+          console.warn("Deep research live search fallback triggered:", e);
         }
       }
 
@@ -4190,7 +3696,229 @@ ${currentContent}
   });
 
   // ==========================================
-  // 6c. DATA ANALYSIS STUDIO ENDPOINT
+  // 6c. AI AUDIO TRANSCRIPTION ENDPOINT
+  // Uses gemini-3.5-transcribe with resilient multimodal fallback
+  // ==========================================
+  app.post("/api/transcribe", async (req: Request, res: Response) => {
+    try {
+      const { audioBase64, mimeType = "audio/webm" } = req.body;
+      const apiKey = getEffectiveApiKey(req);
+
+      if (!audioBase64 || typeof audioBase64 !== "string") {
+        return res.status(400).json({ error: "audioBase64 string is required" });
+      }
+
+      // Strip data URL scheme if present
+      const pureBase64 = audioBase64.includes(",")
+        ? audioBase64.split(",")[1].trim()
+        : audioBase64.trim();
+
+      if (!pureBase64 || pureBase64.length < 50) {
+        return res.json({ success: true, transcript: "" });
+      }
+
+      const cleanMime = (mimeType || "audio/webm").split(";")[0].trim().toLowerCase();
+
+      if (apiKey) {
+        const ai = getGenAiClient(apiKey);
+        const transcribeModels = ["gemini-3.5-transcribe", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
+
+        for (const model of transcribeModels) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: cleanMime,
+                        data: pureBase64,
+                      },
+                    },
+                    {
+                      text: "Transcribe the spoken audio verbatim in the spoken language. Return ONLY the transcribed text. Do not wrap in quotes or add notes.",
+                    },
+                  ],
+                },
+              ],
+            });
+
+            const text = response.text?.trim() || response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            if (text) {
+              return res.json({ success: true, transcript: text, model });
+            }
+          } catch (modelErr: any) {
+            console.log(`Transcribe attempt with ${model} notice:`, modelErr?.message?.slice(0, 100));
+            continue;
+          }
+        }
+      }
+
+      return res.json({
+        success: false,
+        transcript: "",
+        message: "Transcription unavailable without API key or audio was silent.",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
+    }
+  });
+
+  // ==========================================
+  // 6d. AI TEXT-TO-SPEECH (TTS) ENDPOINT
+  // Uses gemini-3.8-flash-lite-tts for high-fidelity natural spoken audio (WAV)
+  // ==========================================
+  app.post("/api/tts", async (req: Request, res: Response) => {
+    try {
+      const { text, voiceName = "Zephyr", style = "Conversational, natural, engaging" } = req.body;
+      const apiKey = getEffectiveApiKey(req);
+
+      if (!text || typeof text !== "string" || !text.trim()) {
+        return res.status(400).json({ error: "Text is required for TTS synthesis." });
+      }
+
+      // Clean markdown tags, code blocks, URLs for natural human speech
+      const cleanSpeech = text
+        .replace(/```[\s\S]*?```/g, "code block omitted")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/[*#_~\[\]\(\)\{\}]/g, "")
+        .replace(/https?:\/\/\S+/g, "link")
+        .replace(/\n+/g, " ")
+        .slice(0, 1500)
+        .trim();
+
+      const validVoices = ["Zephyr", "Aoede", "Kore", "Puck", "Fenrir", "Charon"];
+      let chosenVoice = "Zephyr";
+      const normalizedVoiceName = (voiceName || "").replace(/^gemini-/i, "").trim();
+      const match = validVoices.find(v => v.toLowerCase() === normalizedVoiceName.toLowerCase());
+      if (match) {
+        chosenVoice = match;
+      }
+
+      if (apiKey) {
+        const ai = getGenAiClient(apiKey);
+        const ttsModels = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"];
+
+        for (const model of ttsModels) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      text: cleanSpeech,
+                      speechMetadata: {
+                        style: style || "Natural, charismatic, conversational speaking voice",
+                      },
+                    },
+                  ],
+                },
+              ],
+              config: {
+                // @ts-ignore
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: chosenVoice },
+                  },
+                },
+              },
+            });
+
+            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            if (base64Audio) {
+              return res.json({
+                success: true,
+                audioBase64: base64Audio,
+                mimeType: "audio/wav",
+                voiceName: chosenVoice,
+                engine: model,
+              });
+            }
+          } catch (modelErr: any) {
+            console.log(`TTS generation attempt with ${model} notice:`, modelErr?.message?.slice(0, 100));
+            continue;
+          }
+        }
+      }
+
+      return res.json({
+        success: false,
+        fallback: true,
+        voiceName: chosenVoice,
+        message: "TTS synthesis unavailable on backend; client fallback active.",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
+    }
+  });
+
+  // ==========================================
+  // 6d2. KNOWLEDGE VAULT URL INGESTION ENDPOINT
+  // ==========================================
+  app.post("/api/vault/ingest-url", async (req: Request, res: Response) => {
+    try {
+      const { url } = req.body;
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "Valid URL is required." });
+      }
+
+      const cleanUrl = url.trim();
+      const fetchRes = await fetch(cleanUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ForgeX/2.0",
+        },
+        signal: AbortSignal.timeout(6500),
+      });
+
+      if (!fetchRes.ok) {
+        return res.status(400).json({ error: `Failed to fetch URL: HTTP ${fetchRes.status}` });
+      }
+
+      const html = await fetchRes.text();
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const title = titleMatch ? titleMatch[1].trim() : new URL(cleanUrl).hostname;
+
+      let textContent = html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+        .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
+        .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (textContent.length > 8000) {
+        textContent = textContent.slice(0, 8000) + "...";
+      }
+
+      const summary = textContent.slice(0, 220) + (textContent.length > 220 ? "..." : "");
+
+      return res.json({
+        success: true,
+        title,
+        content: textContent,
+        summary,
+        charCount: textContent.length,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: `URL ingestion note: ${msg}` });
+    }
+  });
+
+  // ==========================================
+  // 6e. DATA ANALYSIS STUDIO ENDPOINT
   // ==========================================
   app.post("/api/data-analysis", async (req: Request, res: Response) => {
     try {

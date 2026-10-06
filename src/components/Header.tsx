@@ -61,6 +61,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Writing Studio', category: 'Productivity' };
       case 'data_analysis':
         return { title: 'Data Analysis Studio', category: 'Intelligence' };
+      case 'vault':
+        return { title: 'Knowledge Vault', category: 'Intelligence' };
       case 'presentation':
         return { title: 'Presentations', category: 'Productivity' };
       case 'canvas':

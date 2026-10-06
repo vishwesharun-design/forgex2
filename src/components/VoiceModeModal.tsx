@@ -52,8 +52,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [transcript, setTranscript] = useState<string>('');
   const [aiSpeechResponse, setAiSpeechResponse] = useState<string>('');
-  const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>([]);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>('');
+  const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>(() => voiceController.getVoices());
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>(() => voiceController.getSelectedVoiceUri() || 'gemini-Zephyr');
   const [liveAudioLevel, setLiveAudioLevel] = useState<number>(0);
   const [continuousCall, setContinuousCall] = useState<boolean>(true);
   const [wasInterrupted, setWasInterrupted] = useState<boolean>(false);
@@ -69,6 +69,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   const [hapticIntensity, setHapticIntensity] = useState<'low' | 'med' | 'high'>('med');
 
   const silenceTimerRef = useRef<any>(null);
+  const vadSilenceTimerRef = useRef<any>(null);
+  const userSpokeRef = useRef<boolean>(false);
   const continuousCallRef = useRef<boolean>(continuousCall);
   const turnsRef = useRef<ConversationTurn[]>(turns);
   const isProcessingRef = useRef<boolean>(false);
@@ -213,6 +215,25 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
       (level) => {
         setLiveAudioLevel(level);
 
+        // VAD (Voice Activity Detection): If browser SpeechRecognition is silent or unavailable,
+        // detect speech by acoustic energy and auto-transcribe on subsequent silence
+        if (level > 24) {
+          userSpokeRef.current = true;
+          if (vadSilenceTimerRef.current) {
+            clearTimeout(vadSilenceTimerRef.current);
+            vadSilenceTimerRef.current = null;
+          }
+        } else if (level < 14 && userSpokeRef.current) {
+          if (!vadSilenceTimerRef.current && !silenceTimerRef.current) {
+            vadSilenceTimerRef.current = setTimeout(() => {
+              if (userSpokeRef.current && !isProcessingRef.current) {
+                userSpokeRef.current = false;
+                handleStopListening();
+              }
+            }, 1600);
+          }
+        }
+
         // Visual haptic pulse when audio transient peaks above ambient noise
         const prev = prevAudioLevelRef.current;
         prevAudioLevelRef.current = level;
@@ -234,6 +255,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   const handleInterrupt = () => {
     setWasInterrupted(true);
     triggerHaptic('interrupt', 'high');
+    if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+    userSpokeRef.current = false;
     voiceController.interruptSpeaking();
     setStatus('listening');
     setTranscript('');
@@ -243,6 +266,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   const handleStopListening = async () => {
     triggerHaptic('turn', 'med');
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+    userSpokeRef.current = false;
     const finalSpeech = await voiceController.stopListening();
     setLiveAudioLevel(0);
     const textToProcess = (finalSpeech || transcript).trim();
@@ -532,24 +557,35 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                     <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 px-2 py-1 font-semibold border-b border-neutral-800/60 mb-1">
                       Select Voice Persona
                     </div>
-                    <div className="max-h-52 overflow-y-auto space-y-1">
-                      {availableVoices.map((v) => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => handleVoiceChange(v.id)}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
-                            selectedVoiceUri === v.id
-                              ? 'bg-amber-500/15 text-amber-400 font-semibold'
-                              : isDark
-                              ? 'hover:bg-neutral-800 text-neutral-300'
-                              : 'hover:bg-neutral-100 text-neutral-700'
-                          }`}
-                        >
-                          <span className="truncate pr-2">{v.name}</span>
-                          {selectedVoiceUri === v.id && <Check className="w-3 h-3 text-amber-400 shrink-0" />}
-                        </button>
-                      ))}
+                    <div className="max-h-56 overflow-y-auto space-y-1">
+                      {availableVoices.map((v) => {
+                        const isGeminiVoice = v.id.startsWith('gemini-');
+                        const displayName = v.name.replace(/ \(Gemini AI.*?\)/, '');
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => handleVoiceChange(v.id)}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                              selectedVoiceUri === v.id
+                                ? 'bg-amber-500/15 text-amber-400 font-semibold'
+                                : isDark
+                                ? 'hover:bg-neutral-800 text-neutral-300'
+                                : 'hover:bg-neutral-100 text-neutral-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate pr-2">
+                              <span className="truncate">{displayName}</span>
+                              {isGeminiVoice && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-400 shrink-0">
+                                  Gemini Voice
+                                </span>
+                              )}
+                            </div>
+                            {selectedVoiceUri === v.id && <Check className="w-3 h-3 text-amber-400 shrink-0" />}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

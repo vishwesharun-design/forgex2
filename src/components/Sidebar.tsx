@@ -25,6 +25,7 @@ import {
   BarChart3, 
   Trash2, 
   X,
+  Database,
   Sparkles,
   Search,
   Check,
@@ -156,6 +157,15 @@ const STUDIOS: StudioDefinition[] = [
     accentColor: 'text-amber-400',
     badge: 'BI & Stats',
     description: 'Upload CSV/JSON for automated stats, anomalies, and reports',
+  },
+  {
+    id: 'vault',
+    title: 'Knowledge Vault',
+    category: 'intelligence',
+    icon: Database,
+    accentColor: 'text-amber-400',
+    badge: 'Vault RAG',
+    description: 'Private document knowledge base & grounding vault for AI',
   },
 
   // 3. Productivity & Dev Studios

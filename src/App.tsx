@@ -40,6 +40,7 @@ import { DataAnalysisWorkspace } from './components/DataAnalysisWorkspace';
 import { PresentationWorkspace } from './components/PresentationWorkspace';
 import { CanvasWorkspace } from './components/CanvasWorkspace';
 import { ProjectWorkspace } from './components/ProjectWorkspace';
+import { VaultWorkspace } from './components/VaultWorkspace';
 import { VoiceModeModal } from './components/VoiceModeModal';
 
 import { SettingsModal } from './components/SettingsModal';
@@ -48,7 +49,6 @@ import { FavoritesModal } from './components/FavoritesModal';
 import { SearchModal } from './components/SearchModal';
 import { NotificationsPopover } from './components/NotificationsPopover';
 import { MediaViewerModal } from './components/MediaViewerModal';
-import { MobileBottomNav } from './components/MobileBottomNav';
 import { StudioStoreModal } from './components/StudioStoreModal';
 import { CustomStudioWorkspace } from './components/CustomStudioWorkspace';
 import { studioService } from './services/studioService';
@@ -70,16 +70,40 @@ export default function App() {
   const [selectedModelId, setSelectedModelId] = useState<ForgeXModelId>('forge-2-ultra');
   const [pendingCodeSnippet, setPendingCodeSnippet] = useState<{ code: string; language?: string } | null>(null);
 
-  // App Settings & Theme
+  // App Settings & Theme (default background effect is none)
   const [settings, setSettings] = useState<UserSettings>(() => {
+    const bgNoneInitialized = localStorage.getItem('forgex_bg_effect_default_none_v2');
     const lightInitialized = localStorage.getItem('forgex_light_default_v1');
     const saved = localStorage.getItem('forgex_settings');
+
+    if (!bgNoneInitialized) {
+      localStorage.setItem('forgex_bg_effect_default_none_v2', 'true');
+      localStorage.setItem('forgex_light_default_v1', 'true');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          const migrated: UserSettings = {
+            ...DEFAULT_SETTINGS,
+            ...parsed,
+            themeEffect: 'none',
+            enableStarBackground: false,
+            theme: parsed.theme || 'light',
+          };
+          localStorage.setItem('forgex_settings', JSON.stringify(migrated));
+          return migrated;
+        } catch {
+          return DEFAULT_SETTINGS;
+        }
+      }
+      return DEFAULT_SETTINGS;
+    }
+
     if (!lightInitialized) {
       localStorage.setItem('forgex_light_default_v1', 'true');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          return { ...DEFAULT_SETTINGS, ...parsed, theme: 'light' };
+          return { ...DEFAULT_SETTINGS, ...parsed, theme: 'light', themeEffect: parsed.themeEffect || 'none' };
         } catch {
           return DEFAULT_SETTINGS;
         }
@@ -88,7 +112,8 @@ export default function App() {
     }
     if (saved) {
       try {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        return { ...DEFAULT_SETTINGS, ...parsed, themeEffect: parsed.themeEffect || 'none' };
       } catch (e) {
         return DEFAULT_SETTINGS;
       }
@@ -462,7 +487,7 @@ export default function App() {
             />
 
             {/* Workspace Core Views */}
-            <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+            <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden">
               {activeWorkspace !== 'chat' && !user ? (
                 <div className={`flex-1 flex flex-col items-center justify-center p-6 text-center ${
                   isDark ? 'bg-neutral-950 text-white' : 'bg-neutral-50 text-neutral-900'
@@ -644,6 +669,19 @@ export default function App() {
                 />
               )}
 
+              {activeWorkspace === 'vault' && (
+                <VaultWorkspace
+                  isDark={isDark}
+                  theme={settings.theme}
+                  onSendToChat={(text) => {
+                    handleSendMessageToActiveChat(text);
+                  }}
+                  onNavigateToChat={() => {
+                    setActiveWorkspace('chat');
+                  }}
+                />
+              )}
+
               {/* Custom Created Studio Workspace */}
               {activeWorkspace.startsWith('custom_') && (() => {
                 const customStudio = studioService.getStudioById(activeWorkspace);
@@ -668,19 +706,6 @@ export default function App() {
                 </>
               )}
             </main>
-
-            {/* Mobile Bottom Navigation Bar (md:hidden) */}
-            <MobileBottomNav
-              activeWorkspace={activeWorkspace}
-              onSelectWorkspace={(ws) => {
-                setActiveWorkspace(ws);
-                setIsMobileNavOpen(false);
-              }}
-              onOpenMobileSidebar={() => setIsMobileNavOpen(true)}
-              onNewChat={handleNewChat}
-              onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
-              theme={settings.theme}
-            />
           </div>
         </div>
       )}

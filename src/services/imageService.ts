@@ -1,4 +1,4 @@
-import { GeneratedImage, ImageAspectRatio, ImageStyle, ForgeXModelId, VisionAnalysisResult } from '../types';
+import { GeneratedImage, ImageAspectRatio, ImageStyle, ForgeXModelId } from '../types';
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 import { puterService, PUTER_FLUX_CONFIG } from './puterService';
@@ -21,32 +21,6 @@ export const imageService = {
     } else {
       localStorage.removeItem('forgex_api_key');
     }
-  },
-
-  async analyzeImageWithVision(image: string, prompt?: string): Promise<VisionAnalysisResult | null> {
-    try {
-      const apiKey = this.getApiKey();
-      const res = await fetch('/api/vision/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'x-api-key': apiKey } : {}),
-        },
-        body: JSON.stringify({
-          image,
-          prompt,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.result) {
-          return data.result as VisionAnalysisResult;
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to analyze image with vision:', err);
-    }
-    return null;
   },
 
   getImages(): GeneratedImage[] {
@@ -110,7 +84,6 @@ export const imageService = {
   async generateImages(
     params: {
       prompt: string;
-      originalInstruction?: string;
       aspectRatio: ImageAspectRatio;
       count: number;
       style: ImageStyle;
@@ -118,7 +91,6 @@ export const imageService = {
       referenceImage?: string;
       customStyle?: string;
       fluxModel?: string;
-      ocrMode?: 'edit' | 'create';
     },
     onProgress?: (progress: number) => void
   ): Promise<GeneratedImage[]> {
@@ -128,103 +100,7 @@ export const imageService = {
 
     if (onProgress) onProgress(10);
 
-    let effectivePrompt = params.prompt;
-    let ocrFoundText: string | undefined;
-    let visionSummary: string | undefined;
-
-    // Run Vision OCR & subject analysis if referenceImage is provided
-    if (params.referenceImage) {
-      if (onProgress) onProgress(15);
-      const userReq = params.originalInstruction || params.prompt;
-      const visionResult = await this.analyzeImageWithVision(params.referenceImage, userReq);
-      if (visionResult) {
-        const isRemoval = /(?:remove|erase|delete|eliminate|take\s+out|take\s+away|without)\b/i.test(userReq);
-        const candidatePrompt = isRemoval && visionResult.subjectRemovalPrompt
-          ? visionResult.subjectRemovalPrompt
-          : visionResult.optimizedPrompt;
-
-        if (candidatePrompt && candidatePrompt !== params.prompt) {
-          effectivePrompt = candidatePrompt;
-        }
-        ocrFoundText = visionResult.ocrText;
-        visionSummary = visionResult.explanation || visionResult.visualDescription;
-      }
-    }
-
-    const puterAuthToken = puterService.getAuthToken();
-
-    // 1. If referenceImage is provided, prioritize Server-side Gemini Multimodal Image Generation & Editing with Vision OCR
-    if (params.referenceImage) {
-      try {
-        if (onProgress) onProgress(25);
-        const streamRes = await fetch('/api/generate-image/stream', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(apiKey ? { 'x-api-key': apiKey } : {}),
-            ...(puterAuthToken ? { 'x-puter-auth': puterAuthToken } : {}),
-          },
-          body: JSON.stringify({
-            ...params,
-            prompt: effectivePrompt,
-            originalInstruction: params.originalInstruction || params.prompt,
-            fluxModel: selectedFluxModel,
-            apiKey: apiKey || undefined,
-            puterAuthToken: puterAuthToken || undefined,
-            ocrMode: params.ocrMode,
-          }),
-        });
-
-        if (streamRes.ok && streamRes.body) {
-          const reader = streamRes.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          const sseImages: GeneratedImage[] = [];
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed.startsWith('data:')) continue;
-              const payloadStr = trimmed.slice(5).trim();
-              if (!payloadStr) continue;
-              try {
-                const data = JSON.parse(payloadStr);
-                if (data.progress && onProgress) {
-                  onProgress(data.progress);
-                }
-                if (data.images && Array.isArray(data.images) && data.images.length > 0) {
-                  sseImages.push(...data.images);
-                }
-              } catch {}
-            }
-          }
-
-          if (sseImages.length > 0) {
-            const enrichedImages = sseImages.map((img) => ({
-              ...img,
-              ocrText: img.ocrText || ocrFoundText,
-              visionAnalysis: img.visionAnalysis || visionSummary,
-              ocrMode: img.ocrMode || params.ocrMode,
-            }));
-            if (onProgress) onProgress(100);
-            const current = this.getImages();
-            const updated = [...enrichedImages, ...current];
-            this.saveImages(updated);
-            return enrichedImages;
-          }
-        }
-      } catch (srvErr) {
-        console.warn('Server image edit pipeline notice, falling back:', srvErr);
-      }
-    }
-
-    // 2. Puter.js SDK call with Black Forest Labs FLUX in browser (for text-to-image or fallback)
+    // 1. Primary: Direct Puter.js SDK call with Black Forest Labs FLUX in browser
     const puterResults: GeneratedImage[] = [];
     let puterError: Error | null = null;
 
@@ -233,7 +109,7 @@ export const imageService = {
       for (let i = 0; i < count; i++) {
         if (onProgress) onProgress(25 + Math.floor((i / count) * 65));
         const res = await puterService.generateFluxImage({
-          prompt: effectivePrompt,
+          prompt: params.prompt,
           aspectRatio: params.aspectRatio,
           style: params.style,
           customStyle: params.customStyle,
@@ -254,9 +130,6 @@ export const imageService = {
             isFavorite: false,
             referenceImage: params.referenceImage,
             engine: res.engine || 'Black Forest Labs FLUX (Puter)',
-            ocrText: ocrFoundText,
-            visionAnalysis: visionSummary,
-            ocrMode: params.ocrMode,
           });
         }
       }
@@ -273,6 +146,8 @@ export const imageService = {
       console.warn('Puter client-side generation notice, trying server pipeline:', err);
     }
 
+    const puterAuthToken = puterService.getAuthToken();
+
     // 2. Real-time streaming SSE image synthesis pipeline
     try {
       const streamRes = await fetch('/api/generate-image/stream', {
@@ -284,7 +159,6 @@ export const imageService = {
         },
         body: JSON.stringify({
           ...params,
-          prompt: effectivePrompt,
           fluxModel: selectedFluxModel,
           apiKey: apiKey || undefined,
           puterAuthToken: puterAuthToken || undefined,
@@ -317,11 +191,7 @@ export const imageService = {
                 onProgress(data.progress);
               }
               if (data.images && Array.isArray(data.images) && data.images.length > 0) {
-                streamedImages = data.images.map((img: GeneratedImage) => ({
-                  ...img,
-                  ocrText: img.ocrText || ocrFoundText,
-                  visionAnalysis: img.visionAnalysis || visionSummary,
-                }));
+                streamedImages = data.images;
               }
             } catch {}
           }
@@ -351,7 +221,6 @@ export const imageService = {
         },
         body: JSON.stringify({
           ...params,
-          prompt: effectivePrompt,
           fluxModel: selectedFluxModel,
           apiKey: apiKey || undefined,
           puterAuthToken: puterAuthToken || undefined,
@@ -361,17 +230,11 @@ export const imageService = {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.images) && data.images.length > 0) {
-          const enriched = data.images.map((img: any) => ({
-            ...img,
-            ocrText: img.ocrText || ocrFoundText,
-            visionAnalysis: img.visionAnalysis || visionSummary,
-            ocrMode: img.ocrMode || params.ocrMode,
-          }));
           if (onProgress) onProgress(100);
           const current = this.getImages();
-          const updated = [...enriched, ...current];
+          const updated = [...data.images, ...current];
           this.saveImages(updated);
-          return enriched;
+          return data.images;
         } else if (data.error) {
           throw new Error(data.error);
         }
