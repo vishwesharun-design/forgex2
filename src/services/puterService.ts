@@ -79,6 +79,7 @@ const STYLE_ENHANCEMENTS: Record<string, string> = {
   Fantasy: 'epic fantasy concept art, magical glowing runes, ethereal mythical atmosphere, majestic architecture',
   Watercolor: 'delicate watercolor painting, soft pigment washes, organic paper texture, fluid bleed edges',
   'Pixel Art': '16-bit retro pixel art, crisp pixel grid, vibrant nostalgic color palette, detailed sprite artwork',
+  'Handwritten Notes': 'ultra-realistic student study notes in an open lined notebook, neat cursive and print handwriting in blue and black gel ink on ruled notebook paper with faint blue lines and pink margin, colorful pastel highlighter section headings in soft pink, mint green, and pale yellow, hand-drawn scientific diagrams with atomic electron shells, dot-and-cross diagram, chemical bonds, arrows, and formulas, boxed definition enclosed in a neat blue ink rectangle, bullet points with underlined key terms, fluffy cloud callout bubble labeled Key points, extremely clean studygram revision notes aesthetic, photorealistic notebook paper texture, natural warm room lighting, sharp 8k resolution, masterwork',
   Custom: 'custom bespoke artistic style, exquisite craftsmanship, balanced composition',
 };
 

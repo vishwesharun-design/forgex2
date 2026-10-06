@@ -34,7 +34,7 @@ import { chatService } from '../services/chatService';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { detectWebSearchIntent } from '../utils/searchIntent';
-import { detectImageGenerationIntent } from '../services/chatService';
+import { detectImageGenerationIntent } from '../utils/imageIntent';
 import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
 import { FullscreenImageModal } from './FullscreenImageModal';
 

@@ -48,6 +48,7 @@ const ASPECT_RATIOS: ImageAspectRatio[] = ['1:1', '16:9', '9:16', '4:3'];
 const IMAGE_COUNTS: number[] = [1, 2, 4];
 const STYLES: ImageStyle[] = [
   'None',
+  'Handwritten Notes',
   'Realistic',
   'Cinematic',
   'Anime',

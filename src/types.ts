@@ -235,6 +235,7 @@ export type ImageStyle =
   | 'Fantasy' 
   | 'Watercolor' 
   | 'Pixel Art' 
+  | 'Handwritten Notes'
   | 'Custom';
 
 export interface GeneratedImage {

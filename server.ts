@@ -22,6 +22,7 @@ const STYLE_PROMPTS: Record<string, string> = {
   Fantasy: "epic fantasy concept art, magical glowing runes, ethereal mythical atmosphere, majestic architecture, ArtStation trending masterpiece",
   Watercolor: "delicate watercolor painting, soft pigment washes, organic paper texture, fluid bleed edges, fine art ink and watercolor wash",
   "Pixel Art": "16-bit retro pixel art, crisp pixel grid, vibrant nostalgic color palette, classic arcade aesthetic, detailed sprite artwork",
+  "Handwritten Notes": "ultra-realistic student study notes in an open lined notebook, neat cursive and print handwriting in blue and black gel ink on ruled notebook paper with faint blue lines and pink margin, colorful pastel highlighter section headings in soft pink, mint green, and pale yellow, hand-drawn scientific diagrams with atomic electron shells, dot-and-cross diagram, chemical bonds, arrows, and formulas, boxed definition enclosed in a neat blue ink rectangle, bullet points with underlined key terms, fluffy cloud callout bubble labeled Key points, extremely clean studygram revision notes aesthetic, photorealistic notebook paper texture, natural warm room lighting, sharp 8k resolution, masterwork",
   Custom: "custom bespoke artistic style, exquisite craftsmanship, balanced composition, ultra-fine detail",
 };
 
@@ -749,9 +750,9 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
      | $3/4 + 2/5$ | Medium | **23/20** |
      | $\\sqrt{2025}$ | Hard | **45** |
 
-9. INTERACTIVE QUIZZES & KNOWLEDGE TESTS:
-   - When the user asks for a quiz, trivia, knowledge check, practice questions, or test (e.g. "make an interactive quiz", "quiz me on...", "test my knowledge"):
-   - If the topic involves real-world facts, recent events (2024-2026), current leaders, sports, movies, or verified scientific discoveries, gather verified facts so questions and answers are 100% accurate.
+9. INTERACTIVE QUIZZES & KNOWLEDGE TESTS (STRICT ZERO-CODE RULE):
+   - When the user asks for a quiz in ANY way (e.g. "give me quiz", "give me a quiz", "create a quiz", "create quiz", "make a quiz", "make quiz", "quiz on [topic]", "test my knowledge", "quiz me", "can you make a quiz", "practice questions"):
+   - NEVER output Python, JavaScript, HTML, C++, or any programming code or script! The user wants to play an interactive quiz in the UI, NOT build software.
    - Always output the quiz in an interactive \`\`\`quiz code block with valid JSON:
      \`\`\`quiz
      {
@@ -780,7 +781,11 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
      Use inline math next to labels so text and formula stay naturally together:
      Sum of Cubes: $a^3 + b^3 = (a + b)(a^2 - ab + b^2)$
      Difference of Cubes: $a^3 - b^3 = (a - b)(a^2 + ab + b^2)$
-   - Never produce disconnected centering for labeled list items; keep labels and formulas smoothly left-aligned.`;
+   - Never produce disconnected centering for labeled list items; keep labels and formulas smoothly left-aligned.
+
+11. HANDWRITTEN STUDY NOTES & NOTEBOOK PAGES:
+   - When the user asks to create or make handwritten notes (e.g. "create handwritten notes like this", "make handwritten notes on [topic]", "notes like this"):
+   - This refers to aesthetic student revision notes in an open lined notebook with pastel highlighter headings (pink, green, yellow), neat handwriting in blue and black gel pen, hand-drawn diagrams, boxed definitions, bullet points, and cloud callouts matching their reference notebook page!`;
 
 async function startServer() {
   const app = express();
@@ -907,6 +912,17 @@ async function startServer() {
     });
   });
 
+  function isQuizQuery(text: string): boolean {
+    if (!text) return false;
+    const clean = text.trim().toLowerCase();
+    return (
+      /\b(?:quiz|trivia|practice\s+questions|test\s+my\s+knowledge)\b/i.test(clean) ||
+      /(?:give(?:\s+me)?|create|make|generate|start|build|provide(?:\s+me)?)\s+(?:an?\s+|some\s+)?(?:interactive\s+)?(?:quiz|quizzes|trivia|test|questions)/i.test(clean) ||
+      /\bquiz\s+me\b/i.test(clean) ||
+      /\b(?:give|make|create|generate)\s+(?:a\s+|an\s+|some\s+)?quiz\b/i.test(clean)
+    );
+  }
+
   // Chat Endpoint with real Gemini 3.8 Flash, Automatic Web Search & Multimodal Vision
   app.post("/api/chat", async (req: Request, res: Response) => {
     try {
@@ -979,12 +995,30 @@ async function startServer() {
         liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
-      const forgexSystemInstruction = customSystemInstruction
+      let forgexSystemInstruction = customSystemInstruction
         ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${customSystemInstruction}`
         : FORGEX_SYSTEM_INSTRUCTION;
-      const enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
+
+      if (isQuizQuery(cleanMessage)) {
+        forgexSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
+The user requested an interactive quiz ("${cleanMessage}").
+1. NEVER output Python, JavaScript, HTML, C++, or any programming code or script!
+2. NEVER output a console application or code block like \`\`\`python.
+3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
+The UI renders this as an interactive playable quiz widget!`;
+      }
+      let enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
         ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
         : forgexSystemInstruction;
+
+      if (isQuizQuery(cleanMessage)) {
+        enhancedSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
+The user requested an interactive quiz ("${cleanMessage}").
+1. NEVER output Python, JavaScript, HTML, C++, or any programming code or script!
+2. NEVER output a console application or code block like \`\`\`python.
+3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
+The UI renders this as an interactive playable quiz widget!`;
+      }
 
       // Try live Gemini with candidate keys
       for (const currentKey of candidateKeys) {
@@ -1214,9 +1248,18 @@ async function startServer() {
       }
 
       const modelCascade = getModelCascade(modelId);
-      const forgexSystemInstruction = customSystemInstruction
+      let forgexSystemInstruction = customSystemInstruction
         ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${customSystemInstruction}`
         : FORGEX_SYSTEM_INSTRUCTION;
+
+      if (isQuizQuery(cleanMessage)) {
+        forgexSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
+The user requested an interactive quiz ("${cleanMessage}").
+1. NEVER output Python, JavaScript, HTML, C++, or any programming code or script!
+2. NEVER output a console application or code block like \`\`\`python.
+3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
+The UI renders this as an interactive playable quiz widget!`;
+      }
 
       // Try streaming with live Gemini candidate keys
       for (const currentKey of candidateKeys) {

@@ -48,6 +48,159 @@ function renderWithMath(children: React.ReactNode): React.ReactNode {
   return children;
 }
 
+/**
+ * Universal error-tolerant parser for Interactive Quizzes
+ * Handles:
+ * - Proper ```quiz JSON
+ * - Unescaped LaTeX backslashes (\Delta, \frac, \sqrt, \alpha, etc.)
+ * - Trailing commas and unquoted keys
+ * - Python / JS quiz assignments (questions = [...])
+ * - Untagged or misc-tagged code blocks containing questions
+ */
+function parseQuizConfig(raw: string): QuizConfig | null {
+  if (!raw || typeof raw !== 'string') return null;
+
+  let cleaned = raw.trim();
+  // Strip code fences if present
+  cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
+  // If raw assignment e.g. "questions = [...]" or "const quiz = { ... }"
+  const assignmentMatch = cleaned.match(/(?:(?:const|let|var)\s+\w+\s*=\s*|\w+\s*=\s*)([{\[][\s\S]+)/);
+  if (assignmentMatch && assignmentMatch[1]) {
+    cleaned = assignmentMatch[1].replace(/;?\s*$/, '').trim();
+  }
+
+  // Attempt parse helpers:
+  const tryParseJson = (str: string): any => {
+    try {
+      return JSON.parse(str);
+    } catch {
+      // 1. Fix unescaped backslashes (common in LaTeX formulas)
+      const sanitized = str
+        .replace(/\\([^"\\\/bfnrtu]|u[0-9a-fA-F]{0,3}[^0-9a-fA-F])/g, '\\\\$1')
+        .replace(/,\s*([}\]])/g, '$1');
+      try {
+        return JSON.parse(sanitized);
+      } catch {
+        // 2. Relaxed quotes / keys
+        try {
+          const relaxed = sanitized
+            .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+            .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+          return JSON.parse(relaxed);
+        } catch {
+          return null;
+        }
+      }
+    }
+  };
+
+  let parsed = tryParseJson(cleaned);
+
+  // If not parsed directly, try to extract first JSON object {...} or array [...]
+  if (!parsed) {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      parsed = tryParseJson(cleaned.slice(firstBrace, lastBrace + 1));
+    }
+  }
+
+  if (!parsed) {
+    const firstBracket = cleaned.indexOf('[');
+    const lastBracket = cleaned.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      const arr = tryParseJson(cleaned.slice(firstBracket, lastBracket + 1));
+      if (Array.isArray(arr)) {
+        parsed = { questions: arr };
+      }
+    }
+  }
+
+  // If parsed is array, wrap it in { questions: parsed }
+  if (Array.isArray(parsed)) {
+    parsed = { questions: parsed };
+  }
+
+  // Verify questions array
+  if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+    const rawQuestions = parsed.questions;
+    const validQuestions = [];
+
+    for (let idx = 0; idx < rawQuestions.length; idx++) {
+      const q = rawQuestions[idx];
+      if (!q) continue;
+
+      const questionText = q.question || q.q || q.prompt || q.title || `Question ${idx + 1}`;
+      let options: string[] = [];
+
+      if (Array.isArray(q.options)) {
+        options = q.options.map((opt: any) => String(opt));
+      } else if (Array.isArray(q.choices)) {
+        options = q.choices.map((opt: any) => String(opt));
+      } else if (q.options && typeof q.options === 'object') {
+        options = Object.values(q.options).map((opt: any) => String(opt));
+      }
+
+      if (options.length < 2) continue;
+
+      let correctIndex = 0;
+      if (typeof q.correctIndex === 'number') {
+        correctIndex = q.correctIndex;
+      } else if (typeof q.answer === 'number') {
+        correctIndex = q.answer;
+      } else if (typeof q.correctAnswer === 'number') {
+        correctIndex = q.correctAnswer;
+      } else if (typeof q.answer === 'string') {
+        const cleanAns = q.answer.trim().toLowerCase();
+        const letterIdx = ['a', 'b', 'c', 'd', 'e'].indexOf(cleanAns);
+        if (letterIdx !== -1) {
+          correctIndex = letterIdx;
+        } else {
+          const matchIdx = options.findIndex((opt) => opt.toLowerCase().includes(cleanAns));
+          if (matchIdx !== -1) correctIndex = matchIdx;
+        }
+      } else if (typeof q.correctAnswer === 'string') {
+        const cleanAns = q.correctAnswer.trim().toLowerCase();
+        const letterIdx = ['a', 'b', 'c', 'd', 'e'].indexOf(cleanAns);
+        if (letterIdx !== -1) {
+          correctIndex = letterIdx;
+        } else {
+          const matchIdx = options.findIndex((opt) => opt.toLowerCase().includes(cleanAns));
+          if (matchIdx !== -1) correctIndex = matchIdx;
+        }
+      }
+
+      if (correctIndex < 0 || correctIndex >= options.length) {
+        correctIndex = 0;
+      }
+
+      validQuestions.push({
+        id: q.id ?? idx + 1,
+        question: questionText,
+        options,
+        correctIndex,
+        explanation: q.explanation || q.reason || q.desc || 'Verified answer explanation.',
+        source: q.source,
+        difficulty: q.difficulty,
+      });
+    }
+
+    if (validQuestions.length > 0) {
+      return {
+        title: parsed.title || parsed.quizTitle || 'Interactive Knowledge Quiz',
+        topic: parsed.topic || parsed.subject || 'Interactive Quiz',
+        difficulty: parsed.difficulty || 'Medium',
+        description: parsed.description,
+        verifiedFromWeb: Boolean(parsed.verifiedFromWeb || parsed.source || parsed.searchQueries),
+        questions: validQuestions,
+      };
+    }
+  }
+
+  return null;
+}
+
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   theme = 'dark',
@@ -89,31 +242,25 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               );
             }
 
-            // Detect quiz code blocks (e.g. ```quiz or ```json with questions array)
-            if (lang === 'quiz' || lang === 'quiz-interactive' || lang === 'json') {
-              try {
-                const parsed = JSON.parse(codeString);
-                if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
-                  const quizConfig: QuizConfig = {
-                    title: parsed.title || 'Interactive Knowledge Quiz',
-                    topic: parsed.topic || parsed.subject,
-                    difficulty: parsed.difficulty || 'Medium',
-                    description: parsed.description,
-                    verifiedFromWeb: Boolean(parsed.verifiedFromWeb || parsed.source || parsed.searchQueries),
-                    questions: parsed.questions.map((q: any, idx: number) => ({
-                      id: q.id ?? idx + 1,
-                      question: q.question || `Question ${idx + 1}`,
-                      options: Array.isArray(q.options) ? q.options : [],
-                      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : (typeof q.answer === 'number' ? q.answer : 0),
-                      explanation: q.explanation || 'Verified answer explanation.',
-                      source: q.source,
-                      difficulty: q.difficulty,
-                    })),
-                  };
-                  return <InteractiveQuiz quiz={quizConfig} theme={theme} />;
-                }
-              } catch {
-                // Not quiz JSON, fall through
+            // Detect quiz code blocks or any code containing quiz questions
+            const isPotentialQuiz = 
+              lang === 'quiz' || 
+              lang === 'quiz-interactive' || 
+              lang === 'json' || 
+              lang === 'javascript' || 
+              lang === 'js' || 
+              lang === 'python' || 
+              lang === 'py' || 
+              lang === 'text' || 
+              !lang || 
+              codeString.includes('"questions"') || 
+              codeString.includes("'questions'") ||
+              codeString.includes('options');
+
+            if (isPotentialQuiz) {
+              const quizConfig = parseQuizConfig(codeString);
+              if (quizConfig) {
+                return <InteractiveQuiz quiz={quizConfig} theme={theme} />;
               }
             }
 

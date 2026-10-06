@@ -106,6 +106,73 @@ print(f"Maximum: {max(numbers)}")
 export function generateInteractiveQuiz(prompt: string): string {
   const lower = prompt.toLowerCase();
 
+  // Chemistry & Chemical Bonding (Ionic Bonding, Covalent Bonding)
+  if (lower.includes('ionic') || lower.includes('bond') || lower.includes('chemistry') || lower.includes('sodium') || lower.includes('chloride') || lower.includes('nacl')) {
+    return `### 🧪 Interactive Chemical & Ionic Bonding Quiz
+
+Test your understanding of ionic compounds, electron transfer, and chemical bonding with instant feedback!
+
+\`\`\`quiz
+{
+  "title": "Ionic Bonding & Chemical Compounds Quiz",
+  "topic": "Chemistry & Chemical Bonding",
+  "difficulty": "Medium",
+  "questions": [
+    {
+      "id": 1,
+      "question": "What fundamental process leads to the formation of an ionic bond?",
+      "options": [
+        "Transfer of electrons from one atom to another",
+        "Equal sharing of electrons between non-metals",
+        "Attraction between neutral neutrons",
+        "Overlapping of molecular p-orbitals"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ionic bonding occurs when an atom loses electrons to become a positively charged cation and another atom gains electrons to become a negatively charged anion, held by electrostatic attraction."
+    },
+    {
+      "id": 2,
+      "question": "In the formation of Sodium Chloride (NaCl), what happens to the Sodium ($Na$) atom?",
+      "options": [
+        "Loses 1 electron to become a stable $Na^+$ cation (2,8)",
+        "Gains 1 electron to become a $Na^-$ anion",
+        "Shares 2 valence electrons with chlorine",
+        "Forms a triple covalent bond"
+      ],
+      "correctIndex": 0,
+      "explanation": "Sodium (2,8,1) readily loses its 1 valence electron to achieve a stable octet (2,8), forming the $Na^+$ cation."
+    },
+    {
+      "id": 3,
+      "question": "Why do solid ionic compounds NOT conduct electricity at room temperature?",
+      "options": [
+        "Ions are locked in a rigid crystal lattice and not free to move",
+        "Ionic compounds contain no charged particles",
+        "Electrons move too fast to conduct current",
+        "Ionic compounds are always non-polar liquids"
+      ],
+      "correctIndex": 0,
+      "explanation": "In a solid crystal lattice, ions are fixed in position. They only conduct electricity when molten or dissolved in aqueous solution where ions are free to move."
+    },
+    {
+      "id": 4,
+      "question": "Which of the following compounds exhibits ionic bonding?",
+      "options": [
+        "Magnesium Oxide ($MgO$)",
+        "Carbon Dioxide ($CO_2$)",
+        "Methane ($CH_4$)",
+        "Water ($H_2O$)"
+      ],
+      "correctIndex": 0,
+      "explanation": "$MgO$ forms between a metal ($Mg$) and a non-metal ($O$) by electron transfer, resulting in $Mg^{2+}$ and $O^{2-}$ ions."
+    }
+  ]
+}
+\`\`\`
+
+*Select an option above to test your knowledge!*`;
+  }
+
   if (lower.includes('calculus') || lower.includes('derivative') || lower.includes('integral') || lower.includes('math')) {
     return `### 🧮 Interactive Calculus & Mathematics Quiz
 
@@ -647,8 +714,11 @@ export function generateExpertChatReply(prompt: string, _modelId = 'forge-2-ultr
   }
 
   // 1.2 Interactive Quiz Generation
-  if (/(?:make\s+it\s+do\s+|create\s+(?:an?\s+)?|give\s+me\s+(?:an?\s+)?|quiz\s+me\s+on\s+|test\s+my\s+knowledge\s+on\s+)?(?:interactive\s+)?(?:quizes|quiz|trivia|practice\s+questions)\b/i.test(clean) ||
-      /\b(?:give\s+me\s+a\s+quiz|quiz\s+me|make\s+a\s+quiz)\b/i.test(clean)) {
+  if (
+    /\b(?:quiz|quizzes|trivia|practice\s+questions|test\s+my\s+knowledge)\b/i.test(clean) ||
+    /(?:give(?:\s+me)?|create|make|generate|start|build|provide(?:\s+me)?)\s+(?:an?\s+|some\s+)?(?:interactive\s+)?(?:quiz|quizzes|trivia|test|questions)/i.test(clean) ||
+    /\b(?:quiz\s+me|give\s+(?:me\s+)?quiz|make\s+(?:a\s+)?quiz|create\s+(?:a\s+)?quiz)\b/i.test(clean)
+  ) {
     return generateInteractiveQuiz(clean);
   }
 
