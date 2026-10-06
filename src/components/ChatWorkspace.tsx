@@ -454,7 +454,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (imgIntent.isImage) {
       setSearchingQuery(null);
       setSearchedForQueryDuringTurn(null);
-      setGeneratingImageState({ prompt: imgIntent.prompt, progress: 10 });
+      setGeneratingImageState({ prompt: imgIntent.prompt, progress: 5 });
     } else if (localSearchIntent.shouldSearch) {
       const q = localSearchIntent.searchQuery || text;
       setSearchingQuery(q);
@@ -506,6 +506,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
       // Ensure progress reaches exactly 100% before showing the image
       if (imgIntent.isImage) {
+        if (imageProgressTimerRef.current) {
+          clearInterval(imageProgressTimerRef.current);
+          imageProgressTimerRef.current = null;
+        }
         setGeneratingImageState({ prompt: imgIntent.prompt, progress: 100 });
         // Give smooth time for user to see the 100% completion before revealing the image
         await new Promise((resolve) => setTimeout(resolve, 550));
@@ -518,6 +522,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       setPendingUserTurn(null);
       onUpdateSession(updatedSession);
     } catch (error) {
+      if (imageProgressTimerRef.current) {
+        clearInterval(imageProgressTimerRef.current);
+        imageProgressTimerRef.current = null;
+      }
       console.error('Failed to send message', error);
       setGeneratingImageState(null);
       setStreamingReply(null);
@@ -525,6 +533,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       setSearchedForQueryDuringTurn(null);
       setPendingUserTurn(null);
     } finally {
+      if (imageProgressTimerRef.current) {
+        clearInterval(imageProgressTimerRef.current);
+        imageProgressTimerRef.current = null;
+      }
       setIsSubmitting(false);
       setStreamingReply(null);
       setSearchingQuery(null);
@@ -1320,7 +1332,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         ForgeX can make mistakes. Check important info.
       </p>
 
-      {/* Fullscreen Image Modal with Edit & Download Icons */}
+      {/* Fullscreen Image Modal matching ChatGPT screenshot */}
       <FullscreenImageModal
         isOpen={Boolean(fullscreenImage)}
         onClose={() => setFullscreenImage(null)}
@@ -1328,6 +1340,21 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         prompt={fullscreenImage?.prompt || ''}
         initialEdit={fullscreenImage?.initialEdit || false}
         theme={theme}
+        galleryImages={displayMessages
+          .flatMap((m) => m.generatedImages || [])
+          .map((img) => ({
+            id: img.id,
+            url: img.imageUrl,
+            prompt: img.prompt,
+          }))}
+        onSelectImage={(img) => {
+          setFullscreenImage({
+            url: img.url,
+            prompt: img.prompt,
+            id: img.id,
+            initialEdit: false,
+          });
+        }}
         onOpenInImageStudio={(promptText, url) => {
           setFullscreenImage(null);
           onNavigateToImage();

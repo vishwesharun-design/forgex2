@@ -17,46 +17,46 @@ export function detectImageGenerationIntent(text: string): ImageIntentResult {
 
   const lower = clean.toLowerCase();
 
-  // Negative filter: Quizzes, coding, trivia, tests, songs, poems, etc. should NEVER trigger image creation!
-  const isExcludedIntent = /^(?:quiz|quizzes|trivia|question|questions|test|practice\s+questions|function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm)\b/i.test(
-    clean.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:create|make|give\s+me|generate)\s+(?:a\s+|an\s+|some\s+)?/i, '').trim()
-  );
+  // Negative filter: Quizzes, coding, feedback/complaints ("not working", "keeps generating this"), trivia, tests, etc. should NEVER trigger image creation!
+  const isExcludedIntent = 
+    /not\s+working|keeps?\s+generating\s+this|why\s+is\s+it|broken|error|fix\s+this|issue\s+with/i.test(clean) ||
+    /^(?:quiz|quizzes|trivia|question|questions|test|practice\s+questions|function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm)\b/i.test(
+      clean.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:create|make|give\s+me|generate)\s+(?:a\s+|an\s+|some\s+)?/i, '').trim()
+    );
   if (isExcludedIntent) {
     return { isImage: false, prompt: '' };
   }
 
-  // 1. HANDWRITTEN STUDY NOTES / NOTEBOOK NOTES INTENT ("notes like this", "handwritten notes", etc.)
-  // Matches:
-  // - "make my ai create handwritten notes like this"
-  // - "create handwritten notes of ionic bonding"
-  // - "make handwritten notes on photosynthesis"
-  // - "handwritten notes like this"
-  // - "notes like this"
-  // - "create notes on biology like this"
-  // - "draw handwritten notes..."
-  const handwrittenMatch = clean.match(
-    /(?:(?:make|create|generate|draw|give(?:\s+me)?|show(?:\s+me)?|produce|design)\s+)?(?:my\s+ai\s+)?(?:an?\s+|some\s+)?(?:handwritten\s+)?(?:study\s+|notebook\s+|revision\s+)?notes?(?:\s+(?:on|about|of|for|like)\s+(.+))?/i
-  ) || clean.match(/(?:notes?|study\s+notes?)\s+(?:like\s+this|like\s+the\s+image|like\s+the\s+photo)/i);
-
+  // 1. HANDWRITTEN STUDY NOTES / NOTEBOOK NOTES INTENT ("notes like this", "handwritten notes", "hand wirtten notes", etc.)
   const isExplicitHandwrittenRequest = 
-    /(?:handwritten\s+notes?|notes?\s+like\s+this|study\s+notes?\s+like\s+this|notebook\s+notes?|like\s+this\s+notes?)/i.test(clean) ||
-    (/(?:create|make|generate|draw|give(?:\s+me)?)\s+(?:me\s+)?(?:an?\s+|some\s+)?handwritten\s+notes?/i.test(clean));
+    /(?:hand[\s-]*(?:written|wirtten|writen|writing|wrtn|crafted)?[\s-]*(?:study[\s-]*)?notes?|notes?[\s-]*(?:like\s+this|like\s+image|like\s+photo|like\s+screenshot)|study\s+notes?|notebook\s+notes?)/i.test(clean) ||
+    (/(?:create|make|generate|draw|give(?:\s+me)?|show(?:\s+me)?)\s+(?:me\s+)?(?:an?\s+|some\s+)?(?:hand[\s-]*(?:written|wirtten|writen|writing)?\s*)?(?:study\s+|notebook\s+)?notes?/i.test(clean));
 
-  if (isExplicitHandwrittenRequest && handwrittenMatch) {
-    let rawTopic = (handwrittenMatch[1] || '').trim();
-    // Clean up "like this", "like image", etc.
-    rawTopic = rawTopic.replace(/like\s+this|like\s+the\s+image|like\s+the\s+photo|please|for\s+me/gi, '').trim();
+  if (isExplicitHandwrittenRequest) {
+    const handwrittenMatch = clean.match(
+      /(?:(?:make|create|generate|draw|give(?:\s+me)?|show(?:\s+me)?|produce|design)\s+)?(?:my\s+ai\s+)?(?:an?\s+|some\s+)?(?:hand[\s-]*(?:written|wirtten|writen|writing|wrtn)?\s*)?(?:study\s+|notebook\s+|revision\s+)?notes?(?:\s+(?:on|about|of|for|like)\s+(.+))?/i
+    );
+
+    let rawTopic = (handwrittenMatch && handwrittenMatch[1] ? handwrittenMatch[1] : '').trim();
+    // Clean up "like this", "like this (3)", "(3)", "like image", etc.
+    rawTopic = rawTopic.replace(/like\s+this(?:\s*\(\d+\))?|like\s+the\s+image(?:\s*\d+)?|like\s+the\s+photo|like\s+screenshot|\(\d+\)|\[\d+\]|please|for\s+me|my\s+ai|should\s+be\s+able\s+to|there\s+should\s+be\s+no\s+spelling\s+mistack|everything\s+should\s+be\s+understandable|no\s+spelling\s+mistakes?|still\s+the\s+texts\s+are\s+not\s+clear|cant\s+even\s+understand\s+the\s+texts|only\s+the\s+topic\s+i\s+can\s+see|hand[\s-]*(?:written|wirtten|writen)?/gi, '').trim();
+    rawTopic = rawTopic.replace(/^(?:of|on|about|for)\s+/i, '').trim();
     rawTopic = rawTopic.replace(/[?!.]+$/, '').trim();
 
-    const topic = rawTopic && rawTopic.length > 2
-      ? rawTopic
-      : 'Ionic Bonding (chemical definition, cations and anions, NaCl dot-and-cross diagram, properties of ionic compounds, key points callout)';
+    const isIonic = /ionic|bonding|chemistry|chemical|nacl/i.test(clean);
+    const isPhotosynthesis = /photosynth|chloroplast|calvin/i.test(clean);
 
-    const prompt = `Ultra-realistic top-down flat lay photograph of aesthetic handwritten student study notes in an open lined notebook. Subject: ${topic}. Neat handwriting in blue and black gel ink on ruled notebook paper with faint blue lines and pink margin. Colorful pastel highlighter section headings in soft pink, mint green, and pale yellow. Hand-drawn scientific diagrams with atomic electron shells, dot and cross diagrams, chemical formulas, arrows, boxed definition in a neat blue ink rectangle, bullet points, and a fluffy cloud callout bubble for 'Key points'. Extremely crisp, neat, and organized studygram revision notes aesthetic, authentic notebook paper texture, natural daylight, 8k resolution, photorealistic masterwork.`;
+    let topic = rawTopic && rawTopic.length > 2
+      ? rawTopic
+      : isIonic
+      ? 'Ionic Bonding : Formation, Properties, Dot and Cross Diagrams & Key Points'
+      : isPhotosynthesis
+      ? 'Photosynthesis : Light Reactions, Calvin Cycle & Chloroplast Structure'
+      : 'Chapter 7 : The Mathematics of Maybe : Introduction to Probability';
 
     return {
       isImage: true,
-      prompt,
+      prompt: topic,
       style: 'Handwritten Notes',
     };
   }

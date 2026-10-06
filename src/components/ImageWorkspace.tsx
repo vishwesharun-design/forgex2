@@ -32,6 +32,7 @@ import {
 import { imageService } from '../services/imageService';
 import { puterService, PUTER_FLUX_CONFIG } from '../services/puterService';
 import { ModelSelector } from './ModelSelector';
+import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
 
 interface ImageWorkspaceProps {
   images: GeneratedImage[];
@@ -72,6 +73,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [imageCount, setImageCount] = useState<number>(1);
   const [style, setStyle] = useState<ImageStyle>('None');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<number>(0);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState<number>(24);
@@ -141,16 +143,22 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
     }
 
     setIsGenerating(true);
+    setGenerationProgress(5);
     try {
-      const newImages = await imageService.generateImages({
-        prompt: cleanPrompt,
-        aspectRatio,
-        count: imageCount,
-        style,
-        modelId: selectedModelId,
-        referenceImage: referenceImage || undefined,
-        fluxModel: selectedFluxModel,
-      });
+      const newImages = await imageService.generateImages(
+        {
+          prompt: cleanPrompt,
+          aspectRatio,
+          count: imageCount,
+          style,
+          modelId: selectedModelId,
+          referenceImage: referenceImage || undefined,
+          fluxModel: selectedFluxModel,
+        },
+        (prog) => {
+          setGenerationProgress(prog);
+        }
+      );
       onUpdateImages(imageService.getImages());
       checkPuterAuth();
     } catch (err: any) {
@@ -552,7 +560,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               {isGenerating ? (
                 <>
                   <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
-                  <span>Synthesizing ({activeFluxModelInfo.badge} via Puter)...</span>
+                  <span>Synthesizing ({generationProgress}%)...</span>
                 </>
               ) : (
                 <>
@@ -563,6 +571,13 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Live Generation Progress Card */}
+        {isGenerating && (
+          <div className="mb-6 flex flex-col items-center justify-center animate-in fade-in duration-200">
+            <ImageGeneratingAnimation progress={generationProgress} theme={theme} />
+          </div>
+        )}
 
         {/* Responsive Gallery (Section 13) */}
         <div>

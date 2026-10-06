@@ -181,6 +181,7 @@ function parseQuizConfig(raw: string): QuizConfig | null {
         options,
         correctIndex,
         explanation: q.explanation || q.reason || q.desc || 'Verified answer explanation.',
+        hint: q.hint || q.clue || q.tip,
         source: q.source,
         difficulty: q.difficulty,
       });
@@ -393,12 +394,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             </InteractiveTable>
           ),
           thead: ({ children }) => (
-            <thead className={isDark ? 'bg-neutral-900/90 border-b border-neutral-800' : 'bg-neutral-100/90 border-b border-neutral-200'}>
+            <thead className={isDark ? 'bg-neutral-900/80 border-b border-neutral-800' : 'bg-neutral-50/80 border-b border-neutral-200'}>
               {children}
             </thead>
           ),
           tbody: ({ children }) => (
-            <tbody className={isDark ? 'divide-y divide-neutral-800/60' : 'divide-y border-neutral-200 divide-neutral-200'}>
+            <tbody className="divide-y divide-transparent">
               {children}
             </tbody>
           ),
@@ -408,15 +409,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             </tr>
           ),
           th: ({ children, style }: any) => {
-            const str = String(children || '').trim().toLowerCase();
-            const isAnswerCol = str.includes('answer') || str.includes('result') || str.includes('score') || str.includes('value');
-            const isDiffCol = str.includes('difficulty') || str.includes('tier') || str.includes('level');
-            const alignClass = isAnswerCol ? 'text-right' : isDiffCol ? 'text-center' : 'text-left';
+            let alignClass = 'text-left';
+            if (style?.textAlign === 'right') alignClass = 'text-right';
+            else if (style?.textAlign === 'center') alignClass = 'text-center';
+            else if (style?.textAlign === 'left') alignClass = 'text-left';
 
             return (
               <th
-                className={`px-3 py-2.5 sm:px-4 sm:py-3 font-semibold font-sans text-xs tracking-wide ${alignClass} ${
-                  isDark ? 'text-neutral-300' : 'text-neutral-700'
+                className={`px-4 py-3 font-semibold font-sans text-xs tracking-wider border-b ${alignClass} ${
+                  isDark ? 'text-neutral-300 border-neutral-800' : 'text-neutral-700 border-neutral-200'
                 }`}
                 style={style}
               >
@@ -425,14 +426,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             );
           },
           td: ({ children, style }: any) => {
-            const str = typeof children === 'string' ? children.trim().toLowerCase() : '';
-            const isNumericAnswer = /^\d+(?:\/\d+)?(?:\.\d+)?$/.test(str) || /^\$?\d+/.test(str);
-            const isDiff = /^(easy|medium|hard)$/i.test(str);
-            const alignClass = isNumericAnswer ? 'text-right font-mono font-bold' : isDiff ? 'text-center' : 'text-left';
+            let alignClass = 'text-left';
+            if (style?.textAlign === 'right') alignClass = 'text-right font-mono font-medium';
+            else if (style?.textAlign === 'center') alignClass = 'text-center';
+            else if (style?.textAlign === 'left') alignClass = 'text-left';
 
             return (
               <td
-                className={`px-3 py-2.5 sm:px-4 sm:py-3 text-inherit leading-relaxed align-middle ${alignClass}`}
+                className={`px-4 py-3 text-inherit leading-relaxed align-middle border-b ${alignClass} ${
+                  isDark ? 'border-neutral-800/60' : 'border-neutral-100'
+                }`}
                 style={style}
               >
                 <TableCellRenderer content={children} isHeader={false} theme={theme} />

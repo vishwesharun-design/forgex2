@@ -91,13 +91,15 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           <X className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
 
-        {/* Media stage */}
-        <div className="flex-1 bg-black flex items-center justify-center min-h-[240px] sm:min-h-[360px] md:min-h-[480px] p-2 sm:p-4 relative">
+        {/* Media stage (White background for image viewing) */}
+        <div className={`flex-1 flex items-center justify-center min-h-[240px] sm:min-h-[360px] md:min-h-[480px] p-2 sm:p-4 relative ${
+          type === 'image' ? 'bg-white' : 'bg-black'
+        }`}>
           {type === 'image' ? (
             <img
               src={(item as GeneratedImage).imageUrl}
               alt={item.prompt}
-              className="max-h-[50vh] md:max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg"
+              className="max-h-[50vh] md:max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-md"
             />
           ) : (
             <div className={`relative max-h-[50vh] md:max-h-[75vh] flex items-center justify-center ${

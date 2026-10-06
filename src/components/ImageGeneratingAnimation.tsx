@@ -25,26 +25,7 @@ export const ImageGeneratingAnimation: React.FC<ImageGeneratingAnimationProps> =
 }) => {
   const isDark = theme === 'dark';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [displayProgress, setDisplayProgress] = useState(() => Math.max(1, Math.min(100, Math.round(progress))));
-
-  // Smoothly interpolate the display percentage
-  useEffect(() => {
-    const target = Math.max(1, Math.min(100, Math.round(progress)));
-    let animationFrameId: number;
-
-    const step = () => {
-      setDisplayProgress((prev) => {
-        if (prev === target) return prev;
-        const diff = target - prev;
-        if (Math.abs(diff) <= 1) return target;
-        return prev + (diff > 0 ? 1 : -1);
-      });
-      animationFrameId = requestAnimationFrame(step);
-    };
-
-    animationFrameId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [progress]);
+  const displayProgress = Math.max(1, Math.min(100, Math.round(progress)));
 
   // Ultra-smooth 60fps GPU-accelerated Canvas animation
   useEffect(() => {

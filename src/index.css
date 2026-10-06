@@ -31,6 +31,11 @@
 .katex {
   font-size: 1.05em;
   text-rendering: geometricPrecision;
+  max-width: 100%;
+}
+
+.math-rendered {
+  max-width: 100%;
 }
 
 /* ChatGPT-style \boxed{} Result Border */
