@@ -4,7 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import { generateExpertChatReply } from "./src/services/knowledgeEngine";
+import { generateExpertChatReply, getStressTestUiShowcase } from "./src/services/knowledgeEngine";
 import { executeAgentTool, initAgentSandbox } from "./src/services/agentBackendExecutor";
 import { TOOL_REGISTRY, getToolsForAgent } from "./src/services/agentToolRegistry";
 
@@ -218,9 +218,20 @@ function analyzeWebSearchIntent(
     triggerReason = "Current news or real-world status lookup.";
   }
 
+  // H. Quizzes & Trivia requiring current, real-world, or verified factual data
+  const isQuizRequest = /\b(?:quiz|trivia|practice\s+questions|test\s+my\s+knowledge)\b/i.test(clean);
+  if (isQuizRequest) {
+    if (/\b(?:2024|2025|2026|latest|recent|current|news|today|real-world|verified|accurate|search\s+web|web\s+search|artemis|spacex|ai\s+models|nobel|election|olympics|champions\s+league|world\s+cup|oscar|grammy)\b/i.test(clean)) {
+      shouldSearch = true;
+      triggerReason = "Interactive quiz on verified real-world/recent facts.";
+    }
+  }
+
   if (shouldSearch) {
     const cleanSearchQuery = userQuery
       .replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:tell\s+me|show\s+me|find|search\s+(?:for)?|what\s+is|what\s+are|who\s+is|who\s+won)\s*/i, "")
+      .replace(/^(?:make\s+it\s+do\s+|create\s+(?:an?\s+)?|give\s+me\s+(?:an?\s+)?|quiz\s+me\s+on\s+)?(?:interactive\s+)?(?:quizes|quiz|trivia|test)\s+(?:about|on|for)?\s*/i, "")
+      .replace(/(?:it\s+should\s+search\s+web.*|with\s+(?:accurate|perfect)\s+answers.*)/i, "")
       .replace(/[?!.]+$/, "")
       .trim() || userQuery.trim();
 
@@ -700,7 +711,76 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
    - All code snippets must be syntactically valid, modern, runnable, and include all necessary imports and declarations.
    - Check edge cases, typings, and syntax before generating code.
 5. STRUCTURE & ELEGANCE:
-   - Use clean, structured Markdown with crisp headings, bullet points, and code blocks for effortless readability.`;
+   - Use clean, structured Markdown with crisp headings, bullet points, and code blocks for effortless readability.
+
+6. MATHEMATICAL SUMS & EQUATIONS (CHATGPT STYLE):
+   - Always format math problems, arithmetic sums, algebra, calculus, and formulas using clean standard LaTeX formatting.
+   - For standalone display equations and arithmetic operations, center them using double dollar signs: $$ ... $$.
+   - Format final results in a box using \\boxed{...}, e.g.:
+     $$(125 + 75) \\times 4 - 300 \\div 3 = \\boxed{700}$$
+   - For expressions inside tables or inline sentences, use inline math: $25 \\times 16$, $144 \\div 12$, $17^2$, $\\frac{3}{4} + \\frac{2}{5}$, $\\sqrt{2025}$.
+
+7. INTERACTIVE CHARTS & VISUALIZATIONS:
+   - When the user asks for a chart, graph, score comparison, trends, or visual data representation, generate a \`\`\`chart code block with valid JSON:
+     \`\`\`chart
+     {
+       "type": "bar",
+       "title": "Maths score test",
+       "subtitle": "Sample scores from five fictional tests.",
+       "unit": "Score",
+       "max": 120,
+       "data": [
+         {"label": "Algebra", "value": 90, "color": "#f472b6"},
+         {"label": "Geometry", "value": 84, "color": "#f472b6"},
+         {"label": "Fractions", "value": 98, "color": "#f472b6"},
+         {"label": "Statistics", "value": 76, "color": "#f472b6"},
+         {"label": "Number Theory", "value": 88, "color": "#f472b6"}
+       ]
+     }
+     \`\`\`
+
+8. INTERACTIVE TABLES:
+   - For comparisons, difficulty tiers, or lists of math problems and answers, generate a clean markdown table with math notation:
+     | Question | Difficulty | Answer |
+     | :--- | :--- | ---: |
+     | $25 \\times 16$ | Easy | **400** |
+     | $144 \\div 12$ | Easy | **12** |
+     | $17^2$ | Medium | **289** |
+     | $3/4 + 2/5$ | Medium | **23/20** |
+     | $\\sqrt{2025}$ | Hard | **45** |
+
+9. INTERACTIVE QUIZZES & KNOWLEDGE TESTS:
+   - When the user asks for a quiz, trivia, knowledge check, practice questions, or test (e.g. "make an interactive quiz", "quiz me on...", "test my knowledge"):
+   - If the topic involves real-world facts, recent events (2024-2026), current leaders, sports, movies, or verified scientific discoveries, gather verified facts so questions and answers are 100% accurate.
+   - Always output the quiz in an interactive \`\`\`quiz code block with valid JSON:
+     \`\`\`quiz
+     {
+       "title": "Quantum Physics Quiz",
+       "topic": "Quantum Mechanics",
+       "difficulty": "Medium",
+       "questions": [
+         {
+           "question": "What principle states that you cannot simultaneously know both the position and momentum of a particle with arbitrary precision?",
+           "options": [
+             "Heisenberg Uncertainty Principle",
+             "Pauli Exclusion Principle",
+             "Planck's Quantum Law",
+             "Schrödinger Equation"
+           ],
+           "correctIndex": 0,
+           "explanation": "Formulated by Werner Heisenberg in 1927, $\\Delta x \\cdot \\Delta p \\ge \\frac{\\hbar}{2}$ dictates the fundamental precision limit.",
+           "source": "Quantum Mechanics Verified"
+         }
+       ]
+     }
+     \`\`\`
+
+10. TEXT & MATH ALIGNMENT:
+   - When presenting identities, formulas, or theorems (e.g. Sum of Cubes, Difference of Cubes, Trinomials):
+     Use inline math next to labels so text and formula stay naturally together:
+     Sum of Cubes: $a^3 + b^3 = (a + b)(a^2 - ab + b^2)$
+     Difference of Cubes: $a^3 - b^3 = (a - b)(a^2 + ab + b^2)$
+   - Never produce disconnected centering for labeled list items; keep labels and formulas smoothly left-aligned.`;
 
 async function startServer() {
   const app = express();
@@ -854,6 +934,19 @@ async function startServer() {
           success: true,
           reply: `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`,
           model: "ForgeX Neural Engine",
+          searchedWeb: false,
+          searchQueries: [],
+          groundingSources: [],
+        });
+      }
+
+      // UI Stress Test / "All Possible UI" showcase matching ChatGPT screenshot
+      const isStressTestUiQuery = /(?:create\s+all\s+pos+ible\s+ui|stress[\s-]test\s+(?:the\s+)?ui|match\s+sum\s+ui\s+check|show\s+all\s+ui\s+(?:widgets?|components?|types?)|maths?\s+score\s+test\s+chart)/i.test(cleanMessage);
+      if (isStressTestUiQuery) {
+        return res.json({
+          success: true,
+          reply: getStressTestUiShowcase(),
+          model: "ForgeX Showcase Engine",
           searchedWeb: false,
           searchQueries: [],
           groundingSources: [],
@@ -1082,6 +1175,15 @@ async function startServer() {
         const reply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
         res.write(`data: ${JSON.stringify({ text: reply })}\n\n`);
         res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Neural Engine", searchedWeb: false, searchQueries: [], groundingSources: [] })}\n\n`);
+        return res.end();
+      }
+
+      // UI Stress Test / "All Possible UI" showcase matching ChatGPT screenshot
+      const isStressTestUiQuery = /(?:create\s+all\s+pos+ible\s+ui|stress[\s-]test\s+(?:the\s+)?ui|match\s+sum\s+ui\s+check|show\s+all\s+ui\s+(?:widgets?|components?|types?)|maths?\s+score\s+test\s+chart)/i.test(cleanMessage);
+      if (isStressTestUiQuery) {
+        const reply = getStressTestUiShowcase();
+        res.write(`data: ${JSON.stringify({ text: reply })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Showcase Engine", searchedWeb: false, searchQueries: [], groundingSources: [] })}\n\n`);
         return res.end();
       }
 

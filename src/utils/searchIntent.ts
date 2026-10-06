@@ -149,6 +149,17 @@ export function detectWebSearchIntent(
     triggerReason = 'Current news or real-world status lookup.';
   }
 
+  // H. Quizzes & Trivia requiring current, real-world, or verified factual data
+  const isQuizRequest = /\b(?:quiz|trivia|practice\s+questions|test\s+my\s+knowledge)\b/i.test(clean);
+  if (isQuizRequest) {
+    if (
+      /\b(?:2024|2025|2026|latest|recent|current|news|today|real-world|verified|accurate|search\s+web|web\s+search|artemis|spacex|ai\s+models|nobel|election|olympics|champions\s+league|world\s+cup|oscar|grammy)\b/i.test(clean)
+    ) {
+      shouldSearch = true;
+      triggerReason = 'Interactive quiz on verified real-world/recent facts.';
+    }
+  }
+
   if (shouldSearch) {
     const cleanSearchQuery =
       userQuery
@@ -156,6 +167,11 @@ export function detectWebSearchIntent(
           /^(?:please\s+)?(?:can\s+you\s+)?(?:tell\s+me|show\s+me|find|search\s+(?:for)?|what\s+is|what\s+are|who\s+is|who\s+won)\s*/i,
           ''
         )
+        .replace(
+          /^(?:make\s+it\s+do\s+|create\s+(?:an?\s+)?|give\s+me\s+(?:an?\s+)?|quiz\s+me\s+on\s+)?(?:interactive\s+)?(?:quizes|quiz|trivia|test)\s+(?:about|on|for)?\s*/i,
+          ''
+        )
+        .replace(/(?:it\s+should\s+search\s+web.*|with\s+(?:accurate|perfect)\s+answers.*)/i, '')
         .replace(/[?!.]+$/, '')
         .trim() || userQuery.trim();
 

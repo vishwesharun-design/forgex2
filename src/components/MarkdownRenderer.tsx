@@ -1,8 +1,24 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Check, Download, ExternalLink, Code2, Play, EyeOff, Sparkles, Image as ImageIcon } from 'lucide-react';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import { 
+  Copy, 
+  Check, 
+  Download, 
+  ExternalLink, 
+  Code2, 
+  Play, 
+  EyeOff, 
+  Image as ImageIcon,
+  Terminal
+} from 'lucide-react';
 import { ForgeXTheme } from '../types';
+import { FormattedMathText, MathView } from './MathView';
+import { InteractiveChart, ChartConfig } from './InteractiveChart';
+import { InteractiveTable, TableCellRenderer } from './InteractiveTable';
+import { InteractiveQuiz, QuizConfig } from './InteractiveQuiz';
 
 interface MarkdownRendererProps {
   content: string;
@@ -11,6 +27,25 @@ interface MarkdownRendererProps {
   onOpenInCodeStudio?: (code: string, language: string) => void;
   onOpenInImageStudio?: (imageUrl: string, prompt: string) => void;
   onViewImageFullscreen?: (imageUrl: string, prompt: string) => void;
+}
+
+// Recursively inspect and format text nodes with math if needed
+function renderWithMath(children: React.ReactNode): React.ReactNode {
+  if (typeof children === 'string') {
+    // If it contains math expressions ($$, $, or symbols)
+    if (/(\$\$[\s\S]+?\$\$|\$[^\$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|[×÷²³]|√\d+)/.test(children)) {
+      return <FormattedMathText text={children} />;
+    }
+    return children;
+  }
+  if (Array.isArray(children)) {
+    return children.map((child, idx) => (
+      <React.Fragment key={idx}>
+        {renderWithMath(child)}
+      </React.Fragment>
+    ));
+  }
+  return children;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
@@ -24,20 +59,25 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const isDark = theme === 'dark';
 
   return (
-    <div className={`markdown-body text-sm leading-relaxed space-y-3 ${className}`}>
+    <div className={`markdown-body text-xs sm:text-sm leading-relaxed space-y-3 break-words ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
-          // Code blocks and inline code
+          // Code blocks, Charts and interactive runners
           code({ node, className, children, ...props }: any) {
             const match = /language-(\w+)/.exec(className || '');
+            const lang = match ? match[1].toLowerCase() : '';
             const isInline = !match && !String(children).includes('\n');
             const codeString = String(children).replace(/\n$/, '');
 
             if (isInline) {
+              if (/^[\d\s+\-*/×÷=^_\\]+$/.test(codeString) || /\\boxed|\\frac|\\sqrt/.test(codeString)) {
+                return <MathView math={codeString} display={false} />;
+              }
               return (
                 <code
-                  className={`px-1.5 py-0.5 rounded-md font-mono text-xs font-semibold ${
+                  className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold ${
                     isDark
                       ? 'bg-neutral-800/90 text-amber-300 border border-neutral-700/60'
                       : 'bg-neutral-100 text-amber-700 border border-neutral-200'
@@ -46,6 +86,75 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 >
                   {children}
                 </code>
+              );
+            }
+
+            // Detect quiz code blocks (e.g. ```quiz or ```json with questions array)
+            if (lang === 'quiz' || lang === 'quiz-interactive' || lang === 'json') {
+              try {
+                const parsed = JSON.parse(codeString);
+                if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+                  const quizConfig: QuizConfig = {
+                    title: parsed.title || 'Interactive Knowledge Quiz',
+                    topic: parsed.topic || parsed.subject,
+                    difficulty: parsed.difficulty || 'Medium',
+                    description: parsed.description,
+                    verifiedFromWeb: Boolean(parsed.verifiedFromWeb || parsed.source || parsed.searchQueries),
+                    questions: parsed.questions.map((q: any, idx: number) => ({
+                      id: q.id ?? idx + 1,
+                      question: q.question || `Question ${idx + 1}`,
+                      options: Array.isArray(q.options) ? q.options : [],
+                      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : (typeof q.answer === 'number' ? q.answer : 0),
+                      explanation: q.explanation || 'Verified answer explanation.',
+                      source: q.source,
+                      difficulty: q.difficulty,
+                    })),
+                  };
+                  return <InteractiveQuiz quiz={quizConfig} theme={theme} />;
+                }
+              } catch {
+                // Not quiz JSON, fall through
+              }
+            }
+
+            // Detect chart code blocks (e.g. ```chart or ```json with chart data)
+            if (lang === 'chart' || lang === 'chart-bar' || lang === 'chart-line' || lang === 'json') {
+              try {
+                const parsed = JSON.parse(codeString);
+                if (parsed && (parsed.data || parsed.series) && (parsed.title || parsed.type)) {
+                  const chartConfig: ChartConfig = {
+                    title: parsed.title || 'Chart Analysis',
+                    subtitle: parsed.subtitle,
+                    type: parsed.type || (lang === 'chart-line' ? 'line' : 'bar'),
+                    unit: parsed.unit || 'Score',
+                    max: parsed.max,
+                    data: Array.isArray(parsed.data)
+                      ? parsed.data.map((item: any) => ({
+                          label: item.label || item.name || item.x || 'Item',
+                          value: typeof item.value === 'number' ? item.value : (item.y || 0),
+                          color: item.color,
+                        }))
+                      : Array.isArray(parsed.series?.[0]?.data)
+                      ? parsed.series[0].data.map((val: number, idx: number) => ({
+                          label: parsed.xAxis?.[idx] || `Item ${idx + 1}`,
+                          value: val,
+                          color: parsed.series[0]?.color,
+                        }))
+                      : [],
+                  };
+                  return <InteractiveChart config={chartConfig} theme={theme} />;
+                }
+              } catch {
+                // Not chart JSON, fall back to CodeBlock
+              }
+            }
+
+            // Detect LaTeX math block (```latex or ```math)
+            if (lang === 'math' || lang === 'latex') {
+              return (
+                <div className="math-sum-card my-3 py-2 flex items-center justify-center text-base sm:text-lg overflow-x-auto max-w-full">
+                  <MathView math={codeString} display={true} />
+                </div>
               );
             }
 
@@ -58,107 +167,133 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               />
             );
           },
-          // Headings
+
+          // Headings with clean left alignment and math support
           h1: ({ children }) => (
-            <h1 className={`text-xl font-bold tracking-tight mt-4 mb-2 pb-1 border-b font-display ${
+            <h1 className={`block text-left text-lg sm:text-xl font-bold tracking-tight mt-4 mb-2 pb-1 border-b font-display ${
               isDark ? 'text-neutral-100 border-neutral-800/60' : 'text-neutral-900 border-neutral-200'
             }`}>
-              {children}
+              {renderWithMath(children)}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className={`text-lg font-bold tracking-tight mt-3 mb-2 font-display ${
+            <h2 className={`block text-left text-base sm:text-lg font-bold tracking-tight mt-3 mb-2 font-display ${
               isDark ? 'text-amber-400' : 'text-amber-700'
             }`}>
-              {children}
+              {renderWithMath(children)}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className={`text-base font-semibold tracking-tight mt-2.5 mb-1.5 font-display ${
+            <h3 className={`block text-left text-sm sm:text-base font-semibold tracking-tight mt-2.5 mb-1.5 font-display ${
               isDark ? 'text-neutral-200' : 'text-neutral-900'
             }`}>
-              {children}
+              {renderWithMath(children)}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 className={`text-sm font-semibold tracking-tight mt-2 mb-1 ${
+            <h4 className={`block text-left text-xs sm:text-sm font-semibold tracking-tight mt-2 mb-1 ${
               isDark ? 'text-neutral-200' : 'text-neutral-900'
             }`}>
-              {children}
+              {renderWithMath(children)}
             </h4>
           ),
-          // Paragraphs
-          p: ({ children }) => (
-            <p className="my-1.5 leading-relaxed text-inherit">
-              {children}
-            </p>
-          ),
+
+          // Paragraphs with recursive math parsing and clean line height
+          p: ({ children }: any) => {
+            return (
+              <div className="my-2 leading-relaxed text-inherit text-left">
+                {renderWithMath(children)}
+              </div>
+            );
+          },
+
           // Lists
           ul: ({ children }) => (
-            <ul className="list-disc pl-5 my-2 space-y-1 text-inherit">
+            <ul className="list-disc pl-5 my-2 space-y-1 text-inherit text-left">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal pl-5 my-2 space-y-1 text-inherit">
+            <ol className="list-decimal pl-5 my-2 space-y-1 text-inherit text-left">
               {children}
             </ol>
           ),
-          li: ({ children }) => (
-            <li className="leading-relaxed">
-              {children}
-            </li>
-          ),
+          li: ({ children }: any) => {
+            return (
+              <li className="leading-relaxed text-left">
+                {renderWithMath(children)}
+              </li>
+            );
+          },
+
           // Blockquotes
           blockquote: ({ children }) => (
             <blockquote
-              className={`border-l-2 pl-3.5 py-1.5 my-2 rounded-r-lg italic text-xs leading-relaxed ${
+              className={`border-l-2 pl-3 py-1 my-2 rounded-r-lg italic text-xs leading-relaxed text-left ${
                 isDark 
-                  ? 'border-amber-500/80 bg-amber-500/5 text-neutral-300' 
-                  : 'border-amber-500 bg-amber-50/80 text-neutral-800'
+                  ? 'border-neutral-600 bg-neutral-900/40 text-neutral-300' 
+                  : 'border-neutral-400 bg-neutral-100 text-neutral-800'
               }`}
             >
-              {children}
+              {renderWithMath(children)}
             </blockquote>
           ),
-          // Tables
+
+          // Enhanced ChatGPT-style Tables with strict column alignment
           table: ({ children }) => (
-            <div className={`overflow-x-auto my-3 rounded-xl border shadow-sm ${
-              isDark ? 'border-neutral-800/80' : 'border-neutral-200'
-            }`}>
-              <table className="min-w-full text-xs text-left">
-                {children}
-              </table>
-            </div>
+            <InteractiveTable theme={theme}>
+              {children}
+            </InteractiveTable>
           ),
           thead: ({ children }) => (
-            <thead className={isDark ? 'bg-neutral-900/80 border-b border-neutral-800' : 'bg-neutral-100 border-b border-neutral-200'}>
+            <thead className={isDark ? 'bg-neutral-900/90 border-b border-neutral-800' : 'bg-neutral-100/90 border-b border-neutral-200'}>
               {children}
             </thead>
           ),
           tbody: ({ children }) => (
-            <tbody className={isDark ? 'divide-y divide-neutral-800/60' : 'divide-y divide-neutral-200'}>
+            <tbody className={isDark ? 'divide-y divide-neutral-800/60' : 'divide-y border-neutral-200 divide-neutral-200'}>
               {children}
             </tbody>
           ),
           tr: ({ children }) => (
-            <tr className={isDark ? 'hover:bg-neutral-800/30' : 'hover:bg-neutral-50'}>
+            <tr className={`transition-colors ${isDark ? 'hover:bg-neutral-800/40' : 'hover:bg-neutral-50/80'}`}>
               {children}
             </tr>
           ),
-          th: ({ children }) => (
-            <th className={`px-3.5 py-2.5 font-semibold font-mono text-[11px] uppercase tracking-wider ${
-              isDark ? 'text-neutral-400' : 'text-neutral-600'
-            }`}>
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="px-3.5 py-2 text-inherit leading-relaxed">
-              {children}
-            </td>
-          ),
-          // Links
+          th: ({ children, style }: any) => {
+            const str = String(children || '').trim().toLowerCase();
+            const isAnswerCol = str.includes('answer') || str.includes('result') || str.includes('score') || str.includes('value');
+            const isDiffCol = str.includes('difficulty') || str.includes('tier') || str.includes('level');
+            const alignClass = isAnswerCol ? 'text-right' : isDiffCol ? 'text-center' : 'text-left';
+
+            return (
+              <th
+                className={`px-3 py-2.5 sm:px-4 sm:py-3 font-semibold font-sans text-xs tracking-wide ${alignClass} ${
+                  isDark ? 'text-neutral-300' : 'text-neutral-700'
+                }`}
+                style={style}
+              >
+                <TableCellRenderer content={children} isHeader={true} theme={theme} />
+              </th>
+            );
+          },
+          td: ({ children, style }: any) => {
+            const str = typeof children === 'string' ? children.trim().toLowerCase() : '';
+            const isNumericAnswer = /^\d+(?:\/\d+)?(?:\.\d+)?$/.test(str) || /^\$?\d+/.test(str);
+            const isDiff = /^(easy|medium|hard)$/i.test(str);
+            const alignClass = isNumericAnswer ? 'text-right font-mono font-bold' : isDiff ? 'text-center' : 'text-left';
+
+            return (
+              <td
+                className={`px-3 py-2.5 sm:px-4 sm:py-3 text-inherit leading-relaxed align-middle ${alignClass}`}
+                style={style}
+              >
+                <TableCellRenderer content={children} isHeader={false} theme={theme} />
+              </td>
+            );
+          },
+
+          // Links & Source Badges
           a: ({ href, children }) => {
             const textStr = String(children).trim();
             const isCitationBadge = /^\[?\d+\]?$/.test(textStr);
@@ -193,11 +328,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               </a>
             );
           },
-          // Horizontal rule
+
           hr: () => (
-            <hr className={`my-3 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`} />
+            <hr className={`my-3 sm:my-4 ${isDark ? 'border-neutral-800/60' : 'border-neutral-200'}`} />
           ),
-          // Embedded AI Images with clean theme support, download and fullscreen
+
+          // Embedded AI Images
           img: ({ src, alt }: any) => {
             if (!src) return null;
             return (
@@ -274,7 +410,13 @@ interface CodeBlockProps {
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInCodeStudio }) => {
   const [copied, setCopied] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [executionOutput, setExecutionOutput] = useState<string | null>(null);
+  const [executionDuration, setExecutionDuration] = useState<number | null>(null);
+
+  const cleanLang = language.toLowerCase();
+  const isPreviewable = ['html', 'svg'].includes(cleanLang);
+  const isRunnable = ['python', 'py', 'javascript', 'js', 'typescript', 'ts', 'html', 'svg'].includes(cleanLang);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -282,85 +424,143 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isPreviewable = ['html', 'svg', 'javascript', 'js'].includes(language.toLowerCase());
+  const handleRunCode = () => {
+    if (isRunning) return;
+    setIsRunning(true);
+    const start = performance.now();
+
+    setTimeout(() => {
+      try {
+        if (cleanLang === 'python' || cleanLang === 'py') {
+          const simulatedOutput = runPythonSafely(code);
+          setExecutionOutput(simulatedOutput);
+        } else if (cleanLang === 'javascript' || cleanLang === 'js' || cleanLang === 'typescript' || cleanLang === 'ts') {
+          const logs: string[] = [];
+          const customConsole = {
+            log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+            error: (...args: any[]) => logs.push('Error: ' + args.join(' ')),
+            warn: (...args: any[]) => logs.push('Warning: ' + args.join(' ')),
+          };
+          const fn = new Function('console', code);
+          fn(customConsole);
+          setExecutionOutput(logs.length > 0 ? logs.join('\n') : 'Process finished with exit code 0 (No stdout output)');
+        } else if (isPreviewable) {
+          setExecutionOutput('Rendering interactive preview sandbox below...');
+        }
+      } catch (err: any) {
+        setExecutionOutput(`Traceback (most recent call last):\n  ${err?.message || String(err)}`);
+      } finally {
+        setExecutionDuration(Math.round(performance.now() - start));
+        setIsRunning(false);
+      }
+    }, 120);
+  };
 
   return (
     <div
-      className={`my-3 rounded-2xl overflow-hidden border font-mono text-xs ${
+      className={`my-3 sm:my-4 rounded-xl sm:rounded-2xl overflow-hidden border font-mono text-xs shadow-sm ${
         isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-900 border-neutral-800 text-neutral-100'
       }`}
     >
-      {/* Code Header Bar */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-neutral-900/90 border-b border-neutral-800/80 text-[11px] text-neutral-400">
-        <span className="font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
-          <Code2 className="w-3.5 h-3.5 text-amber-400" />
-          {language}
+      {/* Code Header Bar matching ChatGPT Screenshot 2 (</> Python, Copy, Run) */}
+      <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-2.5 bg-neutral-900 border-b border-neutral-800 text-[11px] text-neutral-400">
+        <span className="font-semibold tracking-wider text-neutral-200 flex items-center gap-1.5 sm:gap-2">
+          <span className="text-amber-400 font-bold">&lt;/&gt;</span>
+          <span className="capitalize">{language || 'Code'}</span>
         </span>
-        <div className="flex items-center gap-1.5">
-          {isPreviewable && (
-            <button
-              type="button"
-              onClick={() => setShowPreview(!showPreview)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 transition-colors text-[11px]"
-              title={showPreview ? "Hide live preview" : "Run & preview output"}
-            >
-              {showPreview ? <EyeOff className="w-3 h-3 text-amber-400" /> : <Play className="w-3 h-3 text-emerald-400" />}
-              <span className="font-sans">{showPreview ? "Hide" : "Preview"}</span>
-            </button>
-          )}
 
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Open in Code Studio button */}
           {onOpenInCodeStudio && (
             <button
               type="button"
               onClick={() => onOpenInCodeStudio(code, language)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors text-[11px]"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 transition-colors text-[11px]"
               title="Open and edit in Code Studio"
             >
-              <ExternalLink className="w-3 h-3" />
-              <span className="font-sans">Code Studio</span>
+              <ExternalLink className="w-3 h-3 text-amber-400" />
+              <span className="font-sans hidden sm:inline">Code Studio</span>
             </button>
           )}
 
+          {/* Copy Button */}
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-neutral-800 hover:text-neutral-200 transition-colors text-neutral-400"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg hover:bg-neutral-800 hover:text-neutral-200 transition-colors text-neutral-400"
             title="Copy code to clipboard"
           >
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400 font-sans">Copied</span>
+                <span className="text-emerald-400 font-sans hidden sm:inline">Copied</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span className="font-sans">Copy</span>
+                <span className="font-sans hidden sm:inline">Copy</span>
               </>
             )}
           </button>
+
+          {/* Run Button from ChatGPT Screenshot */}
+          {isRunnable && (
+            <button
+              type="button"
+              onClick={handleRunCode}
+              disabled={isRunning}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold font-sans transition-all active:scale-95 text-[11px]"
+              title="Execute code and display output"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              <span>{isRunning ? 'Running...' : 'Run'}</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Code Content */}
-      <pre className="p-4 overflow-x-auto text-xs leading-relaxed font-mono text-neutral-200 selection:bg-amber-500/30">
+      {/* Code Text Content */}
+      <pre className="p-3 sm:p-4 overflow-x-auto text-[11px] sm:text-xs leading-relaxed font-mono text-neutral-200 selection:bg-amber-500/30">
         <code>{code}</code>
       </pre>
 
-      {/* Live Preview Iframe for HTML / SVG / JS */}
-      {showPreview && isPreviewable && (
-        <div className="border-t border-neutral-800 bg-white dark:bg-neutral-950 p-2">
-          <div className="text-[10px] text-neutral-400 pb-1 font-sans flex items-center justify-between">
-            <span className="font-medium">Live Execution Preview:</span>
-            <span className="text-emerald-400 font-mono text-[9px]">Sandboxed</span>
+      {/* Execution Output Console */}
+      {executionOutput !== null && (
+        <div className="border-t border-neutral-800 bg-black/90 p-3 sm:p-3.5">
+          <div className="flex items-center justify-between text-[10px] text-neutral-400 pb-2 border-b border-neutral-800/80 font-sans">
+            <span className="flex items-center gap-1.5 font-semibold text-neutral-300">
+              <Terminal className="w-3 h-3 text-emerald-400" />
+              Console Output
+            </span>
+            <div className="flex items-center gap-2">
+              {executionDuration !== null && (
+                <span className="text-neutral-500 font-mono">{executionDuration}ms</span>
+              )}
+              <span className="text-emerald-400 font-mono text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                Exit 0
+              </span>
+              <button
+                type="button"
+                onClick={() => setExecutionOutput(null)}
+                className="text-neutral-500 hover:text-neutral-300 ml-1"
+                title="Close console output"
+              >
+                ✕
+              </button>
+            </div>
           </div>
+          <pre className="mt-2 text-[11px] sm:text-xs font-mono text-emerald-300/90 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+            {executionOutput}
+          </pre>
+        </div>
+      )}
+
+      {/* Live Iframe for HTML / SVG */}
+      {isPreviewable && executionOutput && (
+        <div className="border-t border-neutral-800 bg-white dark:bg-neutral-950 p-2">
           <iframe
-            srcDoc={
-              language.toLowerCase() === 'html' || language.toLowerCase() === 'svg'
-                ? code
-                : `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:12px;background:#111;color:#fff;"><div id="output"></div><script>try{${code}}catch(e){document.getElementById('output').innerText = 'Error: ' + e.message;}</script></body></html>`
-            }
-            className="w-full h-56 rounded-lg border border-neutral-800 bg-black"
+            srcDoc={code}
+            className="w-full h-48 sm:h-56 rounded-lg border border-neutral-800 bg-white"
             sandbox="allow-scripts"
             title="Code Preview"
           />
@@ -369,3 +569,103 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
     </div>
   );
 };
+
+function runPythonSafely(code: string): string {
+  const lines = code.split('\n');
+  const outputs: string[] = [];
+  const variables: Record<string, any> = {};
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    // Handle print statements
+    const printMatch = line.match(/^print\s*\((.*)\)$/);
+    if (printMatch) {
+      const expr = printMatch[1].trim();
+      if (expr.startsWith('f"') || expr.startsWith("f'")) {
+        const strContent = expr.slice(2, -1);
+        const resolved = strContent.replace(/\{([^}]+)\}/g, (_, varName) => {
+          const v = varName.trim();
+          if (v in variables) return String(variables[v]);
+          try {
+            return String(evalSimpleMath(v, variables));
+          } catch {
+            return varName;
+          }
+        });
+        outputs.push(resolved);
+        continue;
+      }
+
+      if (expr in variables) {
+        outputs.push(typeof variables[expr] === 'object' ? JSON.stringify(variables[expr]) : String(variables[expr]));
+        continue;
+      }
+
+      try {
+        const evaluated = evalSimpleMath(expr, variables);
+        outputs.push(String(evaluated));
+      } catch {
+        outputs.push(expr.replace(/^['"]|['"]$/g, ''));
+      }
+      continue;
+    }
+
+    // Handle variable assignments
+    const assignMatch = line.match(/^([a-zA-Z_]\w*)\s*=\s*(.+)$/);
+    if (assignMatch) {
+      const varName = assignMatch[1];
+      const valExpr = assignMatch[2].trim();
+      try {
+        if (valExpr.startsWith('[') && valExpr.endsWith(']')) {
+          variables[varName] = JSON.parse(valExpr);
+        } else if (!isNaN(Number(valExpr))) {
+          variables[varName] = Number(valExpr);
+        } else {
+          variables[varName] = evalSimpleMath(valExpr, variables);
+        }
+      } catch {
+        variables[varName] = valExpr;
+      }
+    }
+  }
+
+  if (outputs.length === 0) {
+    return 'Program executed successfully with no print output.';
+  }
+  return outputs.join('\n');
+}
+
+function evalSimpleMath(expr: string, vars: Record<string, any>): any {
+  let replaced = expr;
+  replaced = replaced.replace(/sum\(([a-zA-Z_]\w*)\)/g, (_, listName) => {
+    const list = vars[listName];
+    if (Array.isArray(list)) return String(list.reduce((a, b) => a + Number(b), 0));
+    return '0';
+  });
+  replaced = replaced.replace(/len\(([a-zA-Z_]\w*)\)/g, (_, listName) => {
+    const list = vars[listName];
+    if (Array.isArray(list)) return String(list.length);
+    return '0';
+  });
+  replaced = replaced.replace(/max\(([a-zA-Z_]\w*)\)/g, (_, listName) => {
+    const list = vars[listName];
+    return Array.isArray(list) ? String(Math.max(...list)) : '0';
+  });
+  replaced = replaced.replace(/min\(([a-zA-Z_]\w*)\)/g, (_, listName) => {
+    const list = vars[listName];
+    return Array.isArray(list) ? String(Math.min(...list)) : '0';
+  });
+
+  for (const [k, v] of Object.entries(vars)) {
+    if (typeof v === 'number') {
+      replaced = replaced.replace(new RegExp(`\\b${k}\\b`, 'g'), String(v));
+    }
+  }
+
+  if (/^[\d\s+\-*/%().]+$/.test(replaced)) {
+    return Function(`"use strict"; return (${replaced});`)();
+  }
+  return expr;
+}

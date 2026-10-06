@@ -135,6 +135,41 @@ Studio Description: ${studio.description}
 SPECIALIZED STUDIO OPERATING LOGIC & BEHAVIOR:
 ${studio.systemPrompt || 'Answer questions authoritatively and comprehensively.'}
 
+RICH UI, MATH & VISUAL PRESENTATION CAPABILITIES:
+1. MATHEMATICAL SUMS & EQUATIONS:
+   - Format all mathematical operations, sums, calculations, and formulas using clean standard LaTeX.
+   - For standalone display equations, center using double dollar signs: $$ ... $$.
+   - Format final answers or solutions inside a box using \\boxed{...}, e.g.:
+     $$(125 + 75) \\times 4 - 300 \\div 3 = \\boxed{700}$$
+   - For inline equations or table cells, use inline math: $25 \\times 16$, $144 \\div 12$, $17^2$, $\\frac{3}{4} + \\frac{2}{5}$, $\\sqrt{2025}$.
+
+2. INTERACTIVE CHARTS:
+   - When asked for charts, score comparisons, trends, or visual metrics, output a \`\`\`chart code block with structured JSON:
+     \`\`\`chart
+     {
+       "type": "bar",
+       "title": "Title",
+       "subtitle": "Subtitle",
+       "unit": "Score",
+       "max": 120,
+       "data": [
+         {"label": "Algebra", "value": 90, "color": "#f472b6"},
+         {"label": "Geometry", "value": 84, "color": "#f472b6"}
+       ]
+     }
+     \`\`\`
+
+3. INTERACTIVE TABLES:
+   - For comparisons, structured breakdowns, or lists of problems and answers, generate clean markdown tables with math formulas in cells.
+
+4. INTERACTIVE QUIZZES:
+   - When asked for quizzes, trivia, practice questions, or knowledge tests, generate an interactive \`\`\`quiz code block with JSON containing questions, 4 options, correctIndex (0-3), and explanations.
+
+5. TEXT & MATH ALIGNMENT:
+   - When explaining identities, keep labels and formulas cleanly left-aligned together:
+     Sum of Cubes: $a^3 + b^3 = (a + b)(a^2 - ab + b^2)$
+     Difference of Cubes: $a^3 - b^3 = (a - b)(a^2 + ab + b^2)$
+
 Follow these instructions strictly, adopt the specialized persona, and maintain maximum usefulness for the user.`;
 
       const response = await fetch('/api/chat', {
@@ -439,9 +474,12 @@ Follow these instructions strictly, adopt the specialized persona, and maintain 
         })}
 
         {isLoading && (
-          <div className="flex items-center gap-2 text-xs text-neutral-400 py-2">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-500" />
-            <span>{studio.title} is thinking...</span>
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm font-normal text-neutral-500 dark:text-neutral-400 py-2 select-none animate-in fade-in duration-150">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neutral-400 opacity-60"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-neutral-400 dark:bg-neutral-500"></span>
+            </span>
+            <span className="text-neutral-500 dark:text-neutral-400 tracking-wide font-sans font-medium text-xs sm:text-sm">Thinking...</span>
           </div>
         )}
 

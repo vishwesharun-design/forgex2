@@ -18,6 +18,43 @@
   }
 }
 
+/* ChatGPT-style Math LaTeX and Boxed Expressions */
+.katex-display {
+  margin: 0.75rem 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.35rem 0;
+  text-align: center;
+  -webkit-overflow-scrolling: touch;
+}
+
+.katex {
+  font-size: 1.05em;
+  text-rendering: geometricPrecision;
+}
+
+/* ChatGPT-style \boxed{} Result Border */
+.katex .fbox,
+.katex .boxed {
+  border: 1.5px solid currentColor !important;
+  border-radius: 4px !important;
+  padding: 2px 7px !important;
+  margin: 0 4px !important;
+  display: inline-block !important;
+  white-space: nowrap !important;
+}
+
+.math-sum-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  margin: 0.5rem 0;
+  border-radius: 0.75rem;
+  background: rgba(140, 140, 160, 0.06);
+  border: 1px solid rgba(140, 140, 160, 0.15);
+}
+
 /* Custom smooth scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

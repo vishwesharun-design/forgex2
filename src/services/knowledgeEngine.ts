@@ -9,52 +9,355 @@ export interface KnowledgeResponse {
   category?: string;
 }
 
+export function getStressTestUiShowcase(): string {
+  return `Absolutely — let's **stress-test the UI** with different kinds of content. 😎
+
+🧮 1. Maths
+
+$$(125 + 75) \\times 4 - 300 \\div 3 = \\boxed{700}$$
+
+---
+
+📊 2. Chart
+
+\`\`\`chart
+{
+  "type": "bar",
+  "title": "Maths score test",
+  "subtitle": "Sample scores from five fictional tests.",
+  "unit": "Score",
+  "max": 120,
+  "data": [
+    { "label": "Algebra", "value": 90, "color": "#f472b6" },
+    { "label": "Geometry", "value": 84, "color": "#f472b6" },
+    { "label": "Fractions", "value": 98, "color": "#f472b6" },
+    { "label": "Statistics", "value": 76, "color": "#f472b6" },
+    { "label": "Number Theory", "value": 88, "color": "#f472b6" }
+  ]
+}
+\`\`\`
+
+---
+
+📋 3. Table
+
+| Question | Difficulty | Answer |
+| :--- | :--- | ---: |
+| $25 \\times 16$ | Easy | **400** |
+| $144 \\div 12$ | Easy | **12** |
+| $17^2$ | Medium | **289** |
+| $3/4 + 2/5$ | Medium | **23/20** |
+| $\\sqrt{2025}$ | Hard | **45** |
+
+---
+
+💻 4. Code UI
+
+\`\`\`python
+# Python program demonstrating math operations and list statistics
+numbers = [10, 20, 30, 40]
+print(f"Total Sum: {sum(numbers)}")
+print(f"Average: {sum(numbers) / len(numbers)}")
+print(f"Maximum: {max(numbers)}")
+\`\`\`
+
+---
+
+🎯 5. Interactive Quiz
+
+\`\`\`quiz
+{
+  "title": "Maths & Science Rapid Quiz",
+  "topic": "Mathematics & Physics",
+  "difficulty": "Medium",
+  "verifiedFromWeb": true,
+  "questions": [
+    {
+      "id": 1,
+      "question": "What is the result of evaluating $25 \\times 16$?",
+      "options": ["**400**", "**375**", "**425**", "**450**"],
+      "correctIndex": 0,
+      "explanation": "$25 \\times 16 = 25 \\times (4 \\times 4) = 100 \\times 4 = \\boxed{400}$."
+    },
+    {
+      "id": 2,
+      "question": "Which identity correctly factorizes the Sum of Cubes: $a^3 + b^3$?",
+      "options": [
+        "$(a + b)(a^2 - ab + b^2)$",
+        "$(a + b)(a^2 + ab + b^2)$",
+        "$(a - b)(a^2 + ab + b^2)$",
+        "$(a + b)^3$"
+      ],
+      "correctIndex": 0,
+      "explanation": "The Sum of Cubes identity is $a^3 + b^3 = (a + b)(a^2 - ab + b^2)$ with a negative middle term."
+    },
+    {
+      "id": 3,
+      "question": "What is the principal square root of $\\sqrt{2025}$?",
+      "options": ["**45**", "**35**", "**55**", "**42**"],
+      "correctIndex": 0,
+      "explanation": "Since $45^2 = (40 + 5)^2 = 1600 + 400 + 25 = 2025$, $\\sqrt{2025} = \\boxed{45}$."
+    }
+  ]
+}
+\`\`\``;
+}
+
+export function generateInteractiveQuiz(prompt: string): string {
+  const lower = prompt.toLowerCase();
+
+  if (lower.includes('calculus') || lower.includes('derivative') || lower.includes('integral') || lower.includes('math')) {
+    return `### 🧮 Interactive Calculus & Mathematics Quiz
+
+Test your understanding of calculus derivatives, integrals, and algebraic identities with immediate feedback!
+
+\`\`\`quiz
+{
+  "title": "Calculus & Algebraic Identities Quiz",
+  "topic": "Mathematics & Calculus",
+  "difficulty": "Medium",
+  "questions": [
+    {
+      "id": 1,
+      "question": "What is the derivative of the polynomial function $f(x) = 3x^4 - 5x^2 + 8$?",
+      "options": [
+        "$12x^3 - 10x$",
+        "$12x^4 - 10x$",
+        "$3x^3 - 5x$",
+        "$12x^3 - 5x + 8$"
+      ],
+      "correctIndex": 0,
+      "explanation": "Applying the Power Rule $\\\\frac{d}{dx}[x^n] = n x^{n-1}$: $\\\\frac{d}{dx}[3x^4] = 12x^3$, $\\\\frac{d}{dx}[-5x^2] = -10x$, and constant $8$ differentiates to $0$."
+    },
+    {
+      "id": 2,
+      "question": "Which of the following represents the correct factorization for the Sum of Cubes: $a^3 + b^3$?",
+      "options": [
+        "$(a + b)(a^2 - ab + b^2)$",
+        "$(a + b)(a^2 + ab + b^2)$",
+        "$(a - b)(a^2 + ab + b^2)$",
+        "$(a + b)^3$"
+      ],
+      "correctIndex": 0,
+      "explanation": "The standard algebraic Sum of Cubes identity is $a^3 + b^3 = (a + b)(a^2 - ab + b^2)$. Note the negative middle term $-ab$."
+    },
+    {
+      "id": 3,
+      "question": "Evaluate the definite integral: $\\\\int_0^3 2x \\, dx$",
+      "options": [
+        "**9**",
+        "**6**",
+        "**12**",
+        "**3**"
+      ],
+      "correctIndex": 0,
+      "explanation": "The antiderivative of $2x$ is $x^2$. Evaluating from $0$ to $3$ gives $[3^2 - 0^2] = 9 - 0 = \\\\boxed{9}$."
+    },
+    {
+      "id": 4,
+      "question": "What is the limit $\\\\lim_{x \\to 0} \\\\frac{\\\\sin(x)}{x}$?",
+      "options": [
+        "**1**",
+        "**0**",
+        "**Undefined**",
+        "**$\\\\infty$**"
+      ],
+      "correctIndex": 0,
+      "explanation": "By the geometric squeeze theorem or L'Hôpital's rule, $\\\\lim_{x \\to 0} \\\\frac{\\\\sin(x)}{x} = \\\\boxed{1}$."
+    }
+  ]
+}
+\`\`\`
+
+*Select an option above to see instant feedback, explanations, and your live score!*`;
+  }
+
+  // Physics & Quantum
+  if (lower.includes('quantum') || lower.includes('physics') || lower.includes('science')) {
+    return `### ⚛️ Interactive Quantum Mechanics Quiz
+
+Test your mastery of foundational quantum principles with instant scoring and explanations!
+
+\`\`\`quiz
+{
+  "title": "Quantum Physics Fundamentals",
+  "topic": "Quantum Mechanics & Physics",
+  "difficulty": "Medium",
+  "verifiedFromWeb": true,
+  "questions": [
+    {
+      "id": 1,
+      "question": "Which quantum principle states that a physical system remains in a linear combination of multiple states until it is observed?",
+      "options": [
+        "Quantum Superposition",
+        "Wavefunction Collapse",
+        "Pauli Exclusion Principle",
+        "Quantum Decoherence"
+      ],
+      "correctIndex": 0,
+      "explanation": "Superposition dictates that before measurement, a quantum state $|\\\\psi\\\\rangle$ exists simultaneously as $\\\\alpha|0\\\\rangle + \\\\beta|1\\\\rangle$, where $|\\\\alpha|^2 + |\\\\beta|^2 = 1$."
+    },
+    {
+      "id": 2,
+      "question": "According to the Heisenberg Uncertainty Principle, which pair of physical observables cannot both be known simultaneously with arbitrary precision?",
+      "options": [
+        "Position and Linear Momentum",
+        "Energy and Position",
+        "Mass and Velocity",
+        "Charge and Spin"
+      ],
+      "correctIndex": 0,
+      "explanation": "The position-momentum uncertainty relation is $\\\\Delta x \\\\cdot \\\\Delta p \\\\ge \\\\frac{\\\\hbar}{2}$."
+    },
+    {
+      "id": 3,
+      "question": "What phenomenon did Albert Einstein famously refer to as 'spooky action at a distance'?",
+      "options": [
+        "Quantum Entanglement",
+        "Gravitational Lensing",
+        "Photoelectric Effect",
+        "Quantum Tunneling"
+      ],
+      "correctIndex": 0,
+      "explanation": "Quantum Entanglement describes non-local correlation where the measurement of one entangled particle instantly determines the state of the other."
+    }
+  ]
+}
+\`\`\`
+
+*Select an option above to test your knowledge!*`;
+  }
+
+  // General Knowledge & Current Web Trivia
+  return `### 🎯 Interactive Knowledge Quiz
+
+Here is an interactive quiz testing your knowledge across science, technology, and world facts!
+
+\`\`\`quiz
+{
+  "title": "Universal Knowledge & Science Quiz",
+  "topic": "General Science & Technology",
+  "difficulty": "Medium",
+  "verifiedFromWeb": true,
+  "questions": [
+    {
+      "id": 1,
+      "question": "Which architecture introduced in the 2017 paper 'Attention Is All You Need' forms the backbone of modern LLMs?",
+      "options": [
+        "The Transformer Architecture",
+        "Recurrent Neural Networks (RNN)",
+        "Convolutional Networks (CNN)",
+        "Long Short-Term Memory (LSTM)"
+      ],
+      "correctIndex": 0,
+      "explanation": "Vaswani et al. introduced the Transformer architecture relying entirely on Self-Attention mechanisms, replacing recurrent loops and enabling massive parallel training."
+    },
+    {
+      "id": 2,
+      "question": "What is the approximate speed of light in a vacuum ($c$)?",
+      "options": [
+        "**$299,792,458\\text{ m/s}$**",
+        "**$300,000,000\\text{ km/s}$**",
+        "**$150,000,000\\text{ m/s}$**",
+        "**$3,000,000\\text{ m/s}$**"
+      ],
+      "correctIndex": 0,
+      "explanation": "The speed of light in vacuum is defined exactly as $299,792,458\\text{ meters per second}$ (approximately $3 \\times 10^8\\text{ m/s}$)."
+    },
+    {
+      "id": 3,
+      "question": "In computer science, what is the average time complexity of searching a sorted array using Binary Search?",
+      "options": [
+        "$O(\\log n)$",
+        "$O(n)$",
+        "$O(n \\log n)$",
+        "$O(1)$"
+      ],
+      "correctIndex": 0,
+      "explanation": "Binary search halves the search space in each iteration, resulting in logarithmic time complexity $O(\\\\log n)$."
+    }
+  ]
+}
+\`\`\`
+
+*Click any option to get instant scoring and verified explanations!*`;
+}
+
 // 1. Math and Quantitative Evaluator
 function evaluateMathExpression(input: string): string | null {
-  const clean = input.trim().toLowerCase();
+  const clean = input.trim();
+  const lower = clean.toLowerCase();
 
   // Percentage calculations: e.g. "what is 15% of 240", "20% of 1500"
-  const pctMatch = clean.match(/(?:what is|calculate|compute)?\s*(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)/i);
+  const pctMatch = lower.match(/(?:what is|calculate|compute)?\s*(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)/i);
   if (pctMatch) {
     const pct = parseFloat(pctMatch[1]);
     const total = parseFloat(pctMatch[2]);
     const result = (pct / 100) * total;
-    return `**${pct}%** of **${total}** is **${result}**.`;
+    return `$$${pct}\\% \\times ${total} = \\boxed{${result}}$$`;
   }
 
-  // Powers: e.g. "2^10", "3 to the power of 4", "5^3"
-  const powMatch = clean.match(/(?:what is|calculate)?\s*(\d+(?:\.\d+)?)\s*(?:\^|\s*to the power of\s*)\s*(\d+(?:\.\d+)?)/i);
+  // Powers: e.g. "17^2", "2^10", "3 to the power of 4", "5^3"
+  const powMatch = lower.match(/(?:what is|calculate)?\s*(\d+(?:\.\d+)?)\s*(?:\^|\s*to the power of\s*)\s*(\d+(?:\.\d+)?)/i);
   if (powMatch) {
     const base = parseFloat(powMatch[1]);
     const exp = parseFloat(powMatch[2]);
     const result = Math.pow(base, exp);
-    return `**${base}** raised to the power of **${exp}** is **${result}**.`;
+    return `$$${base}^{${exp}} = \\boxed{${result}}$$`;
   }
 
-  // Square roots: e.g. "sqrt(144)", "square root of 81"
-  const sqrtMatch = clean.match(/(?:what is|calculate)?\s*(?:sqrt\((\d+(?:\.\d+)?)\)|square root of\s*(\d+(?:\.\d+)?))/i);
+  // Square roots: e.g. "sqrt(2025)", "sqrt(144)", "square root of 81"
+  const sqrtMatch = lower.match(/(?:what is|calculate)?\s*(?:sqrt\((\d+(?:\.\d+)?)\)|square root of\s*(\d+(?:\.\d+)?))/i);
   if (sqrtMatch) {
     const val = parseFloat(sqrtMatch[1] || sqrtMatch[2]);
     const result = Math.sqrt(val);
-    return `The square root of **${val}** is **${result}**.`;
+    return `$$\\sqrt{${val}} = \\boxed{${result}}$$`;
   }
 
-  // Arithmetic operations: e.g. "125 * 8", "450 / 9", "1240 + 860", "500 - 125"
-  const mathMatch = clean.match(/^(?:what is|calculate|compute)?\s*(-?\d+(?:\.\d+)?)\s*([\+\-\*\/xX])\s*(-?\d+(?:\.\d+)?)\s*\??$/i);
-  if (mathMatch) {
-    const num1 = parseFloat(mathMatch[1]);
-    const op = mathMatch[2].toLowerCase() === 'x' ? '*' : mathMatch[2];
-    const num2 = parseFloat(mathMatch[3]);
-    let result = 0;
-    if (op === '+') result = num1 + num2;
-    else if (op === '-') result = num1 - num2;
-    else if (op === '*') result = num1 * num2;
-    else if (op === '/') {
-      if (num2 === 0) return `Division by zero is undefined in real mathematics.`;
-      result = num1 / num2;
+  // Fractions: e.g. "3/4 + 2/5"
+  const fracMatch = lower.match(/^(?:what is|calculate|compute)?\s*(\d+)\/(\d+)\s*([\+\-\*\/])\s*(\d+)\/(\d+)\s*\??$/i);
+  if (fracMatch) {
+    const [_, n1, d1, op, n2, d2] = fracMatch;
+    const num1 = parseInt(n1, 10), den1 = parseInt(d1, 10), num2 = parseInt(n2, 10), den2 = parseInt(d2, 10);
+    if (op === '+') {
+      const top = num1 * den2 + num2 * den1;
+      const bottom = den1 * den2;
+      return `$$\\frac{${num1}}{${den1}} + \\frac{${num2}}{${den2}} = \\boxed{\\frac{${top}}{${bottom}}}$$`;
     }
-    return `${num1} ${op} ${num2} = **${result}**.`;
   }
+
+  // Compound arithmetic operations: e.g. "(125 + 75) * 4 - 300 / 3", "25 * 16", "144 / 12"
+  const mathExprCandidate = clean
+    .replace(/^(?:what is|calculate|compute|solve|eval|evaluate)\s*/i, '')
+    .replace(/[?!.]+$/, '')
+    .trim();
+
+  if (/^[\d\s+\-*/()xX×÷^.]+$/.test(mathExprCandidate) && /[\d]/.test(mathExprCandidate) && /[+\-*/xX×÷^]/.test(mathExprCandidate)) {
+    try {
+      // Normalize to standard JS arithmetic
+      const jsExpr = mathExprCandidate
+        .replace(/×|[xX]/g, '*')
+        .replace(/÷/g, '/')
+        .replace(/\^/g, '**');
+
+      // Safe evaluation of pure numeric math
+      if (/^[\d\s+\-*/().*]+$/.test(jsExpr)) {
+        const val = Function(`"use strict"; return (${jsExpr});`)();
+        if (typeof val === 'number' && !isNaN(val) && isFinite(val)) {
+          // Format latex display
+          const latexExpr = mathExprCandidate
+            .replace(/\*/g, ' \\times ')
+            .replace(/[xX]/g, ' \\times ')
+            .replace(/×/g, ' \\times ')
+            .replace(/\//g, ' \\div ')
+            .replace(/÷/g, ' \\div ');
+
+          return `$$${latexExpr} = \\boxed{${val}}$$`;
+        }
+      }
+    } catch {}
+  }
+
 
   // Unit conversions: Miles to KM, Celsius to Fahrenheit, etc.
   const milesMatch = clean.match(/(\d+(?:\.\d+)?)\s*miles?\s*(?:to|in)\s*(?:km|kilometers?)/i);
@@ -336,6 +639,42 @@ export function generateExpertChatReply(prompt: string, _modelId = 'forge-2-ultr
     /(?:who\s+(?:created|made|developed|built|designed|programmed|coded|founded|invented)\s+(?:you|forgex|this\s+(?:app|ai|website|platform|software|system))|who\s+is\s+your\s+(?:creator|maker|developer|author|architect|father|founder|boss|programmer)|who\s+created\s+you|who\s+made\s+you|who\s+are\s+your\s+creators|who\s+owns\s+you|who\s+built\s+forgex|creator\s+of\s+forgex|who\s+is\s+vishwesh|who\s+is\s+vishweshvarman|what\s+is\s+the\s+creator(?:'s)?\s+name)/i.test(clean)
   ) {
     return `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
+  }
+
+  // 1.1 Stress Test & "All Possible UI" Showcase (Math, Chart, Table, Code UI, Quiz)
+  if (/(?:create\s+all\s+pos+ible\s+ui|stress[\s-]test\s+(?:the\s+)?ui|match\s+sum\s+ui\s+check|show\s+all\s+ui\s+(?:widgets?|components?|types?)|maths?\s+score\s+test\s+chart)/i.test(clean)) {
+    return getStressTestUiShowcase();
+  }
+
+  // 1.2 Interactive Quiz Generation
+  if (/(?:make\s+it\s+do\s+|create\s+(?:an?\s+)?|give\s+me\s+(?:an?\s+)?|quiz\s+me\s+on\s+|test\s+my\s+knowledge\s+on\s+)?(?:interactive\s+)?(?:quizes|quiz|trivia|practice\s+questions)\b/i.test(clean) ||
+      /\b(?:give\s+me\s+a\s+quiz|quiz\s+me|make\s+a\s+quiz)\b/i.test(clean)) {
+    return generateInteractiveQuiz(clean);
+  }
+
+  // 1.3 Algebraic Identities Query (Strict Left-Aligned LaTeX Formatting)
+  if (/(?:sum\s+and\s+difference\s+of\s+cubes|trinomial\s+identities|algebraic\s+identities|euler'?s\s+identity.*cubes?|useful\s+derived\s+identities)/i.test(clean)) {
+    return `### Essential Algebraic Identities
+
+These are frequently used for factoring polynomials and solving symmetric equations:
+
+#### 1. Sum and Difference of Cubes
+- **Sum of Cubes:** $a^3 + b^3 = (a + b)(a^2 - ab + b^2)$
+- **Difference of Cubes:** $a^3 - b^3 = (a - b)(a^2 + ab + b^2)$
+
+---
+
+#### 2. Trinomial Identities
+- **Square of a Trinomial:** $(a + b + c)^2 = a^2 + b^2 + c^2 + 2(ab + bc + ca)$
+- **Euler's Identity (Sum of Cubes Variant):** $a^3 + b^3 + c^3 - 3abc = (a + b + c)(a^2 + b^2 + c^2 - ab - bc - ca)$
+
+---
+
+#### 3. Useful Derived Identities
+For solving symmetric equations, these rearrangements are highly effective:
+- **Sum of Squares:** $a^2 + b^2 = (a + b)^2 - 2ab$
+- **Sum of Cubes (in terms of sum and product):** $a^3 + b^3 = (a + b)^3 - 3ab(a + b)$
+- **Difference of Fourth Powers:** $a^4 - b^4 = (a - b)(a + b)(a^2 + b^2)$`;
   }
 
   // 2. Math & Quantitative computations

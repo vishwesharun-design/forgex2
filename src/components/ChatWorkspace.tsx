@@ -1134,7 +1134,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
                       return (
                         <div
-                          className={`relative max-w-[85%] sm:max-w-[78%] rounded-2xl p-3.5 sm:p-4 transition-all text-sm leading-relaxed ${
+                          className={`relative w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all text-xs sm:text-sm leading-relaxed ${
                             isDark
                               ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
                               : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm shadow-sm'
@@ -1149,7 +1149,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                                     <img
                                       src={att.url}
                                       alt={att.name}
-                                      className="max-h-48 max-w-xs rounded-xl object-cover border border-amber-500/20 shadow-sm"
+                                      className="max-h-48 max-w-xs rounded-xl object-cover border border-neutral-700 shadow-sm"
                                     />
                                   )}
                                   <div
@@ -1183,7 +1183,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                               }}
                             />
                             {message.isStreaming && (
-                              <span className="inline-block w-2 h-4 ml-1 bg-amber-400 animate-pulse rounded-xs align-middle shadow-sm shadow-amber-400/50" />
+                              <span className="inline-block w-1.5 h-4 ml-1 bg-neutral-400 dark:bg-neutral-500 animate-pulse rounded-xs align-middle" />
                             )}
                           </div>
 
@@ -1224,10 +1224,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                             isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
                           }`}>
                             <div className="flex items-center gap-2">
-                              <span className={`text-[11px] font-mono inline-flex items-center gap-1 ${
-                                isDark ? 'text-amber-400' : 'text-amber-700 font-semibold'
-                              }`}>
-                                <Zap className="w-3 h-3 shrink-0" />
+                              <span className="text-[11px] font-mono inline-flex items-center gap-1 text-neutral-400 dark:text-neutral-500">
+                                <Zap className="w-3 h-3 shrink-0 text-neutral-400 dark:text-neutral-500" />
                                 <span>
                                   {message.isStreaming 
                                     ? `${currentModel.name} is streaming...`
@@ -1238,7 +1236,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                               </span>
 
                               {message.searchedWeb && (
-                                <span className="text-[10px] text-blue-500 dark:text-blue-400 inline-flex items-center gap-1 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                                <span className="text-[10px] text-neutral-500 dark:text-neutral-400 inline-flex items-center gap-1 font-medium bg-neutral-500/10 px-2 py-0.5 rounded-full border border-neutral-500/20">
                                   <Globe className="w-2.5 h-2.5" />
                                   <span>Web Search</span>
                                 </span>
@@ -1293,16 +1291,13 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <span>Searching {searchingQuery ? searchingQuery : 'the web...'}</span>
                   </div>
                 ) : (
-                  /* Thinking State — Classic Old Clean UI (No shiny animation, subtle clean pill) */
-                  <div
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                      isDark
-                        ? 'bg-neutral-900/70 border-neutral-800 text-neutral-400'
-                        : 'bg-neutral-50 border-neutral-200 text-neutral-600'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500/85 dark:text-amber-400/85 animate-spin-slow" />
-                    <span>Thinking...</span>
+                  /* Thinking State — Mature, clean greyish ChatGPT style (No colourful childish UI) */
+                  <div className="flex items-center gap-2.5 text-xs sm:text-sm font-normal text-neutral-500 dark:text-neutral-400 py-2 px-1 select-none animate-in fade-in duration-150">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neutral-400 opacity-60"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-neutral-400 dark:bg-neutral-500"></span>
+                    </span>
+                    <span className="text-neutral-500 dark:text-neutral-400 tracking-wide font-sans font-medium text-xs sm:text-sm">Thinking...</span>
                   </div>
                 )}
               </div>
