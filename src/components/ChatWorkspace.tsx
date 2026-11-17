@@ -33,7 +33,6 @@ import {
   Lightbulb,
   LayoutTemplate,
   Search,
-  Eraser,
   Brain
 } from 'lucide-react';
 import { ChatMessage, ChatSession, ForgeXModelId, ForgeXProject, ForgeXTheme, FORGEX_MODELS } from '../types';
@@ -48,6 +47,7 @@ import { detectImageGenerationIntent } from '../utils/imageIntent';
 import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
 import { FullscreenImageModal } from './FullscreenImageModal';
 import { InlineDeepResearchCard } from './InlineDeepResearchCard';
+import { SketchModal } from './SketchModal';
 
 const MenuLibraryIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -114,7 +114,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
   const [isSketchOpen, setIsSketchOpen] = useState(false);
-  const [sketchColor, setSketchColor] = useState('#111827');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [pendingUserTurn, setPendingUserTurn] = useState<{
     text: string;
@@ -131,8 +130,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [generatingImageState, setGeneratingImageState] = useState<{ prompt: string; progress: number } | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const attachMenuContainerRef = useRef<HTMLDivElement | null>(null);
-  const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const isSketchDrawingRef = useRef(false);
   const deepResearchAbortMapRef = useRef<Record<string, AbortController>>({});
 
   const optimizeImageFileToDataUrl = (file: File, maxDim = 1600, quality = 0.88): Promise<string> => {
@@ -217,16 +214,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [attachMenuOpen]);
-
-  useEffect(() => {
-    if (!isSketchOpen || !sketchCanvasRef.current) return;
-    const canvas = sketchCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-  }, [isSketchOpen]);
 
   const handleDownloadImage = async (imageUrl: string, imageId?: string) => {
     try {
@@ -569,11 +556,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   // Auto resize textarea
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      const scrollH = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = `${Math.min(scrollH, 180)}px`;
+      const el = textareaRef.current;
+      el.style.height = 'auto';
+      const maxH = 144;
+      const scrollH = el.scrollHeight;
+      el.style.height = `${Math.min(scrollH, maxH)}px`;
+      el.style.overflowY = inputText.trim().length > 0 && scrollH > maxH ? 'auto' : 'hidden';
     }
-  }, [inputText]);
+  }, [inputText, activeComposerTool, activeProjectInChat]);
 
   const buildDefaultResearchSteps = (query: string): string[] => {
     const topic = query.trim().slice(0, 70) || 'the requested topic';
@@ -592,83 +582,247 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const targetMsg = targetSession?.messages.find((m) => m.id === messageId);
     const query = targetMsg?.deepResearch?.query || 'requested topic';
 
-    const runningSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => ({
-      ...msg,
-      deepResearch: {
-        ...(msg.deepResearch || { query, steps }),
-        query,
-        steps,
-        status: 'running',
-      },
-    }));
-    if (runningSession) {
-      onUpdateSession(runningSession);
-    }
+    const updateProgress = (completedCount: number, sourcesFound = 0) => {
+      const updated = chatService.updateMessageInSession(sessionId, messageId, (msg) => {
+        if (msg.deepResearch?.status === 'cancelled') return msg;
+        return {
+          ...msg,
+          deepResearch: {
+            ...(msg.deepResearch || { query, steps }),
+            query,
+            steps,
+            status: 'running',
+            completedStepsCount: completedCount,
+            sourcesFound,
+          },
+        };
+      });
+      if (updated) {
+        onUpdateSession(updated);
+      }
+    };
+
+    updateProgress(0, 0);
 
     const abortController = new AbortController();
     deepResearchAbortMapRef.current[messageId] = abortController;
 
-    try {
-      const storedApiKey = localStorage.getItem('forgex_api_key') || '';
-      const res = await fetch('/api/deep-research', {
-        method: 'POST',
-        signal: abortController.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
-        },
-        body: JSON.stringify({
-          query: activeProjectInChat
-            ? `${query}\n\n[Project Context: ${activeProjectInChat.name} — ${activeProjectInChat.description || ''}]`
-            : query,
-          planSteps: steps,
-          depth: 'deep',
-          modelId: selectedModelId,
-        }),
+    let visualCompleted = 0;
+    let latestSourcesFound = 0;
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve, reject) => {
+        if (abortController.signal.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+        const timer = setTimeout(() => {
+          abortController.signal.removeEventListener('abort', onAbort);
+          resolve();
+        }, ms);
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        abortController.signal.addEventListener('abort', onAbort, { once: true });
       });
 
-      if (!res.ok) {
-        throw new Error(`Deep research failed (${res.status})`);
+    const advanceVisualStepsTo = async (targetCount: number, stepDelayMs = 340) => {
+      const clampedTarget = Math.min(steps.length, Math.max(visualCompleted, targetCount));
+      while (visualCompleted < clampedTarget) {
+        if (abortController.signal.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        visualCompleted += 1;
+        updateProgress(visualCompleted, latestSourcesFound);
+        if (visualCompleted < clampedTarget) {
+          await sleep(stepDelayMs);
+        }
+      }
+    };
+
+    try {
+      const storedApiKey = localStorage.getItem('forgex_api_key') || '';
+      let finalReport: any = null;
+      const requestBody = JSON.stringify({
+        query,
+        projectContext: activeProjectInChat
+          ? `${activeProjectInChat.name} — ${activeProjectInChat.description || ''}`
+          : undefined,
+        planSteps: steps,
+        depth: 'deep',
+        modelId: selectedModelId,
+      });
+
+      const handleSsePayload = async (jsonText: string) => {
+        const evt = JSON.parse(jsonText);
+        if (evt.type === 'step') {
+          if (typeof evt.sourcesFound === 'number') {
+            latestSourcesFound = Math.max(latestSourcesFound, evt.sourcesFound);
+          }
+          const target = Math.min(steps.length, Math.max(1, Number(evt.completedCount || 1)));
+          await advanceVisualStepsTo(target, 220);
+        } else if (evt.type === 'complete') {
+          finalReport = evt.report;
+        } else if (evt.type === 'error') {
+          throw new Error(evt.error || 'Deep research failed');
+        }
+      };
+
+      try {
+        const res = await fetch('/api/deep-research/stream', {
+          method: 'POST',
+          signal: abortController.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
+          },
+          body: requestBody,
+        });
+
+        if (!res.ok) {
+          const errPayload = await res.json().catch(() => null);
+          throw new Error(errPayload?.error || `Deep research failed (${res.status})`);
+        }
+
+        const contentType = res.headers.get('content-type') || '';
+
+        if (contentType.includes('text/event-stream') && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const events = buffer.split('\n\n');
+            buffer = events.pop() || '';
+
+            for (const rawEvent of events) {
+              const line = rawEvent
+                .split('\n')
+                .find((l) => l.startsWith('data:'));
+              if (!line) continue;
+              const jsonText = line.slice(5).trim();
+              if (!jsonText) continue;
+              await handleSsePayload(jsonText);
+            }
+          }
+
+          if (buffer.trim()) {
+            const trailingLine = buffer
+              .split('\n')
+              .find((l) => l.startsWith('data:'));
+            if (trailingLine) {
+              const jsonText = trailingLine.slice(5).trim();
+              if (jsonText) {
+                await handleSsePayload(jsonText);
+              }
+            }
+          }
+        } else {
+          const data = await res.json();
+          finalReport = data.report || data;
+        }
+      } catch (streamErr: any) {
+        if (streamErr?.name === 'AbortError' || abortController.signal.aborted) {
+          throw streamErr;
+        }
+        // Fallback to standard JSON endpoint only if the SSE stream disconnected unexpectedly
+        if (!finalReport && /network|fetch|chunked|stream|abort/i.test(String(streamErr?.message || ''))) {
+          const fallbackRes = await fetch('/api/deep-research', {
+            method: 'POST',
+            signal: abortController.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
+            },
+            body: requestBody,
+          });
+          if (!fallbackRes.ok) {
+            const errPayload = await fallbackRes.json().catch(() => null);
+            throw new Error(errPayload?.error || streamErr?.message || `Deep research failed (${fallbackRes.status})`);
+          }
+          const fallbackData = await fallbackRes.json();
+          finalReport = fallbackData.report || fallbackData;
+        } else {
+          throw streamErr;
+        }
       }
 
-      const data = await res.json();
-      const report = data.report || data;
-      const durationSec = Math.max(1, Math.round((Date.now() - startTs) / 1000));
-      const sources = Array.isArray(report.sources)
-        ? report.sources.map((s: any) => ({
+      if (!finalReport || !finalReport.answer) {
+        throw new Error('Deep research returned an empty report.');
+      }
+
+      const sources = Array.isArray(finalReport.sources)
+        ? finalReport.sources.map((s: any) => ({
             title: s.title || s.sourceDomain || 'Source',
             url: s.url || '#',
             snippet: s.snippet || '',
             sourceDomain: s.sourceDomain,
           }))
         : [];
+      latestSourcesFound = Math.max(latestSourcesFound, sources.length);
 
-      const completedSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => ({
-        ...msg,
-        content: report.answer || report.summary || 'Research completed.',
-        searchedWeb: true,
-        searchQueries: [query],
-        groundingSources: sources,
-        deepResearch: {
-          ...(msg.deepResearch || { query, steps }),
-          query,
-          steps,
-          status: 'completed',
-          researchDurationSec: durationSec,
-        },
-      }));
+      // Ensure all steps show checked and pause briefly so the user sees 100% completion before report opens
+      await advanceVisualStepsTo(steps.length, 240);
+      await sleep(320);
+
+      if (abortController.signal.aborted) return;
+
+      const durationSec = Math.max(1, Math.round((Date.now() - startTs) / 1000));
+      const completedSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => {
+        if (msg.deepResearch?.status === 'cancelled') return msg;
+        return {
+          ...msg,
+          content: finalReport.answer || finalReport.summary || 'Research completed.',
+          searchedWeb: true,
+          searchQueries: Array.isArray(finalReport.searchQueriesUsed) && finalReport.searchQueriesUsed.length > 0
+            ? finalReport.searchQueriesUsed
+            : [query],
+          groundingSources: sources,
+          deepResearch: {
+            ...(msg.deepResearch || { query, steps }),
+            query,
+            steps,
+            completedStepsCount: steps.length,
+            sourcesFound: latestSourcesFound,
+            status: 'completed',
+            researchDurationSec: durationSec,
+          },
+        };
+      });
       if (completedSession) {
         onUpdateSession(completedSession);
       }
     } catch (err: any) {
-      if (err?.name === 'AbortError') return;
+      if (err?.name === 'AbortError' || abortController.signal.aborted) return;
+      let rawErrMsg = String(err?.message || 'Network error');
+      for (let i = 0; i < 3; i++) {
+        const trimmed = rawErrMsg.trim();
+        if (!trimmed.startsWith('{')) break;
+        try {
+          const parsed = JSON.parse(trimmed);
+          const inner = parsed?.error?.message || parsed?.message;
+          if (typeof inner === 'string' && inner.trim()) rawErrMsg = inner;
+          else break;
+        } catch {
+          break;
+        }
+      }
+      if (/503|unavailable|high demand/i.test(rawErrMsg)) {
+        rawErrMsg = 'The AI model is temporarily experiencing high demand (503).';
+      }
       const errSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => ({
         ...msg,
-        content: `Could not complete deep research: ${err?.message || 'Network error'}. Please try again.`,
+        content: `Could not complete deep research: ${rawErrMsg} Please try again.`,
         deepResearch: {
           ...(msg.deepResearch || { query, steps }),
           query,
           steps,
+          completedStepsCount: visualCompleted,
           status: 'completed',
           researchDurationSec: Math.max(1, Math.round((Date.now() - startTs) / 1000)),
         },
@@ -1397,16 +1551,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   : voiceModeState === 'transcribing' || isProcessing
                   ? 'Transcribing...'
                   : activeComposerTool === 'deep_research'
-                  ? 'Enter a topic for deep research...'
+                  ? 'Research a topic...'
                   : activeComposerTool === 'image'
-                  ? 'Describe an image to create...'
+                  ? 'Describe an image...'
                   : activeComposerTool === 'search'
                   ? 'Search the web...'
                   : activeComposerTool === 'thinking'
-                  ? 'Ask a complex question for deep thinking...'
+                  ? 'Ask a complex question...'
                   : 'Ask ForgeX'
               }
               className={`w-full bg-transparent px-2 py-1 text-sm sm:text-base resize-none outline-none max-h-36 leading-normal transition-colors ${
+                !inputText ? 'overflow-hidden' : ''
+              } ${
                 isDark ? 'text-white' : 'text-neutral-900'
               } ${
                 voiceModeState === 'listening' || isListening
@@ -2158,139 +2314,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
       )}
 
-      {/* Sketch Pad Modal ("Sketch — Draw and attach an image") */}
-      {isSketchOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsSketchOpen(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        >
-          <div
-            className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden flex flex-col ${
-              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
-            }`}
-          >
-            <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
-              <div className="flex items-center gap-2">
-                <MenuSketchIcon className="w-4 h-4 text-emerald-500" />
-                <h3 className="text-sm font-semibold">Sketch Pad</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSketchOpen(false)}
-                className="p-1 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {['#111827', '#0284c7', '#16a34a', '#d97706', '#dc2626'].map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setSketchColor(color)}
-                      className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${
-                        sketchColor === color ? 'scale-110 border-neutral-400' : 'border-transparent'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={`Select ink color ${color}`}
-                    />
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const canvas = sketchCanvasRef.current;
-                    const ctx = canvas?.getContext('2d');
-                    if (canvas && ctx) {
-                      ctx.fillStyle = '#ffffff';
-                      ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    }
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 cursor-pointer ${
-                    isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
-                  }`}
-                >
-                  <Eraser className="w-3.5 h-3.5" />
-                  <span>Clear</span>
-                </button>
-              </div>
-
-              <canvas
-                ref={sketchCanvasRef}
-                width={460}
-                height={280}
-                onPointerDown={(e) => {
-                  const canvas = sketchCanvasRef.current;
-                  const ctx = canvas?.getContext('2d');
-                  if (!canvas || !ctx) return;
-                  const rect = canvas.getBoundingClientRect();
-                  const x = ((e.clientX - rect.left) * canvas.width) / rect.width;
-                  const y = ((e.clientY - rect.top) * canvas.height) / rect.height;
-                  isSketchDrawingRef.current = true;
-                  ctx.strokeStyle = sketchColor;
-                  ctx.lineWidth = 3.5;
-                  ctx.lineCap = 'round';
-                  ctx.lineJoin = 'round';
-                  ctx.beginPath();
-                  ctx.moveTo(x, y);
-                }}
-                onPointerMove={(e) => {
-                  if (!isSketchDrawingRef.current) return;
-                  const canvas = sketchCanvasRef.current;
-                  const ctx = canvas?.getContext('2d');
-                  if (!canvas || !ctx) return;
-                  const rect = canvas.getBoundingClientRect();
-                  const x = ((e.clientX - rect.left) * canvas.width) / rect.width;
-                  const y = ((e.clientY - rect.top) * canvas.height) / rect.height;
-                  ctx.lineTo(x, y);
-                  ctx.stroke();
-                }}
-                onPointerUp={() => {
-                  isSketchDrawingRef.current = false;
-                }}
-                onPointerLeave={() => {
-                  isSketchDrawingRef.current = false;
-                }}
-                className="w-full h-[260px] rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white touch-none cursor-crosshair"
-              />
-
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSketchOpen(false)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-medium cursor-pointer ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
-                  }`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dataUrl = sketchCanvasRef.current?.toDataURL('image/png');
-                    if (dataUrl) {
-                      setAttachedFiles((prev) => [
-                        ...prev,
-                        { type: 'image', name: 'sketch.png', url: dataUrl },
-                      ]);
-                    }
-                    setIsSketchOpen(false);
-                    textareaRef.current?.focus();
-                  }}
-                  className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 cursor-pointer"
-                >
-                  Attach Sketch
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ChatGPT-style Sketch Pad Modal */}
+      <SketchModal
+        isOpen={isSketchOpen}
+        onClose={() => setIsSketchOpen(false)}
+        onAttachSketch={(dataUrl) => {
+          setAttachedFiles((prev) => [
+            ...prev,
+            { type: 'image', name: 'sketch.png', url: dataUrl },
+          ]);
+          textareaRef.current?.focus();
+        }}
+      />
 
       {/* Inline Project Picker Modal ("Work in a project") */}
       {isProjectPickerOpen && (

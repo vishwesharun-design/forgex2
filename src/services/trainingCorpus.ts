@@ -199,17 +199,25 @@ Note: WHERE cannot reference SELECT aliases or aggregate functions (use HAVING o
   },
   {
     id: 'corpus-ai-ml',
-    title: 'AI, Transformers, RAG, Fine-Tuning & LLM Engineering',
+    title: 'Artificial Intelligence (AI), Machine Learning, Deep Learning & LLMs',
     category: 'document',
-    tags: ['AI', 'Machine Learning', 'LLM', 'Transformers', 'RAG'],
+    tags: ['AI', 'Artificial Intelligence', 'Machine Learning', 'LLM', 'Transformers', 'RAG'],
     keywords: [
-      'ai', 'artificial intelligence', 'machine learning', 'deep learning', 'neural network',
-      'transformer', 'attention', 'llm', 'rag', 'retrieval', 'embedding', 'vector', 'fine tuning',
-      'finetuning', 'lora', 'qlora', 'rlhf', 'dpo', 'hallucination', 'token', 'context window',
-      'backpropagation', 'gradient descent', 'overfitting', 'bias variance', 'precision', 'recall', 'f1',
+      'ai', 'artificial intelligence', 'genai', 'generative ai', 'machine learning', 'deep learning',
+      'neural network', 'transformer', 'attention', 'llm', 'rag', 'retrieval', 'embedding', 'vector',
+      'fine tuning', 'finetuning', 'lora', 'qlora', 'rlhf', 'dpo', 'hallucination', 'token',
+      'context window', 'backpropagation', 'gradient descent', 'overfitting', 'bias variance',
+      'precision', 'recall', 'f1', 'agi', 'computer vision', 'nlp', 'robotics',
     ],
-    summary: 'Transformer equations, RAG retrieval architecture, LoRA/DPO training methods, and classification evaluation metrics.',
-    content: `# AI, Machine Learning & LLM Engineering
+    summary: 'Core definition of Artificial Intelligence, Narrow AI vs AGI, ML/DL foundations, Transformer equations, RAG architecture, and evaluation metrics.',
+    content: `# Artificial Intelligence (AI) & Machine Learning Reference
+## What Is Artificial Intelligence?
+- Definition: Artificial Intelligence (AI) is the branch of computer science focused on building systems capable of performing tasks that typically require human intelligence—including reasoning, learning from data, pattern recognition, natural language understanding, perception, and decision-making.
+- Main Categories:
+  1. Narrow AI (Weak AI): Specialized systems designed for specific tasks (e.g., language models, image recognition, medical diagnosis, recommendation engines, autonomous driving).
+  2. Artificial General Intelligence (AGI): Theoretical AI capable of understanding, learning, and applying intelligence across any intellectual task a human can perform.
+- Core Subfields: Machine Learning (supervised, unsupervised, reinforcement learning), Deep Learning (multi-layer neural networks), Natural Language Processing (NLP), Computer Vision, and Robotics.
+
 ## Transformer & Training Mechanics
 - Scaled Dot-Product Attention: Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k)) V. Dividing by sqrt(d_k) keeps dot-product variance stable so softmax gradients do not vanish.
 - Positional Encoding: Absolute sinusoidal, learned embeddings, or RoPE (Rotary Position Embeddings, widely used in modern LLMs for relative position generalization).
@@ -359,6 +367,50 @@ Note: WHERE cannot reference SELECT aliases or aggregate functions (use HAVING o
 - Prefer std::vector, std::string_view, std::span, and range-based loops over raw C arrays.`,
   },
   {
+    id: 'corpus-space-earth-science',
+    title: 'Astronomy, Space Exploration, Earth Science & Climate',
+    category: 'notes',
+    tags: ['Astronomy', 'Space', 'Black Holes', 'Solar System', 'Earth Science', 'Climate'],
+    keywords: [
+      'space', 'universe', 'solar system', 'planet', 'planets', 'black hole', 'galaxy', 'milky way',
+      'big bang', 'star', 'stars', 'sun', 'moon', 'mars', 'jupiter', 'exoplanet', 'light year',
+      'climate change', 'greenhouse', 'global warming', 'atmosphere', 'plate tectonics', 'earthquake', 'volcano',
+    ],
+    summary: 'Verified astronomy facts, solar system planets, black holes, Big Bang cosmology, and Earth/climate systems.',
+    content: `# Astronomy, Space & Earth Science
+## Solar System & Cosmology
+- Eight Planets (in order from the Sun): Mercury, Venus, Earth, Mars (terrestrial rocky planets), Jupiter, Saturn (gas giants), Uranus, Neptune (ice giants).
+- 1 Astronomical Unit (AU) ~ 149.6 million km (Earth-Sun distance); 1 Light-Year ~ 9.461 trillion km.
+- Big Bang Theory: The universe began expanding ~13.8 billion years ago from an extremely hot, dense state (evidenced by cosmic microwave background radiation and Hubble expansion).
+- Black Holes: Regions of spacetime where gravity is so strong that nothing—not even light—can escape beyond the event horizon (Schwarzschild radius r_s = 2GM/c^2). Stellar-mass black holes form from core-collapse supernovae; supermassive black holes reside at galaxy centers (e.g., Sagittarius A* at the Milky Way's core).
+
+## Earth & Climate Science
+- Earth's Atmosphere Composition (dry air): ~78% Nitrogen (N2), ~21% Oxygen (O2), ~0.93% Argon, ~0.04% Carbon Dioxide (CO2), plus variable water vapor.
+- Greenhouse Effect: Gases such as CO2, methane (CH4), and water vapor absorb outgoing infrared radiation, warming Earth's surface; excess fossil fuel emissions intensify warming.`,
+  },
+  {
+    id: 'corpus-computing-fundamentals',
+    title: 'Computer Architecture, Operating Systems, Cloud & Blockchain',
+    category: 'document',
+    tags: ['Computing', 'Operating Systems', 'Cloud', 'Blockchain', 'Hardware'],
+    keywords: [
+      'computer', 'cpu', 'gpu', 'ram', 'memory', 'operating system', 'kernel', 'process', 'thread',
+      'cloud computing', 'aws', 'serverless', 'api', 'json', 'blockchain', 'cryptocurrency',
+      'compiler', 'interpreter', 'binary', 'hexadecimal', 'virtual memory', 'cache',
+    ],
+    summary: 'Core computer science principles: CPU/GPU architecture, OS processes vs threads, APIs, cloud models, and blockchain.',
+    content: `# Computer Architecture, Operating Systems & Cloud
+## Hardware & Execution
+- CPU vs GPU: CPUs optimize low-latency sequential execution with complex branch prediction and large caches; GPUs pack thousands of simpler cores for massive parallel SIMD/matrix math (graphics, AI training/inference).
+- Memory Hierarchy (fastest -> slowest): CPU Registers -> L1/L2/L3 Cache -> RAM (DRAM) -> NVMe SSD -> HDD / Network Storage.
+- Process vs Thread: A process has an isolated virtual address space and OS resources; threads within a process share memory and heap while maintaining separate stacks and registers.
+
+## Cloud, APIs & Blockchain
+- API (Application Programming Interface): A structured contract (e.g., REST/HTTP, GraphQL, gRPC) allowing software systems to exchange data cleanly.
+- Cloud Service Models: IaaS (raw VMs/storage), PaaS (managed runtime/deployment), SaaS (end-user web applications).
+- Blockchain: An append-only, cryptographically linked ledger of blocks replicated across a decentralized peer-to-peer network using consensus mechanisms (e.g., Proof of Work or Proof of Stake).`,
+  },
+  {
     id: 'corpus-forgex-platform',
     title: 'ForgeX Platform Capabilities, Models & User Workflows',
     category: 'document',
@@ -421,9 +473,15 @@ export function retrieveTrainingContext(
     const contentLower = entry.content.toLowerCase();
     const tagsLower = entry.tags.map((t) => t.toLowerCase());
 
-    // Exact multi-word keyword / phrase matching
+    // Exact multi-word keyword / phrase matching (word-boundary safe for short keywords)
     for (const kw of entry.keywords) {
-      if (clean.includes(kw)) {
+      let matched = false;
+      if (kw.length <= 3 && /^[a-z0-9]+$/i.test(kw)) {
+        matched = new RegExp(`\\b${kw}\\b`, 'i').test(clean);
+      } else {
+        matched = clean.includes(kw);
+      }
+      if (matched) {
         score += kw.includes(' ') ? 14 : 9;
       }
     }

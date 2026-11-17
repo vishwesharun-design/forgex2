@@ -315,5 +315,23 @@ export const imageService = {
       firestoreStorageService.deleteUserImage(userId, imageId).catch(() => {});
     }
     return images;
+  },
+
+  deleteImageByIdOrUrl(imageId?: string, imageUrl?: string): GeneratedImage[] {
+    const current = this.getImages();
+    const toRemove = current.filter(
+      (img) => (imageId && img.id === imageId) || (imageUrl && img.imageUrl === imageUrl)
+    );
+    if (toRemove.length === 0) return current;
+    const removedIds = new Set(toRemove.map((img) => img.id));
+    const remaining = current.filter((img) => !removedIds.has(img.id));
+    this.saveImages(remaining);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      removedIds.forEach((id) => {
+        firestoreStorageService.deleteUserImage(userId, id).catch(() => {});
+      });
+    }
+    return remaining;
   }
 };

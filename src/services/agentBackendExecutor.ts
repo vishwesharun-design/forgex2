@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
 import { execSync } from 'child_process';
-import { TOOL_REGISTRY } from './agentToolRegistry';
+import { TOOL_REGISTRY } from './agentToolRegistry.ts';
 
 // Setup sandboxed filesystem root
 const SANDBOX_BASE_DIR = path.join(process.cwd(), 'data', 'agent_sandbox');

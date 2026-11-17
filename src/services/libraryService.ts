@@ -65,6 +65,16 @@ export const libraryService = {
     return updated;
   },
 
+  deleteReferenceByIdOrUrl(id?: string, imageUrl?: string): LibraryReferenceItem[] {
+    const updated = this.getReferences().filter((r) => {
+      if (id && r.id === id) return false;
+      if (imageUrl && r.imageUrl === imageUrl) return false;
+      return true;
+    });
+    this.saveReferences(updated);
+    return updated;
+  },
+
   getFolders(): LibraryFolder[] {
     try {
       const raw = localStorage.getItem(getFolderStorageKey());

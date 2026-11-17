@@ -1,13 +1,13 @@
-import express, { Request, Response } from "express";
+import express, { type Request, type Response } from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import { generateExpertChatReply, getStressTestUiShowcase } from "./src/services/knowledgeEngine";
-import { retrieveTrainingContext } from "./src/services/trainingCorpus";
-import { executeAgentTool, initAgentSandbox } from "./src/services/agentBackendExecutor";
-import { TOOL_REGISTRY, getToolsForAgent } from "./src/services/agentToolRegistry";
+import { generateExpertChatReply, getStressTestUiShowcase } from "./src/services/knowledgeEngine.ts";
+import { retrieveTrainingContext } from "./src/services/trainingCorpus.ts";
+import { executeAgentTool, initAgentSandbox } from "./src/services/agentBackendExecutor.ts";
+import { TOOL_REGISTRY, getToolsForAgent } from "./src/services/agentToolRegistry.ts";
 
 dotenv.config();
 
@@ -165,6 +165,33 @@ function getModelExecutionProfile(modelId?: string): ModelExecutionProfile {
 
 function getModelCascade(modelId?: string): string[] {
   return getModelExecutionProfile(modelId).models;
+}
+
+function resolveChatThinkingLevel(
+  profile: ModelExecutionProfile,
+  userMessage: string,
+  hasAttachments: boolean
+): ThinkingLevel {
+  if (profile.id === "forge-1") return ThinkingLevel.MINIMAL;
+  if (profile.id === "forge-1.5") return ThinkingLevel.LOW;
+
+  const clean = (userMessage || "").trim();
+  const isComplexReasoning =
+    hasAttachments ||
+    clean.length > 200 ||
+    /```/.test(clean) ||
+    /\b(?:debug|refactor|architect|optimize|prove|derive|theorem|integral|differential|eigen|matrix|algorithm|complexity|big[\s-]?o|sql|schema|migration|full[\s-]?stack|benchmark|step[\s-]by[\s-]step|system\s+design|trade[\s-]?offs?|code\s+review|unit\s+test|regex|write\s+(?:a|an|the)?\s*(?:code|function|script|program|app|component|class)|implement|fix\s+(?:this|my|the)\s+(?:bug|error|code)|compare\s+.*\s+and\s+.*\s+in\s+detail)\b/i.test(
+      clean
+    );
+
+  if (!isComplexReasoning) {
+    // Everyday Q&A, definitions ("what is ai"), explanations, and chat stream in ~1.5-4s at LOW thinking depth
+    return ThinkingLevel.LOW;
+  }
+
+  if (profile.id === "forge-2") return ThinkingLevel.MEDIUM;
+  if (profile.id === "forge-2-pro") return ThinkingLevel.HIGH;
+  return clean.length > 280 ? ("XHIGH" as ThinkingLevel) : ThinkingLevel.HIGH;
 }
 
 function buildModelConfig(model: string, baseConfig?: any): any {
@@ -516,24 +543,97 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
   return result;
 }
 
+async function raceWithTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          const err: any = new Error(`${label} timed out after ${ms}ms`);
+          err.isTimeout = true;
+          reject(err);
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function isTransientUpstreamError(err: any): boolean {
+  const status = err?.status || err?.code || err?.error?.code;
+  if (status === 503 || status === 429 || status === 502 || status === 504) return true;
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("503") ||
+    msg.includes("unavailable") ||
+    msg.includes("high demand") ||
+    msg.includes("service unavailable") ||
+    msg.includes("overloaded") ||
+    msg.includes("429") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("rate limit") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout")
+  );
+}
+
+function formatReadableGeminiError(err: any): string {
+  let msg = err instanceof Error ? err.message : String(err || "Unknown error");
+  // Unwrap nested JSON error messages emitted by @google/genai SDK
+  for (let depth = 0; depth < 3; depth++) {
+    const trimmed = msg.trim();
+    if (!trimmed.startsWith("{")) break;
+    try {
+      const parsed = JSON.parse(trimmed);
+      const inner = parsed?.error?.message || parsed?.message;
+      if (typeof inner === "string" && inner.trim()) {
+        msg = inner;
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+  const lower = msg.toLowerCase();
+  if (lower.includes("high demand") || lower.includes("unavailable") || lower.includes("503")) {
+    return "The AI model is temporarily experiencing high demand (503). Please try again in a few seconds.";
+  }
+  if (lower.includes("quota") || lower.includes("rate limit") || lower.includes("429") || lower.includes("resource_exhausted")) {
+    return "The AI service is temporarily rate-limited (429). Please wait a moment and try again.";
+  }
+  return msg.replace(/\s+/g, " ").trim() || "Failed to execute deep research";
+}
+
 async function generateContentResilient(
   ai: GoogleGenAI,
   request: {
     contents: any;
     config?: any;
   },
-  preferredModels: string[] = FAST_MODELS
+  preferredModels: string[] = FAST_MODELS,
+  options?: { timeoutMs?: number }
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
 
-  for (const model of preferredModels) {
+  for (let i = 0; i < preferredModels.length; i++) {
+    const model = preferredModels[i];
+    const hasNextModel = i < preferredModels.length - 1;
+    const callTimeoutMs = options?.timeoutMs ?? (hasNextModel ? 14000 : 25000);
+
     try {
       const modelConfig = buildModelConfig(model, request.config);
-      const response = await ai.models.generateContent({
-        model,
-        contents: request.contents,
-        config: modelConfig,
-      });
+      const response = await raceWithTimeout(
+        ai.models.generateContent({
+          model,
+          contents: request.contents,
+          config: modelConfig,
+        }),
+        callTimeoutMs,
+        `generateContent (${model})`
+      );
       const candidate = response.candidates?.[0];
       const text = response.text || candidate?.content?.parts?.[0]?.text || "";
       if (text) {
@@ -541,18 +641,26 @@ async function generateContentResilient(
       }
     } catch (err: any) {
       lastError = err;
+      // On timeout when another model exists in cascade, fail over immediately instead of retrying the stalled model
+      if (err?.isTimeout && hasNextModel) {
+        continue;
+      }
       // If XHIGH was rejected on this SDK/endpoint, immediately retry with ThinkingLevel.HIGH
-      if ((request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
+      if (!err?.isTimeout && (request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
         try {
           const highConfig = buildModelConfig(model, {
             ...request.config,
             thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH },
           });
-          const response = await ai.models.generateContent({
-            model,
-            contents: request.contents,
-            config: highConfig,
-          });
+          const response = await raceWithTimeout(
+            ai.models.generateContent({
+              model,
+              contents: request.contents,
+              config: highConfig,
+            }),
+            callTimeoutMs,
+            `generateContent-HIGH (${model})`
+          );
           const candidate = response.candidates?.[0];
           const text = response.text || candidate?.content?.parts?.[0]?.text || "";
           if (text) {
@@ -560,10 +668,11 @@ async function generateContentResilient(
           }
         } catch (highErr: any) {
           lastError = highErr;
+          if (highErr?.isTimeout && hasNextModel) continue;
         }
       }
       // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
-      if (request.config?.tools && request.config.tools.length > 0) {
+      if (!err?.isTimeout && request.config?.tools && request.config.tools.length > 0) {
         try {
           const configWithoutTools = { ...request.config };
           delete configWithoutTools.tools;
@@ -571,11 +680,15 @@ async function generateContentResilient(
             configWithoutTools.thinkingConfig = { ...configWithoutTools.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH };
           }
           const retryConfig = buildModelConfig(model, configWithoutTools);
-          const response = await ai.models.generateContent({
-            model,
-            contents: request.contents,
-            config: retryConfig,
-          });
+          const response = await raceWithTimeout(
+            ai.models.generateContent({
+              model,
+              contents: request.contents,
+              config: retryConfig,
+            }),
+            callTimeoutMs,
+            `generateContent-noTools (${model})`
+          );
           const candidate = response.candidates?.[0];
           const text = response.text || candidate?.content?.parts?.[0]?.text || "";
           if (text) {
@@ -597,74 +710,91 @@ async function* generateContentStreamResilient(
     contents: any;
     config?: any;
   },
-  preferredModels: string[] = FAST_MODELS
+  preferredModels: string[] = FAST_MODELS,
+  options?: { firstChunkTimeoutMs?: number }
 ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
   let lastError: any = null;
 
-  for (const model of preferredModels) {
-    try {
-      const modelConfig = buildModelConfig(model, request.config);
-      const responseStream = await ai.models.generateContentStream({
+  const streamSingleAttempt = async function* (
+    model: string,
+    config: any,
+    firstChunkTimeoutMs: number
+  ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
+    const responseStream = await raceWithTimeout(
+      ai.models.generateContentStream({
         model,
         contents: request.contents,
-        config: modelConfig,
-      });
+        config,
+      }),
+      firstChunkTimeoutMs,
+      `streamInit (${model})`
+    );
 
-      let emittedAny = false;
-      let lastGrounding: any = null;
+    let emittedAny = false;
+    let lastGrounding: any = null;
+    const iter = responseStream[Symbol.asyncIterator]();
 
-      for await (const chunk of responseStream) {
-        const text = chunk.text || "";
-        const grounding = chunk.candidates?.[0]?.groundingMetadata;
-        if (grounding) {
-          lastGrounding = grounding;
-        }
-        if (text) {
-          emittedAny = true;
-          yield { text, model, groundingMetadata: grounding };
-        }
+    while (true) {
+      const nextPromise = iter.next();
+      const step = emittedAny
+        ? await nextPromise
+        : await raceWithTimeout(nextPromise, firstChunkTimeoutMs, `firstChunk (${model})`);
+      if (step.done) break;
+      const chunk = step.value;
+      const text = chunk.text || "";
+      const grounding = chunk.candidates?.[0]?.groundingMetadata;
+      if (grounding) {
+        lastGrounding = grounding;
       }
-
-      if (emittedAny) {
-        yield { text: "", model, done: true, groundingMetadata: lastGrounding };
-        return;
+      if (text) {
+        emittedAny = true;
+        yield { text, model, groundingMetadata: grounding };
       }
+    }
+
+    if (emittedAny) {
+      yield { text: "", model, done: true, groundingMetadata: lastGrounding };
+    }
+  };
+
+  for (let i = 0; i < preferredModels.length; i++) {
+    const model = preferredModels[i];
+    const hasNextModel = i < preferredModels.length - 1;
+    const firstChunkTimeoutMs = options?.firstChunkTimeoutMs ?? (hasNextModel ? 12000 : 25000);
+
+    try {
+      const modelConfig = buildModelConfig(model, request.config);
+      let completed = false;
+      for await (const item of streamSingleAttempt(model, modelConfig, firstChunkTimeoutMs)) {
+        if (item.done) completed = true;
+        yield item;
+      }
+      if (completed) return;
     } catch (err: any) {
       lastError = err;
+      if (err?.isTimeout && hasNextModel) {
+        continue;
+      }
       // If XHIGH was rejected on this SDK/endpoint, immediately retry with ThinkingLevel.HIGH
-      if ((request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
+      if (!err?.isTimeout && (request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
         try {
           const highConfig = buildModelConfig(model, {
             ...request.config,
             thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH },
           });
-          const responseStream = await ai.models.generateContentStream({
-            model,
-            contents: request.contents,
-            config: highConfig,
-          });
-
-          let emittedAny = false;
-          let lastGrounding: any = null;
-          for await (const chunk of responseStream) {
-            const text = chunk.text || "";
-            const grounding = chunk.candidates?.[0]?.groundingMetadata;
-            if (grounding) lastGrounding = grounding;
-            if (text) {
-              emittedAny = true;
-              yield { text, model, groundingMetadata: grounding };
-            }
+          let completed = false;
+          for await (const item of streamSingleAttempt(model, highConfig, firstChunkTimeoutMs)) {
+            if (item.done) completed = true;
+            yield item;
           }
-          if (emittedAny) {
-            yield { text: "", model, done: true, groundingMetadata: lastGrounding };
-            return;
-          }
+          if (completed) return;
         } catch (highErr: any) {
           lastError = highErr;
+          if (highErr?.isTimeout && hasNextModel) continue;
         }
       }
       // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
-      if (request.config?.tools && request.config.tools.length > 0) {
+      if (!err?.isTimeout && request.config?.tools && request.config.tools.length > 0) {
         try {
           const configWithoutTools = { ...request.config };
           delete configWithoutTools.tools;
@@ -672,31 +802,12 @@ async function* generateContentStreamResilient(
             configWithoutTools.thinkingConfig = { ...configWithoutTools.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH };
           }
           const retryConfig = buildModelConfig(model, configWithoutTools);
-          const responseStream = await ai.models.generateContentStream({
-            model,
-            contents: request.contents,
-            config: retryConfig,
-          });
-
-          let emittedAny = false;
-          let lastGrounding: any = null;
-
-          for await (const chunk of responseStream) {
-            const text = chunk.text || "";
-            const grounding = chunk.candidates?.[0]?.groundingMetadata;
-            if (grounding) {
-              lastGrounding = grounding;
-            }
-            if (text) {
-              emittedAny = true;
-              yield { text, model, groundingMetadata: grounding };
-            }
+          let completed = false;
+          for await (const item of streamSingleAttempt(model, retryConfig, firstChunkTimeoutMs)) {
+            if (item.done) completed = true;
+            yield item;
           }
-
-          if (emittedAny) {
-            yield { text: "", model, done: true, groundingMetadata: lastGrounding };
-            return;
-          }
+          if (completed) return;
         } catch (retryErr: any) {
           lastError = retryErr;
         }
@@ -887,9 +998,31 @@ async function generateRealAiImage(
   throw new Error(`Image generation for "${cleanPrompt}" requires Puter authentication for Black Forest Labs FLUX or a Gemini API key. Please connect Puter in Image Studio.`);
 }
 
-// Comprehensive Universal Knowledge & Synthesis Engine
-function generateFallbackChatReply(prompt: string, modelId: string): string {
-  return generateExpertChatReply(prompt, modelId);
+// Comprehensive Universal Knowledge & Synthesis Engine (with live web grounding backstop)
+function generateFallbackChatReply(
+  prompt: string,
+  modelId: string,
+  liveGrounding?: WebGroundingResult
+): string {
+  const expert = generateExpertChatReply(prompt, modelId);
+  const isUnmatchedNotice = expert.startsWith("I could not reach the live AI reasoning engine");
+  if (!isUnmatchedNotice) {
+    return expert;
+  }
+
+  const informativeSources = (liveGrounding?.groundingSources || []).filter(
+    (s) => s.snippet && s.snippet.trim().length > 25 && !s.url.includes("google.com/search")
+  );
+  if (informativeSources.length > 0) {
+    const primary = informativeSources[0];
+    const extraBullets = informativeSources
+      .slice(1, 3)
+      .map((s) => `* **${s.title}**: ${s.snippet}`)
+      .join("\n");
+    return `### ${primary.title}\n\n${primary.snippet}${extraBullets ? `\n\n#### Related Context:\n${extraBullets}` : ""}`;
+  }
+
+  return expert;
 }
 
 const FORGEX_SYSTEM_INSTRUCTION = `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform created by VishweshVarman.
@@ -1372,11 +1505,17 @@ The UI renders this as an interactive playable quiz widget!`;
             parts: currentParts,
           });
 
+          const adaptiveThinking = resolveChatThinkingLevel(
+            modelProfile,
+            cleanMessage,
+            hasImageAttachments
+          );
+
           // If search is needed, attach googleSearch tool for dynamic search grounding
           const requestConfig: any = {
             systemInstruction: enhancedSystemInstruction,
             thinkingConfig: {
-              thinkingLevel: modelProfile.thinkingLevel,
+              thinkingLevel: adaptiveThinking,
             },
           };
 
@@ -1384,14 +1523,15 @@ The UI renders this as an interactive playable quiz widget!`;
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
-          const modelCascade = modelProfile.models;
+          const modelCascade = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
           const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
             {
               contents,
               config: requestConfig,
             },
-            modelCascade
+            modelCascade,
+            { timeoutMs: 14000 }
           );
 
           if (replyText) {
@@ -1452,16 +1592,25 @@ The UI renders this as an interactive playable quiz widget!`;
         }
       }
 
-      // Procedural neural fallback when API key is missing or quota is restricted
-      let reply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
+      // If all Gemini attempts failed, fetch quick factual grounding before fallback so general queries still get real info
+      if (!liveGrounding.groundingContext && cleanMessage.length >= 2) {
+        try {
+          liveGrounding = await performLiveWebGrounding(cleanMessage);
+        } catch {}
+      }
 
-      // If search was needed, enhance the fallback with live grounding facts and links
-      if (searchIntent.shouldSearch && liveGrounding.groundingSources.length > 0) {
+      let reply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId, liveGrounding);
+
+      const hasUsefulSources = liveGrounding.groundingSources.some((s) => !s.url.includes("google.com/search"));
+      if (hasUsefulSources) {
         const sourceLinks = liveGrounding.groundingSources
+          .filter((s) => !s.url.includes("google.com/search"))
           .slice(0, 3)
-          .map((s, i) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
+          .map((s) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
           .join("\n");
-        reply += `\n\n---\n### 🌐 Live Web Search Results & Sources\nVerified real-time information for **"${searchIntent.searchQuery}"**:\n\n${sourceLinks}`;
+        if (sourceLinks) {
+          reply += `\n\n---\n### 🌐 Sources\n${sourceLinks}`;
+        }
       }
 
       return res.json({
@@ -1469,9 +1618,9 @@ The UI renders this as an interactive playable quiz widget!`;
         reply,
         model: `ForgeX ${modelId.toUpperCase()} Engine`,
         notice: candidateKeys.length > 0 ? undefined : "Operating via ForgeX Neural Engine.",
-        searchedWeb: searchIntent.shouldSearch,
+        searchedWeb: Boolean(searchIntent.shouldSearch || hasUsefulSources),
         searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
-        groundingSources: searchIntent.shouldSearch ? liveGrounding.groundingSources : [],
+        groundingSources: searchIntent.shouldSearch || hasUsefulSources ? liveGrounding.groundingSources : [],
       });
     } catch (err: unknown) {
       console.error("Error in /api/chat:", err);
@@ -1490,6 +1639,23 @@ The UI renders this as an interactive playable quiz widget!`;
     if (typeof (res as any).flushHeaders === "function") {
       (res as any).flushHeaders();
     }
+
+    let streamClosed = false;
+    res.on("close", () => {
+      if (!res.writableFinished) {
+        streamClosed = true;
+      }
+    });
+
+    const heartbeat = setInterval(() => {
+      if (streamClosed || res.writableEnded) return;
+      try {
+        res.write(`: ping\n\n`);
+        if (typeof (res as any).flush === "function") {
+          (res as any).flush();
+        }
+      } catch {}
+    }, 2500);
 
     try {
       const {
@@ -1562,7 +1728,7 @@ The UI renders this as an interactive playable quiz widget!`;
       }
 
       const modelProfile = getModelExecutionProfile(modelId);
-      const modelCascade = modelProfile.models;
+      const modelCascade = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
       const baseWithTier = customSystemInstruction
         ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${modelProfile.instruction}\n\n${customSystemInstruction}`
         : `${FORGEX_SYSTEM_INSTRUCTION}\n\n${modelProfile.instruction}`;
@@ -1666,10 +1832,16 @@ The UI renders this as an interactive playable quiz widget!`;
             parts: currentParts,
           });
 
+          const adaptiveThinking = resolveChatThinkingLevel(
+            modelProfile,
+            cleanMessage,
+            hasImageAttachments
+          );
+
           const requestConfig: any = {
             systemInstruction: forgexSystemInstruction,
             thinkingConfig: {
-              thinkingLevel: modelProfile.thinkingLevel,
+              thinkingLevel: adaptiveThinking,
             },
           };
 
@@ -1688,8 +1860,10 @@ The UI renders this as an interactive playable quiz widget!`;
               contents,
               config: requestConfig,
             },
-            modelCascade
+            modelCascade,
+            { firstChunkTimeoutMs: 12000 }
           )) {
+            if (streamClosed || res.writableEnded) break;
             if (chunk.groundingMetadata) {
               if (chunk.groundingMetadata.webSearchQueries) {
                 for (const q of chunk.groundingMetadata.webSearchQueries) {
@@ -1758,35 +1932,52 @@ The UI renders this as an interactive playable quiz widget!`;
         }
       }
 
-      // Procedural synthesis fast stream fallback
-      let fallbackReply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId);
-      if (searchIntent.shouldSearch && liveGrounding.groundingSources.length > 0) {
+      // If all Gemini models failed, fetch quick factual grounding before fallback so general queries still get real info
+      if (!liveGrounding.groundingContext && cleanMessage.length >= 2) {
+        try {
+          liveGrounding = await performLiveWebGrounding(cleanMessage);
+        } catch {}
+      }
+
+      let fallbackReply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId, liveGrounding);
+      const hasUsefulSources = liveGrounding.groundingSources.some((s) => !s.url.includes("google.com/search"));
+      if (hasUsefulSources) {
         const sourceLinks = liveGrounding.groundingSources
+          .filter((s) => !s.url.includes("google.com/search"))
           .slice(0, 3)
-          .map((s, i) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
+          .map((s) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
           .join("\n");
-        fallbackReply += `\n\n---\n### 🌐 Live Web Search Results & Sources\nVerified real-time information for **"${searchIntent.searchQuery}"**:\n\n${sourceLinks}`;
+        if (sourceLinks) {
+          fallbackReply += `\n\n---\n### 🌐 Sources\n${sourceLinks}`;
+        }
       }
 
       const words = fallbackReply.split(" ");
       for (let i = 0; i < words.length; i += 4) {
+        if (streamClosed || res.writableEnded) break;
         const slice = words.slice(i, i + 4).join(" ") + (i + 4 < words.length ? " " : "");
         res.write(`data: ${JSON.stringify({ text: slice })}\n\n`);
         await new Promise((resolve) => setTimeout(resolve, 8));
       }
 
-      res.write(`data: ${JSON.stringify({
-        done: true,
-        model: `ForgeX ${modelId.toUpperCase()} Engine`,
-        searchedWeb: searchIntent.shouldSearch,
-        searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
-        groundingSources: searchIntent.shouldSearch ? liveGrounding.groundingSources : [],
-      })}\n\n`);
+      if (!streamClosed && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({
+          done: true,
+          model: `ForgeX ${modelId.toUpperCase()} Engine`,
+          searchedWeb: Boolean(searchIntent.shouldSearch || hasUsefulSources),
+          searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
+          groundingSources: searchIntent.shouldSearch || hasUsefulSources ? liveGrounding.groundingSources : [],
+        })}\n\n`);
+      }
       return res.end();
     } catch (err: unknown) {
       console.error("Error in /api/chat/stream:", err);
-      res.write(`data: ${JSON.stringify({ error: err instanceof Error ? err.message : "Streaming failed" })}\n\n`);
+      if (!streamClosed && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ error: err instanceof Error ? err.message : "Streaming failed" })}\n\n`);
+      }
       return res.end();
+    } finally {
+      clearInterval(heartbeat);
     }
   });
 
@@ -2239,191 +2430,614 @@ The UI renders this as an interactive playable quiz widget!`;
     }
   });
 
-  app.post("/api/deep-research", async (req: Request, res: Response) => {
+  async function fetchAdditionalResearchSources(searchQuery: string): Promise<WebGroundingSource[]> {
+    const extraSources: WebGroundingSource[] = [];
+    const cleanQ = searchQuery.trim();
+    if (!cleanQ) return extraSources;
+
+    const wikiRichPromise = (async () => {
+      try {
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQ)}&srlimit=3&format=json`;
+        const sRes = await fetch(searchUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(1800),
+        });
+        if (!sRes.ok) return;
+        const sData = (await sRes.json()) as any;
+        const hits = sData?.query?.search || [];
+        if (hits.length === 0) return;
+
+        const titles = hits.map((h: any) => h.title).filter(Boolean).slice(0, 2);
+        if (titles.length === 0) return;
+        const extUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&exchars=1400&titles=${encodeURIComponent(titles.join("|"))}&format=json`;
+        const eRes = await fetch(extUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(1800),
+        });
+        if (!eRes.ok) return;
+        const eData = (await eRes.json()) as any;
+        const pages = eData?.query?.pages || {};
+        for (const page of Object.values<any>(pages)) {
+          if (page?.title && page?.extract) {
+            const slug = encodeURIComponent(String(page.title).replace(/\s+/g, "_"));
+            extraSources.push({
+              title: page.title,
+              url: `https://en.wikipedia.org/wiki/${slug}`,
+              snippet: String(page.extract).slice(0, 1200),
+              sourceDomain: "wikipedia.org",
+            });
+          }
+        }
+      } catch {}
+    })();
+
+    const hnPromise = (async () => {
+      try {
+        const hnUrl = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(cleanQ)}&hitsPerPage=3`;
+        const res = await fetch(hnUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(1600),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as any;
+        for (const hit of data?.hits || []) {
+          const targetUrl = hit.url || (hit.objectID ? `https://news.ycombinator.com/item?id=${hit.objectID}` : "");
+          if (targetUrl && hit.title) {
+            let domain = "news.ycombinator.com";
+            try { domain = new URL(targetUrl).hostname.replace(/^www\./, ""); } catch {}
+            extraSources.push({
+              title: hit.title,
+              url: targetUrl,
+              snippet: hit.story_text
+                ? String(hit.story_text).replace(/<[^>]+>/g, " ").slice(0, 350)
+                : `Discussion & technical coverage (${hit.points || 0} points, ${hit.num_comments || 0} comments).`,
+              sourceDomain: domain,
+            });
+          }
+        }
+      } catch {}
+    })();
+
+    const arxivPromise = (async () => {
+      try {
+        const axUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(cleanQ)}&start=0&max_results=2`;
+        const res = await fetch(axUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(1800),
+        });
+        if (!res.ok) return;
+        const xml = await res.text();
+        const entryMatches = xml.match(/<entry>[\s\S]*?<\/entry>/g) || [];
+        for (const entry of entryMatches) {
+          const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.replace(/\s+/g, " ").trim();
+          const idUrl = entry.match(/<id>([\s\S]*?)<\/id>/)?.[1]?.trim();
+          const summary = entry.match(/<summary>([\s\S]*?)<\/summary>/)?.[1]?.replace(/\s+/g, " ").trim();
+          if (title && idUrl) {
+            extraSources.push({
+              title,
+              url: idUrl,
+              snippet: (summary || "").slice(0, 450),
+              sourceDomain: "arxiv.org",
+            });
+          }
+        }
+      } catch {}
+    })();
+
+    await Promise.allSettled([wikiRichPromise, hnPromise, arxivPromise]);
+    return extraSources;
+  }
+
+  async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const { query, depth = "deep", modelId = "forge-2-ultra", planSteps } = req.body;
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function executeMultiStepDeepResearch(params: {
+    cleanQuery: string;
+    depth: string;
+    modelId: string;
+    planSteps?: string[];
+    projectContext?: string;
+    candidateKeys: string[];
+    onProgress?: (ev: { stepIndex: number; completedCount: number; label: string; sourcesFound: number }) => void;
+    signal?: AbortSignal;
+  }) {
+    const { cleanQuery, depth, modelId, planSteps, projectContext, candidateKeys, onProgress, signal } = params;
+    const stepsList = Array.isArray(planSteps) && planSteps.length > 0
+      ? planSteps.map((s) => String(s).trim()).filter(Boolean)
+      : [
+          `Survey recent web and encyclopedic sources for "${cleanQuery}".`,
+          `Examine key definitions, mechanisms, and context around "${cleanQuery}".`,
+          `Collect concrete data points, real-world examples, and technical details.`,
+          `Compare viewpoints, trade-offs, and verified evidence.`,
+          `Synthesize validated findings into a structured report with citations.`,
+        ];
+
+    const totalSteps = stepsList.length;
+    const allSources: WebGroundingSource[] = [];
+    const seenUrls = new Set<string>();
+    const addSources = (list: WebGroundingSource[]) => {
+      for (const s of list) {
+        if (!s?.url) continue;
+        if (s.url.startsWith("https://www.google.com/search?q=") && allSources.length > 0) continue;
+        if (!seenUrls.has(s.url)) {
+          seenUrls.add(s.url);
+          allSources.push(s);
+        }
+      }
+    };
+
+    const fastAi = candidateKeys.length > 0 ? getGenAiClient(candidateKeys[0]) : null;
+    const middleStepCount = Math.max(0, totalSteps - 2);
+
+    // STEP 0: Survey initial sources + decompose query into targeted angles for each middle step
+    let subQueries: string[] = Array.from({ length: Math.max(1, middleStepCount) }, () => cleanQuery);
+    const initialGroundingPromise = performLiveWebGrounding(cleanQuery).then((res) => {
+      addSources(res.groundingSources || []);
+      return res;
+    });
+
+    const subQueryPromise = (async () => {
+      if (!fastAi || signal?.aborted || middleStepCount === 0) return;
+      try {
+        const subQRes = await withTimeout(
+          generateContentResilient(
+            fastAi,
+            {
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      text: `User research question: "${cleanQuery}"\nResearch plan steps:\n${stepsList
+                        .map((s, i) => `${i + 1}. ${s}`)
+                        .join("\n")}\n\nGenerate ${middleStepCount} distinct, concise web search queries (2-6 words each), one corresponding to each middle research step (steps 2 to ${Math.max(2, totalSteps - 1)}). Return ONLY a JSON array of ${middleStepCount} strings.`,
+                    },
+                  ],
+                },
+              ],
+              config: {
+                thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+              },
+            },
+            FAST_MODELS
+          ),
+          8000,
+          "Query decomposition"
+        );
+        const match = (subQRes.text || "").match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          if (Array.isArray(parsed)) {
+            const valid = parsed.map((q) => String(q).trim()).filter((q) => q.length >= 2);
+            if (valid.length > 0) {
+              subQueries = Array.from({ length: middleStepCount }, (_, i) => valid[i] || cleanQuery);
+            }
+          }
+        }
+      } catch {
+        // Keep default cleanQuery entries
+      }
+    })();
+
+    await Promise.all([initialGroundingPromise, subQueryPromise]);
+    if (signal?.aborted) throw new Error("Research cancelled");
+
+    onProgress?.({
+      stepIndex: 0,
+      completedCount: 1,
+      label: stepsList[0] || "Surveyed initial sources",
+      sourcesFound: allSources.length,
+    });
+
+    // MIDDLE STEPS (1 .. totalSteps - 2): Each step genuinely runs targeted web/repo lookup + focused AI note extraction
+    const stepFindings: string[] = [];
+    const searchPhaseEnd = Math.max(1, totalSteps - 1);
+    for (let idx = 1; idx < searchPhaseEnd; idx++) {
+      if (signal?.aborted) throw new Error("Research cancelled");
+      const queryForStep = subQueries[idx - 1] || cleanQuery;
+      const stepGoal = stepsList[idx] || `Investigate "${queryForStep}"`;
+
+      const [groundingRes, richSources] = await Promise.all([
+        performLiveWebGrounding(queryForStep),
+        fetchAdditionalResearchSources(queryForStep),
+      ]);
+      const stepSources = [...richSources, ...(groundingRes.groundingSources || [])];
+      addSources(stepSources);
+
+      if (fastAi && !signal?.aborted) {
+        try {
+          const stepContext = stepSources
+            .filter((s) => !s.url.startsWith("https://www.google.com/search?q="))
+            .slice(0, 5)
+            .map((s, i) => `[${i + 1}] ${s.title} (${s.sourceDomain || "web"}): ${(s.snippet || "").slice(0, 380)}`)
+            .join("\n");
+
+          const stepNoteRes = await withTimeout(
+            generateContentResilient(
+              fastAi,
+              {
+                contents: [
+                  {
+                    role: "user",
+                    parts: [
+                      {
+                        text: `Research question: "${cleanQuery}"\nCurrent research step (${idx + 1}/${totalSteps}): "${stepGoal}"\nSearch query used: "${queryForStep}"\n\n${
+                          stepContext ? `Retrieved sources for this step:\n${stepContext}\n\n` : ""
+                        }Write concise, high-density factual research notes (3-5 crisp bullet points with exact facts, definitions, numbers, or examples) strictly completing this step.`,
+                      },
+                    ],
+                  },
+                ],
+                config: {
+                  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+                },
+              },
+              FAST_MODELS
+            ),
+            9000,
+            `Research step ${idx + 1}`
+          );
+          if (stepNoteRes.text?.trim()) {
+            stepFindings.push(`### Step ${idx + 1}: ${stepGoal}\n${stepNoteRes.text.trim()}`);
+          }
+        } catch {
+          // Proceed with raw source snippets if fast note pass times out
+          if (stepSources.length > 0) {
+            const snippetSummary = stepSources
+              .slice(0, 3)
+              .map((s) => `- ${s.title}: ${(s.snippet || "").slice(0, 180)}`)
+              .join("\n");
+            stepFindings.push(`### Step ${idx + 1}: ${stepGoal}\n${snippetSummary}`);
+          }
+        }
+      }
+
+      if (signal?.aborted) throw new Error("Research cancelled");
+      onProgress?.({
+        stepIndex: idx,
+        completedCount: idx + 1,
+        label: stepGoal,
+        sourcesFound: allSources.length,
+      });
+    }
+
+    // Ensure at least main query additional sources ran if stepsList was short
+    if (allSources.length < 2 && !signal?.aborted) {
+      const richFallback = await fetchAdditionalResearchSources(cleanQuery);
+      addSources(richFallback);
+    }
+
+    // FINAL STEP: Synthesize comprehensive, question-specific Markdown report using gathered step findings & sources
+    if (signal?.aborted) throw new Error("Research cancelled");
+
+    if (candidateKeys.length === 0) {
+      throw new Error("No Gemini API key is configured on the server to synthesize deep research.");
+    }
+
+    const compiledResearchContext = allSources
+      .filter((s) => !s.url.startsWith("https://www.google.com/search?q="))
+      .slice(0, 10)
+      .map(
+        (s, i) =>
+          `[Source ${i + 1}] ${s.title} (${s.sourceDomain || "web"})\nURL: ${s.url}\nContent: ${(s.snippet || "").slice(0, 500)}`
+      )
+      .join("\n\n");
+
+    const customPlanClause =
+      stepsList.length > 0
+        ? `\nApproved Research Plan Executed:\n${stepsList.map((s, idx) => `${idx + 1}. ${s}`).join("\n")}\n`
+        : "";
+
+    const stepNotesClause =
+      stepFindings.length > 0
+        ? `\n=== VERIFIED STEP-BY-STEP RESEARCH FINDINGS ===\n${stepFindings.join("\n\n")}\n`
+        : "";
+
+    const projectClause = projectContext?.trim()
+      ? `\nProject Context (for relevance only; still answer the user's exact question directly):\n${projectContext.trim()}\n`
+      : "";
+
+    const modelProfile = getModelExecutionProfile(modelId);
+    const researchTrained = retrieveTrainingContext(cleanQuery, 2400);
+
+    let reportAnswer = "";
+    const searchQueriesUsed: string[] = [cleanQuery, ...subQueries];
+    let lastApiErr: any = null;
+
+    for (const apiKey of candidateKeys) {
+      try {
+        const ai = getGenAiClient(apiKey);
+        const sysInstruction =
+          `You are an elite deep research intelligence engine. Current Date: ${new Date().toISOString().split("T")[0]}.\n` +
+          `CRITICAL RULES:\n` +
+          `1. Answer the user's EXACT question ("${cleanQuery}") directly, thoroughly, and accurately. Never drift off-topic or emit generic placeholder prose.\n` +
+          `2. Integrate the verified step-by-step research findings and retrieved sources using concrete facts, numbers, definitions, comparisons, and examples.\n` +
+          `3. Cite sources cleanly inline when referencing specific claims.\n` +
+          `4. If the user's question is ambiguous or broad (e.g., a single word or open-ended term), directly explain the exact meaning(s), linguistic/technical contexts, and specifics of that exact query.\n\n` +
+          `${researchTrained.hasContext ? `\n=== VERIFIED REFERENCE DATA ===\n${researchTrained.contextText}` : ""}`;
+
+        const promptText =
+          `User Question: "${cleanQuery}"\n` +
+          `${customPlanClause}${projectClause}` +
+          `${stepNotesClause}\n` +
+          `${compiledResearchContext ? `=== RETRIEVED WEB RESEARCH SOURCES ===\n${compiledResearchContext}\n\n` : ""}` +
+          `Write a comprehensive, well-structured Markdown deep research report (${depth.toUpperCase()} depth) that directly answers "${cleanQuery}":\n` +
+          `- Begin with a clear, direct Executive Answer / Overview specifically addressing "${cleanQuery}".\n` +
+          `- Include a **Key Findings** section with concrete bullet points.\n` +
+          `- Include well-organized thematic sections synthesizing the completed research steps.\n` +
+          `- Conclude with practical takeaways or direct answers.`;
+
+        // Multi-pass resilient synthesis across cascade (streaming -> backoff + non-streaming fallback on 503 high demand)
+        const synthesisCascade = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
+        const runSynthesisAttempt = async (synthModel: string, useStream: boolean) => {
+          const synthThinking = synthModel.startsWith("gemini-4")
+            ? ThinkingLevel.LOW
+            : ThinkingLevel.MINIMAL;
+          const timeoutMs = synthModel.startsWith("gemini-4") ? 28000 : 20000;
+          const reqConfig: any = {
+            ...(allSources.length < 2 ? { tools: [{ googleSearch: {} }] } : {}),
+            systemInstruction: sysInstruction,
+            thinkingConfig: {
+              thinkingLevel: synthThinking,
+            },
+          };
+
+          if (useStream) {
+            return await withTimeout(
+              (async () => {
+                let accText = "";
+                let lastGrounding: any = null;
+                for await (const chunk of generateContentStreamResilient(
+                  ai,
+                  {
+                    contents: [{ role: "user", parts: [{ text: promptText }] }],
+                    config: reqConfig,
+                  },
+                  [synthModel],
+                  { firstChunkTimeoutMs: synthModel.startsWith("gemini-4") ? 18000 : 14000 }
+                )) {
+                  if (signal?.aborted) throw new Error("Research cancelled");
+                  if (chunk.text) accText += chunk.text;
+                  if (chunk.groundingMetadata) lastGrounding = chunk.groundingMetadata;
+                }
+                return { text: accText, groundingMetadata: lastGrounding };
+              })(),
+              timeoutMs,
+              `Synthesis (${synthModel})`
+            );
+          }
+
+          return await generateContentResilient(
+            ai,
+            {
+              contents: [{ role: "user", parts: [{ text: promptText }] }],
+              config: reqConfig,
+            },
+            [synthModel],
+            { timeoutMs }
+          );
+        };
+
+        const synthesisPlan: Array<{ model: string; stream: boolean; delayBeforeMs: number }> = [];
+        for (const m of synthesisCascade) {
+          synthesisPlan.push({ model: m, stream: true, delayBeforeMs: 0 });
+        }
+        // Retry pass (prefer flash-lite first on 503 spikes, non-streaming + streaming)
+        const reversedOrFastFirst = Array.from(new Set([...FAST_MODELS, ...synthesisCascade]));
+        for (let idx = 0; idx < reversedOrFastFirst.length; idx++) {
+          synthesisPlan.push({
+            model: reversedOrFastFirst[idx],
+            stream: false,
+            delayBeforeMs: idx === 0 ? 850 : 400,
+          });
+        }
+        synthesisPlan.push({
+          model: FAST_MODELS[0],
+          stream: true,
+          delayBeforeMs: 1500,
+        });
+
+        for (const attempt of synthesisPlan) {
+          if (signal?.aborted) throw new Error("Research cancelled");
+          if (attempt.delayBeforeMs > 0) {
+            await new Promise((r) => setTimeout(r, attempt.delayBeforeMs));
+            if (signal?.aborted) throw new Error("Research cancelled");
+          }
+          try {
+            const result = await runSynthesisAttempt(attempt.model, attempt.stream);
+            if (result.text && result.text.trim()) {
+              reportAnswer = result.text.trim();
+              const groundingMetadata = result.groundingMetadata;
+              if (groundingMetadata?.webSearchQueries) {
+                searchQueriesUsed.push(...groundingMetadata.webSearchQueries);
+              }
+              if (groundingMetadata?.groundingChunks) {
+                for (const chunk of groundingMetadata.groundingChunks) {
+                  if (chunk.web?.uri) {
+                    const uri = chunk.web.uri;
+                    let domain = "web";
+                    try { domain = new URL(uri).hostname.replace(/^www\./, ""); } catch {}
+                    addSources([
+                      {
+                        title: chunk.web.title || domain || "Web Source",
+                        url: uri,
+                        snippet: chunk.web.title || `Source retrieved from ${domain}`,
+                        sourceDomain: domain,
+                      },
+                    ]);
+                  }
+                }
+              }
+              break;
+            }
+          } catch (modelErr: any) {
+            lastApiErr = modelErr;
+            // If error is non-transient (e.g. invalid API key), stop retrying on the same key
+            if (!isTransientUpstreamError(modelErr) && !modelErr?.isTimeout && !String(modelErr?.message || "").includes("timed out")) {
+              break;
+            }
+          }
+        }
+
+        if (reportAnswer) break;
+      } catch (err) {
+        lastApiErr = err;
+      }
+    }
+
+    if (!reportAnswer) {
+      throw new Error(formatReadableGeminiError(lastApiErr || "Deep research synthesis failed to produce a response."));
+    }
+
+    const realSources = allSources.filter((s) => !s.url.startsWith("https://www.google.com/search?q="));
+    const finalSources = realSources.length > 0 ? realSources : allSources;
+
+    onProgress?.({
+      stepIndex: totalSteps - 1,
+      completedCount: totalSteps,
+      label: stepsList[totalSteps - 1] || "Finalizing report",
+      sourcesFound: finalSources.length,
+    });
+
+    const findingsMatches = reportAnswer.match(/(?:^|\n)[-*•]\s+([^\n]+)/g);
+    const keyFindings = findingsMatches
+      ? findingsMatches.slice(0, 6).map((line) => line.replace(/^[\s\n-*•]+/, "").trim())
+      : [`Completed live multi-step research synthesis on "${cleanQuery}".`];
+
+    return {
+      id: `research_${Date.now()}`,
+      query: cleanQuery,
+      depth,
+      timestamp: Date.now(),
+      answer: reportAnswer,
+      summary: reportAnswer.split("\n\n")[0].replace(/^#+\s*/, "") || `Research report on ${cleanQuery}`,
+      keyFindings,
+      sources: finalSources.slice(0, 12),
+      searchQueriesUsed: Array.from(new Set(searchQueriesUsed)),
+      steps: stepsList.map((title, idx) => ({
+        id: String(idx + 1),
+        title,
+        status: "completed" as const,
+      })),
+      modelId,
+    };
+  }
+
+  app.post("/api/deep-research/stream", async (req: Request, res: Response) => {
+    const abortController = new AbortController();
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+
+    res.on("close", () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    });
+
+    try {
+      const { query, depth = "deep", modelId = "forge-2-ultra", planSteps, projectContext } = req.body;
       const cleanQuery = (query || "").trim();
 
       if (!cleanQuery) {
         return res.status(400).json({ error: "Query is required for deep research" });
       }
 
-      const apiKey = getEffectiveApiKey(req);
-      let reportAnswer = "";
-      const sources: { title: string; url: string; snippet: string; sourceDomain?: string }[] = [];
-      const searchQueriesUsed: string[] = [];
-      const customPlanClause =
-        Array.isArray(planSteps) && planSteps.length > 0
-          ? `\nFollow this approved research plan:\n${planSteps.map((s: any, idx: number) => `${idx + 1}. ${String(s)}`).join("\n")}\n`
-          : "";
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders?.();
 
-      if (apiKey) {
-        try {
-          const ai = getGenAiClient(apiKey);
-          const modelProfile = getModelExecutionProfile(modelId);
-          const candModels = modelProfile.models;
-
-          for (const cand of candModels) {
-            try {
-              const researchTrained = retrieveTrainingContext(cleanQuery, 3000);
-              const reqConfig = buildModelConfig(cand, {
-                tools: [{ googleSearch: {} }],
-                systemInstruction: `You are an elite deep research engine. Current Date: ${new Date().toISOString().split("T")[0]}. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, verified intelligence reports.\n\n${modelProfile.instruction}${researchTrained.hasContext ? `\n\n=== VERIFIED REFERENCE DATA ===\n${researchTrained.contextText}` : ""}`,
-                thinkingConfig: {
-                  thinkingLevel: modelProfile.thinkingLevel,
-                },
-              });
-              const result = await ai.models.generateContent({
-                model: cand,
-                contents: [
-                  {
-                    role: "user",
-                    parts: [
-                      {
-                        text: `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n${customPlanClause}\n` +
-                          `Instructions for the report structure:\n` +
-                          `1. Start with a direct, comprehensive executive summary and core answer.\n` +
-                          `2. Provide a 'Key Findings' section with bulleted facts, statistics, and verifiable takeaways.\n` +
-                          `3. Provide in-depth thematic sections breaking down mechanisms, evidence, industry/academic context, and future outlook.\n` +
-                          `4. Ensure all factual claims are backed by rigorous web research and cite sources accurately.\n\n` +
-                          `Depth level requested: ${depth.toUpperCase()}`
-                      }
-                    ]
-                  }
-                ],
-                config: reqConfig,
-              });
-
-              const candidate = result.candidates?.[0];
-              const text = result.text || candidate?.content?.parts?.[0]?.text;
-
-              if (text) {
-                reportAnswer = text;
-                const grounding = candidate?.groundingMetadata;
-                if (grounding?.webSearchQueries) {
-                  searchQueriesUsed.push(...grounding.webSearchQueries);
-                }
-                if (grounding?.groundingChunks) {
-                  for (const chunk of grounding.groundingChunks) {
-                    if (chunk.web?.uri) {
-                      const uri = chunk.web.uri;
-                      let domain = "";
-                      try {
-                        domain = new URL(uri).hostname.replace(/^www\./, '');
-                      } catch {
-                        domain = "Web Source";
-                      }
-                      sources.push({
-                        title: chunk.web.title || domain || "Web Source",
-                        url: uri,
-                        snippet: chunk.web.title || `Information retrieved from ${domain}`,
-                        sourceDomain: domain,
-                      });
-                    }
-                  }
-                }
-                break;
-              }
-            } catch (err) {
-              console.warn(`Deep research search attempt on ${cand} notice:`, err);
-            }
-          }
-        } catch (e) {
-          console.warn("Deep research live search fallback triggered:", e);
+      // Send periodic SSE comments so Cloud Run / proxies never drop idle connections
+      heartbeatTimer = setInterval(() => {
+        if (!res.writableEnded) {
+          res.write(": ping\n\n");
+          (res as any).flush?.();
         }
-      }
+      }, 2500);
 
-      // If live web search produced no report or no API key, use procedural deep research synthesis
-      if (!reportAnswer) {
-        const titleCaseQuery = cleanQuery.charAt(0).toUpperCase() + cleanQuery.slice(1);
-        reportAnswer = `## Executive Briefing: ${titleCaseQuery}\n\n` +
-          `A thorough multi-vector analysis of **${cleanQuery}** reveals significant real-world developments, structural principles, and strategic considerations. ` +
-          `Through synthetic web crawling and historical documentation review, the core findings indicate a convergence of technological modernization, growing public interest, and regulatory/practical implications.\n\n` +
-          `### Key Research Findings\n` +
-          `* **Primary Architecture**: The core foundation relies on interconnected frameworks designed to maintain equilibrium between scalability and accessibility.\n` +
-          `* **Performance & Evidence**: Empirical benchmarks demonstrate high adaptability across diverse operational environments, with documented efficiency gains.\n` +
-          `* **Industry & Community Adoption**: Modern implementations prioritize modularity, fault-tolerant pipelines, and user-centric interfaces.\n` +
-          `* **Current Challenges**: Key considerations include latency management, verification of edge-case reliability, and data privacy safeguards.\n\n` +
-          `### Comprehensive Analysis\n\n` +
-          `#### 1. Mechanism & Operational Principles\n` +
-          `When breaking down ${cleanQuery}, the fundamental mechanics operate through recursive evaluation. Each discrete component processes contextual signals and adjusts parameters to achieve optimal balance. Early paradigms were limited by static constraints; however, modern approaches utilize dynamic adaptation.\n\n` +
-          `#### 2. Practical Applications & Real-World Impact\n` +
-          `Across enterprise, research laboratories, and consumer software, practical deployment shows measurable enhancements in productivity. Case studies highlight a notable reduction in overhead when structured workflows are systematically integrated.\n\n` +
-          `#### 3. Strategic Recommendations & Future Outlook\n` +
-          `To capitalize on these developments, organizations and researchers should:\n` +
-          `1. Establish clear baseline metrics prior to implementation.\n` +
-          `2. Implement continuous telemetry monitoring for real-time adjustments.\n` +
-          `3. Stay updated with emerging standards and cross-disciplinary studies.`;
-
-        // Add domain-relevant sources
-        const encodedQ = encodeURIComponent(cleanQuery);
-        sources.push(
-          {
-            title: `${titleCaseQuery} - Comprehensive Knowledge Base`,
-            url: `https://en.wikipedia.org/wiki/Special:Search?search=${encodedQ}`,
-            snippet: "Historical, technical, and encyclopedic background context and reference data.",
-            sourceDomain: "en.wikipedia.org",
-          },
-          {
-            title: `Academic Research & Papers: ${titleCaseQuery}`,
-            url: `https://scholar.google.com/scholar?q=${encodedQ}`,
-            snippet: "Peer-reviewed literature, citations, empirical experiments, and conference proceedings.",
-            sourceDomain: "scholar.google.com",
-          },
-          {
-            title: `Open Source & Technical Implementation: ${titleCaseQuery}`,
-            url: `https://github.com/search?q=${encodedQ}`,
-            snippet: "Repository codebases, benchmarks, algorithmic implementations, and developer discussions.",
-            sourceDomain: "github.com",
-          },
-          {
-            title: `Global News & Market Analysis: ${titleCaseQuery}`,
-            url: `https://www.reuters.com/site-search/?query=${encodedQ}`,
-            snippet: "Latest global updates, business implications, and macroeconomic reporting.",
-            sourceDomain: "reuters.com",
-          }
-        );
-      }
-
-      // Deduplicate sources by URL
-      const uniqueSources = Array.from(new Map(sources.map((s) => [s.url, s])).values());
-
-      // Extract key findings bullets
-      const findingsMatches = reportAnswer.match(/(?:^|\n)[-*•]\s+([^\n]+)/g);
-      const keyFindings = findingsMatches
-        ? findingsMatches.slice(0, 6).map((line) => line.replace(/^[\s\n-*•]+/, '').trim())
-        : [
-            `Core principles behind "${cleanQuery}" point to accelerated modernization and increased adoption.`,
-            `Empirical validation highlights strong operational performance across tested scenarios.`,
-            `Key ongoing priorities include standard compliance, fault tolerance, and security.`,
-          ];
-
-      const report = {
-        id: `research_${Date.now()}`,
-        query: cleanQuery,
-        depth,
-        timestamp: Date.now(),
-        answer: reportAnswer,
-        summary: reportAnswer.split('\n\n')[0].replace(/^#+\s*/, '') || `Comprehensive research briefing on ${cleanQuery}.`,
-        keyFindings,
-        sources: uniqueSources,
-        steps: [
-          { id: '1', title: 'Query Analysis & Objective Decomposition', status: 'completed' },
-          { id: '2', title: 'Live Web Search & Source Retrieval', status: 'completed' },
-          { id: '3', title: 'Cross-Verification & Grounding Analysis', status: 'completed' },
-          { id: '4', title: 'Comprehensive Synthesis & Citation Compilation', status: 'completed' },
-        ],
-        modelId,
+      const sendEvent = (payload: any) => {
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify(payload)}\n\n`);
+          (res as any).flush?.();
+        }
       };
+
+      const candidateKeys = getEffectiveApiKeys(req);
+      const report = await executeMultiStepDeepResearch({
+        cleanQuery,
+        depth,
+        modelId,
+        planSteps,
+        projectContext,
+        candidateKeys,
+        signal: abortController.signal,
+        onProgress: (ev) => {
+          sendEvent({ type: "step", ...ev });
+        },
+      });
+
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      sendEvent({ type: "complete", success: true, report });
+      return res.end();
+    } catch (err: unknown) {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (abortController.signal.aborted) {
+        if (!res.writableEnded) res.end();
+        return;
+      }
+      const msg = formatReadableGeminiError(err);
+      console.error("Error in /api/deep-research/stream:", msg);
+      if (!res.headersSent) {
+        return res.status(502).json({ error: msg });
+      }
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: "error", error: msg })}\n\n`);
+        res.end();
+      }
+    }
+  });
+
+  app.post("/api/deep-research", async (req: Request, res: Response) => {
+    try {
+      const { query, depth = "deep", modelId = "forge-2-ultra", planSteps, projectContext } = req.body;
+      const cleanQuery = (query || "").trim();
+
+      if (!cleanQuery) {
+        return res.status(400).json({ error: "Query is required for deep research" });
+      }
+
+      const candidateKeys = getEffectiveApiKeys(req);
+      const report = await executeMultiStepDeepResearch({
+        cleanQuery,
+        depth,
+        modelId,
+        planSteps,
+        projectContext,
+        candidateKeys,
+      });
 
       return res.json({
         success: true,
         report,
       });
     } catch (err: unknown) {
-      console.error("Error in /api/deep-research:", err);
-      return res.status(500).json({
-        error: err instanceof Error ? err.message : "Failed to execute deep research",
+      const msg = formatReadableGeminiError(err);
+      console.error("Error in /api/deep-research:", msg);
+      return res.status(502).json({
+        success: false,
+        error: msg,
       });
     }
   });

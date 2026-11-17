@@ -29,6 +29,7 @@ import {
 import { libraryService } from '../services/libraryService';
 import { imageService } from '../services/imageService';
 import { musicService } from '../services/musicService';
+import { chatService } from '../services/chatService';
 
 type LibraryTab = 'suggested' | 'favorites' | 'folders' | 'images' | 'all';
 type SortOrder = 'newest' | 'oldest';
@@ -52,6 +53,7 @@ interface LibraryWorkspaceProps {
   onUpdateImages: (images: GeneratedImage[]) => void;
   videos: GeneratedVideo[];
   chatSessions: ChatSession[];
+  onUpdateChatSessions?: (sessions: ChatSession[]) => void;
   onSelectChat: (chatId: string) => void;
   onNewChat: () => void;
   onNavigateToImage: () => void;
@@ -65,6 +67,7 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
   onUpdateImages,
   videos,
   chatSessions,
+  onUpdateChatSessions,
   onSelectChat,
   onNewChat,
   onNavigateToImage,
@@ -282,20 +285,39 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
     e.stopPropagation();
     if (entry.source === 'reference') {
       setReferences(libraryService.toggleReferenceFavorite(entry.id));
-    } else if (entry.rawGenerated) {
-      const updated = imageService.toggleFavorite(entry.rawGenerated.id);
-      onUpdateImages(updated);
+    } else {
+      if (entry.rawGenerated) {
+        const updated = imageService.toggleFavorite(entry.rawGenerated.id);
+        onUpdateImages(updated);
+      }
+      const updatedSessions = chatService.toggleImageFavoriteInSessions(
+        entry.imageUrl,
+        entry.rawGenerated?.id || entry.id
+      );
+      onUpdateChatSessions?.(updatedSessions);
     }
   };
 
   const handleDeleteEntry = (entry: UnifiedImageEntry, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (entry.source === 'reference') {
-      setReferences(libraryService.deleteReference(entry.id));
-    } else if (entry.rawGenerated) {
-      const updated = imageService.deleteImage(entry.rawGenerated.id);
-      onUpdateImages(updated);
+    if (folderPickerItemId === entry.id) {
+      setFolderPickerItemId(null);
     }
+
+    const updatedRefs = libraryService.deleteReferenceByIdOrUrl(entry.id, entry.imageUrl);
+    setReferences(updatedRefs);
+
+    const updatedImages = imageService.deleteImageByIdOrUrl(
+      entry.rawGenerated?.id || entry.id,
+      entry.imageUrl
+    );
+    onUpdateImages(updatedImages);
+
+    const updatedSessions = chatService.removeImageFromSessions(
+      entry.imageUrl,
+      entry.rawGenerated?.id || entry.id
+    );
+    onUpdateChatSessions?.(updatedSessions);
   };
 
   const handleOpenViewer = (entry: UnifiedImageEntry) => {
@@ -383,7 +405,7 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
     }
 
     return (
-      <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-3.5 space-y-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 items-stretch">
         {items.map((entry) => {
           const isBroken = Boolean(brokenImageIds[entry.id]);
           const assignedFolder = entry.folderId
@@ -393,37 +415,45 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
             <div
               key={entry.id}
               onClick={() => handleOpenViewer(entry)}
-              className={`group relative break-inside-avoid rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 ${
+              className={`group relative flex flex-col rounded-2xl border cursor-pointer transition-all duration-200 ${
                 isDark
                   ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-600'
-                  : 'bg-white border-neutral-200/80 hover:border-neutral-400 shadow-xs hover:shadow-md'
+                  : 'bg-white border-neutral-200/90 hover:border-neutral-400 shadow-2xs hover:shadow-md'
               }`}
             >
-              {isBroken ? (
-                <div
-                  className={`aspect-square w-full flex flex-col items-center justify-center p-4 text-center ${
-                    isDark ? 'bg-neutral-900 text-neutral-400' : 'bg-neutral-100 text-neutral-600'
-                  }`}
-                >
-                  <ImageIcon className="w-6 h-6 mb-2 opacity-60" />
-                  <span className="text-[11px] font-medium line-clamp-2">{entry.title}</span>
-                </div>
-              ) : (
-                <img
-                  src={entry.imageUrl}
-                  alt={entry.title}
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  onError={() =>
-                    setBrokenImageIds((prev) => ({ ...prev, [entry.id]: true }))
-                  }
-                  className="w-full h-auto block object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                />
-              )}
+              {/* Uniform 1:1 Media Frame */}
+              <div
+                className={`relative aspect-square w-full overflow-hidden rounded-t-2xl ${
+                  isDark ? 'bg-neutral-950' : 'bg-neutral-100'
+                }`}
+              >
+                {isBroken ? (
+                  <div
+                    className={`w-full h-full flex flex-col items-center justify-center p-4 text-center ${
+                      isDark ? 'bg-neutral-900 text-neutral-400' : 'bg-neutral-100 text-neutral-600'
+                    }`}
+                  >
+                    <ImageIcon className="w-6 h-6 mb-2 opacity-60" />
+                    <span className="text-[11px] font-medium line-clamp-2">{entry.title}</span>
+                  </div>
+                ) : (
+                  <img
+                    src={entry.imageUrl}
+                    alt={entry.title}
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    onError={() =>
+                      setBrokenImageIds((prev) => ({ ...prev, [entry.id]: true }))
+                    }
+                    className="w-full h-full object-cover object-center block transition-transform duration-300 group-hover:scale-[1.03]"
+                  />
+                )}
 
-              {/* Hover Scrim & Actions */}
-              <div className="pointer-events-none group-hover:pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/35 flex flex-col justify-between p-2.5">
-                <div className="flex items-center justify-between gap-1">
+                {/* Subtle top gradient scrim for badge & hover quick actions */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-black/50 via-black/20 to-transparent opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150" />
+
+                {/* Top-left Source / Folder pill */}
+                <div className="absolute top-2.5 left-2.5 z-10">
                   {entry.source === 'reference' && folders.length > 0 ? (
                     <div className="relative">
                       <button
@@ -442,47 +472,9 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
                           {assignedFolder ? assignedFolder.name : 'Folder'}
                         </span>
                       </button>
-                      {folderPickerItemId === entry.id && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className={`absolute left-0 top-full mt-1 w-40 rounded-xl border p-1 shadow-xl z-30 ${
-                            isDark
-                              ? 'bg-neutral-900 border-neutral-700 text-white'
-                              : 'bg-white border-neutral-200 text-neutral-900'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReferences(
-                                libraryService.assignReferenceFolder(entry.id, undefined)
-                              );
-                              setFolderPickerItemId(null);
-                            }}
-                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] hover:bg-neutral-500/10"
-                          >
-                            No folder
-                          </button>
-                          {folders.map((f) => (
-                            <button
-                              key={f.id}
-                              type="button"
-                              onClick={() => {
-                                setReferences(
-                                  libraryService.assignReferenceFolder(entry.id, f.id)
-                                );
-                                setFolderPickerItemId(null);
-                              }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] hover:bg-neutral-500/10 truncate"
-                            >
-                              {f.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   ) : (
-                    <span className="text-[10px] font-medium text-white/90 bg-black/50 px-2 py-0.5 rounded-md backdrop-blur-md">
+                    <span className="text-[10px] font-medium text-white/95 bg-black/55 px-2 py-0.5 rounded-md backdrop-blur-md">
                       {entry.source === 'generated'
                         ? 'Generated'
                         : entry.source === 'reference'
@@ -490,50 +482,104 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
                         : 'Chat'}
                     </span>
                   )}
+                </div>
 
-                  <div className="flex items-center gap-1">
-                    {(entry.source === 'reference' || entry.rawGenerated) && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleFavorite(entry, e)}
-                        title={entry.isFavorite ? 'Remove favorite' : 'Add to favorites'}
-                        className={`p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${
-                          entry.isFavorite
-                            ? 'bg-rose-500 text-white'
-                            : 'bg-black/60 hover:bg-black/80 text-white'
-                        }`}
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${entry.isFavorite ? 'fill-current' : ''}`} />
-                      </button>
-                    )}
-
+                {/* Top-right Favorite & Download */}
+                <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+                  {(entry.source === 'reference' || entry.rawGenerated) && (
                     <button
                       type="button"
-                      onClick={(e) => handleDownloadEntry(entry, e)}
-                      title="Download image"
-                      className="p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-colors cursor-pointer"
+                      onClick={(e) => handleToggleFavorite(entry, e)}
+                      title={entry.isFavorite ? 'Remove favorite' : 'Add to favorites'}
+                      className={`p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${
+                        entry.isFavorite
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-black/60 hover:bg-black/80 text-white'
+                      }`}
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      <Heart className={`w-3.5 h-3.5 ${entry.isFavorite ? 'fill-current' : ''}`} />
                     </button>
+                  )}
 
-                    {(entry.source === 'reference' || entry.rawGenerated) && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteEntry(entry, e)}
-                        title="Delete from library"
-                        className="p-1.5 rounded-full bg-black/60 hover:bg-rose-600 text-white backdrop-blur-md transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDownloadEntry(entry, e)}
+                    title="Download image"
+                    className="p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
                 </div>
+              </div>
 
-                <div className="text-left">
-                  <p className="text-[11px] font-medium text-white line-clamp-2 leading-snug">
-                    {entry.title}
-                  </p>
+              {/* Folder dropdown popover rendered outside overflow-hidden media frame so it never clips */}
+              {folderPickerItemId === entry.id && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={`absolute left-2.5 top-10 w-40 rounded-xl border p-1 shadow-xl z-30 ${
+                    isDark
+                      ? 'bg-neutral-900 border-neutral-700 text-white'
+                      : 'bg-white border-neutral-200 text-neutral-900'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReferences(
+                        libraryService.assignReferenceFolder(entry.id, undefined)
+                      );
+                      setFolderPickerItemId(null);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] hover:bg-neutral-500/10"
+                  >
+                    No folder
+                  </button>
+                  {folders.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => {
+                        setReferences(
+                          libraryService.assignReferenceFolder(entry.id, f.id)
+                        );
+                        setFolderPickerItemId(null);
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] hover:bg-neutral-500/10 truncate"
+                    >
+                      {f.name}
+                    </button>
+                  ))}
                 </div>
+              )}
+
+              {/* Uniform Footer Row: Title + Delete button */}
+              <div
+                className={`px-3 py-2.5 flex items-center justify-between gap-2 rounded-b-2xl border-t ${
+                  isDark ? 'border-neutral-800/80' : 'border-neutral-100'
+                }`}
+              >
+                <p
+                  className={`text-xs font-medium truncate min-w-0 flex-1 ${
+                    isDark ? 'text-neutral-200' : 'text-neutral-800'
+                  }`}
+                  title={entry.title}
+                >
+                  {entry.title}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteEntry(entry, e)}
+                  title="Delete from library"
+                  aria-label={`Delete ${entry.title}`}
+                  className={`p-1.5 rounded-lg transition-colors shrink-0 cursor-pointer ${
+                    isDark
+                      ? 'text-neutral-400 hover:text-rose-400 hover:bg-rose-500/15'
+                      : 'text-neutral-500 hover:text-rose-600 hover:bg-rose-50'
+                  }`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           );
@@ -793,32 +839,30 @@ export const LibraryWorkspace: React.FC<LibraryWorkspaceProps> = ({
         {/* IMAGES TAB */}
         {activeTab === 'images' && (
           <div className="space-y-5">
-            {/* References Subheader + "+ Add" button */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                  References
+            {/* Images & References Header Row */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                  Visual Collection
                 </h2>
                 <span className="text-xs text-neutral-500 tabular-nums">
                   {filteredImages.length} {filteredImages.length === 1 ? 'item' : 'items'}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  id="library-btn-add-reference"
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`px-4 py-2 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
-                    isDark
-                      ? 'border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-200'
-                      : 'border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-800 shadow-2xs'
-                  }`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                id="library-btn-add-reference"
+                onClick={() => fileInputRef.current?.click()}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium border inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  isDark
+                    ? 'border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-200'
+                    : 'border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-800 shadow-2xs'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Reference</span>
+              </button>
             </div>
 
             {renderImageGrid(

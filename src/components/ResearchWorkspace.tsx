@@ -137,46 +137,119 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
 
     setIsLoading(true);
     setErrorMsg(null);
+    setCurrentReport(null);
     setActiveStepIndex(0);
 
-    // Step ticker for visual feedback during search
-    const interval = setInterval(() => {
-      setActiveStepIndex((prev) => {
-        if (prev < researchSteps.length - 1) return prev + 1;
-        return prev;
-      });
-    }, 1800);
+    let visualStep = 0;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const advanceTo = async (target: number, delay = 320) => {
+      const clamped = Math.min(researchSteps.length, Math.max(visualStep, target));
+      while (visualStep < clamped) {
+        visualStep += 1;
+        setActiveStepIndex(visualStep);
+        if (visualStep < clamped) await sleep(delay);
+      }
+    };
 
     try {
-      const res = await fetch('/api/deep-research', {
+      const rawKey = localStorage.getItem('forgex_api_key') || '';
+      const storedApiKey = rawKey.startsWith('AIza') ? rawKey : undefined;
+      const res = await fetch('/api/deep-research/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
+        },
         body: JSON.stringify({
           query: q,
           depth,
           modelId: selectedModelId,
+          planSteps: researchSteps.map((s) => s.title),
         }),
       });
 
-      clearInterval(interval);
-
       if (!res.ok) {
-        throw new Error(`Research query failed with status ${res.status}`);
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error || `Research query failed with status ${res.status}`);
       }
 
-      const data = await res.json();
-      if (data.success && data.report) {
-        setCurrentReport(data.report);
-        saveToHistory(data.report);
+      let finalReport: DeepResearchReport | null = null;
+      const contentType = res.headers.get('content-type') || '';
+
+      const handleResearchEvent = async (jsonText: string) => {
+        const evt = JSON.parse(jsonText);
+        if (evt.type === 'step') {
+          const target = Math.min(researchSteps.length, Math.max(1, Number(evt.completedCount || 1)));
+          await advanceTo(target, 220);
+        } else if (evt.type === 'complete') {
+          finalReport = evt.report;
+        } else if (evt.type === 'error') {
+          throw new Error(evt.error || 'Failed to retrieve deep research report');
+        }
+      };
+
+      if (contentType.includes('text/event-stream') && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+
+          for (const rawEvent of events) {
+            const line = rawEvent.split('\n').find((l) => l.startsWith('data:'));
+            if (!line) continue;
+            const jsonText = line.slice(5).trim();
+            if (!jsonText) continue;
+            await handleResearchEvent(jsonText);
+          }
+        }
+
+        if (buffer.trim()) {
+          const trailingLine = buffer.split('\n').find((l) => l.startsWith('data:'));
+          if (trailingLine) {
+            const jsonText = trailingLine.slice(5).trim();
+            if (jsonText) await handleResearchEvent(jsonText);
+          }
+        }
       } else {
-        throw new Error(data.error || 'Failed to retrieve deep research report');
+        const data = await res.json();
+        finalReport = data.report || null;
+      }
+
+      if (finalReport && finalReport.answer) {
+        await advanceTo(researchSteps.length, 240);
+        await sleep(320);
+        setCurrentReport(finalReport);
+        saveToHistory(finalReport);
+      } else {
+        throw new Error('Failed to retrieve deep research report');
       }
     } catch (err: any) {
-      clearInterval(interval);
-      setErrorMsg(err.message || 'An error occurred while executing deep research');
+      let msg = String(err?.message || 'An error occurred while executing deep research');
+      for (let i = 0; i < 3; i++) {
+        const trimmed = msg.trim();
+        if (!trimmed.startsWith('{')) break;
+        try {
+          const parsed = JSON.parse(trimmed);
+          const inner = parsed?.error?.message || parsed?.message;
+          if (typeof inner === 'string' && inner.trim()) msg = inner;
+          else break;
+        } catch {
+          break;
+        }
+      }
+      if (/503|unavailable|high demand/i.test(msg)) {
+        msg = 'The AI model is temporarily experiencing high demand (503). Please try again in a few seconds.';
+      }
+      setErrorMsg(msg);
     } finally {
       setIsLoading(false);
-      setActiveStepIndex(3);
     }
   };
 
@@ -443,7 +516,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                 <h2 className="text-sm font-bold tracking-wide">Live Web Autonomous Investigation</h2>
               </div>
               <span className="text-[11px] font-mono text-amber-400 font-semibold px-2 py-0.5 rounded-full bg-amber-500/10">
-                Step {activeStepIndex + 1} of 4
+                {Math.min(activeStepIndex, researchSteps.length)} of {researchSteps.length} completed
               </span>
             </div>
 

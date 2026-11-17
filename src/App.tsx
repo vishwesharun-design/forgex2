@@ -14,6 +14,7 @@ import {
 import { authService } from './services/authService';
 import { chatService } from './services/chatService';
 import { imageService } from './services/imageService';
+import { libraryService } from './services/libraryService';
 import { videoService } from './services/videoService';
 import { musicService } from './services/musicService';
 
@@ -563,6 +564,7 @@ export default function App() {
                   onUpdateImages={setImages}
                   videos={videos}
                   chatSessions={chatSessions}
+                  onUpdateChatSessions={setChatSessions}
                   onSelectChat={handleSelectChat}
                   onNewChat={handleNewChat}
                   onNavigateToImage={() => setActiveWorkspace('image')}
@@ -844,8 +846,15 @@ export default function App() {
         theme={settings.theme}
         onDelete={(id, type) => {
           if (type === 'image') {
-            const updated = imageService.deleteImage(id);
+            const imgUrl =
+              viewingMedia?.type === 'image'
+                ? (viewingMedia.item as GeneratedImage).imageUrl
+                : undefined;
+            const updated = imageService.deleteImageByIdOrUrl(id, imgUrl);
             setImages(updated);
+            libraryService.deleteReferenceByIdOrUrl(id, imgUrl);
+            const updatedSessions = chatService.removeImageFromSessions(imgUrl, id);
+            setChatSessions(updatedSessions);
           } else {
             const updated = videoService.deleteVideo(id);
             setVideos(updated);

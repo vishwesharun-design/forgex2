@@ -47,9 +47,18 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [draftSteps, setDraftSteps] = useState<string[]>(dr.steps);
   const [countdown, setCountdown] = useState<number>(60);
-  const [runningStepIdx, setRunningStepIdx] = useState<number>(0);
   const [runningElapsed, setRunningElapsed] = useState<number>(0);
   const autoStartedRef = useRef<boolean>(false);
+  const onStartRef = useRef(onStart);
+  const draftStepsRef = useRef(draftSteps);
+
+  useEffect(() => {
+    onStartRef.current = onStart;
+  }, [onStart]);
+
+  useEffect(() => {
+    draftStepsRef.current = draftSteps;
+  }, [draftSteps]);
 
   // Sync draft steps when async /api/deep-research/plan replaces initial placeholder steps
   useEffect(() => {
@@ -67,7 +76,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
           clearInterval(timer);
           if (!autoStartedRef.current) {
             autoStartedRef.current = true;
-            setTimeout(() => onStart(message.id, draftSteps), 0);
+            setTimeout(() => onStartRef.current(message.id, draftStepsRef.current), 0);
           }
           return 0;
         }
@@ -75,26 +84,21 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [dr.status, isEditing, message.id, draftSteps, onStart]);
+  }, [dr.status, isEditing, message.id]);
 
-  // Animated progress stepper during 'running' phase
+  // Elapsed seconds counter during 'running' phase
   useEffect(() => {
     if (dr.status !== 'running') {
-      setRunningStepIdx(0);
       setRunningElapsed(0);
       return;
     }
-    const stepTimer = setInterval(() => {
-      setRunningStepIdx((prev) => Math.min(dr.steps.length - 1, prev + 1));
-    }, 2400);
     const secTimer = setInterval(() => {
       setRunningElapsed((prev) => prev + 1);
     }, 1000);
-    return () => {
-      clearInterval(stepTimer);
-      clearInterval(secTimer);
-    };
-  }, [dr.status, dr.steps.length]);
+    return () => clearInterval(secTimer);
+  }, [dr.status]);
+
+  const completedStepsCount = Math.max(0, Math.min(dr.steps.length, dr.completedStepsCount ?? 0));
 
   const handleSaveEdit = () => {
     const cleaned = draftSteps.map((s) => s.trim()).filter(Boolean);
@@ -291,15 +295,26 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
   }
 
   if (dr.status === 'running') {
+    const totalCount = Math.max(1, dr.steps.length);
+    const pct = Math.max(12, Math.min(100, Math.round((completedStepsCount / totalCount) * 100)));
     return (
       <div className="w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] py-2 flex flex-col gap-3 animate-in fade-in duration-200">
-        {/* Subtle progress pill matching Screenshot 3 */}
-        <div
-          className={`h-2.5 w-32 rounded-full overflow-hidden ${
-            isDark ? 'bg-neutral-800' : 'bg-neutral-200/80'
-          }`}
-        >
-          <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-sky-400 via-indigo-400 to-sky-400 animate-pulse" />
+        {/* Real Progress Bar */}
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`h-2 w-40 rounded-full overflow-hidden ${
+              isDark ? 'bg-neutral-800' : 'bg-neutral-200/80'
+            }`}
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-500 transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-medium text-neutral-500 tabular-nums">
+            {completedStepsCount}/{dr.steps.length} steps
+            {dr.sourcesFound && dr.sourcesFound > 0 ? ` · ${dr.sourcesFound} sources` : ''}
+          </span>
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -310,7 +325,9 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
                 isDark ? 'animate-text-shimmer-dark' : 'animate-text-shimmer-light'
               }`}
             >
-              Researching &ldquo;{dr.query}&rdquo;
+              {completedStepsCount >= dr.steps.length
+                ? `Finalizing research for “${dr.query}”`
+                : `Researching “${dr.query}”`}
             </span>
             <span className="text-xs text-neutral-400 tabular-nums shrink-0">
               {runningElapsed}s
@@ -329,26 +346,26 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
           </button>
         </div>
 
-        <div className="space-y-1.5 pl-1">
+        <div className="space-y-2 pl-1">
           {dr.steps.map((step, idx) => {
-            const done = idx < runningStepIdx;
-            const active = idx === runningStepIdx;
+            const done = idx < completedStepsCount;
+            const active = idx === completedStepsCount;
             return (
               <div
                 key={idx}
-                className={`flex items-start gap-2 text-xs transition-opacity duration-300 ${
+                className={`flex items-start gap-2.5 text-xs transition-all duration-300 ${
                   done
-                    ? 'text-neutral-500 dark:text-neutral-400 opacity-85'
+                    ? 'text-neutral-700 dark:text-neutral-200'
                     : active
-                    ? 'text-neutral-800 dark:text-neutral-100 font-medium'
-                    : 'text-neutral-400 dark:text-neutral-600 opacity-60'
+                    ? 'text-neutral-900 dark:text-white font-medium'
+                    : 'text-neutral-400 dark:text-neutral-600 opacity-65'
                 }`}
               >
                 {done ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5 transition-transform duration-200 scale-100" />
                 ) : (
                   <CircleDashed
-                    className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                    className={`w-4 h-4 shrink-0 mt-0.5 ${
                       active ? 'text-sky-500 animate-spin-slow' : ''
                     }`}
                   />

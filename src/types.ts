@@ -233,6 +233,8 @@ export interface ChatMessage {
     query: string;
     status: 'planning' | 'running' | 'completed' | 'cancelled';
     steps: string[];
+    completedStepsCount?: number;
+    sourcesFound?: number;
     planDurationSec?: number;
     researchDurationSec?: number;
   };

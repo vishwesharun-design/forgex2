@@ -151,6 +151,125 @@ export const chatService = {
     return session;
   },
 
+  removeImageFromSessions(imageUrl?: string, imageId?: string): ChatSession[] {
+    const sessions = this.getSessions();
+    let anyChanged = false;
+    const modifiedSessions: ChatSession[] = [];
+
+    const updatedSessions = sessions.map((session) => {
+      let sessionChanged = false;
+      const updatedMessages = (session.messages || []).map((msg) => {
+        let msgChanged = false;
+        let nextGenerated = msg.generatedImages;
+        let nextAttachments = msg.attachments;
+
+        if (Array.isArray(msg.generatedImages) && msg.generatedImages.length > 0) {
+          const filtered = msg.generatedImages.filter((g) => {
+            const matchId = Boolean(imageId && g.id === imageId);
+            const matchUrl = Boolean(imageUrl && g.imageUrl === imageUrl);
+            return !matchId && !matchUrl;
+          });
+          if (filtered.length !== msg.generatedImages.length) {
+            nextGenerated = filtered;
+            msgChanged = true;
+          }
+        }
+
+        if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+          const filteredAtts = msg.attachments.filter((att, idx) => {
+            if (att.type !== 'image') return true;
+            const syntheticAttId = `chat_att_${msg.id}_${idx}`;
+            const matchId = Boolean(imageId && syntheticAttId === imageId);
+            const matchUrl = Boolean(imageUrl && att.url === imageUrl);
+            return !matchId && !matchUrl;
+          });
+          if (filteredAtts.length !== msg.attachments.length) {
+            nextAttachments = filteredAtts;
+            msgChanged = true;
+          }
+        }
+
+        if (!msgChanged) return msg;
+        sessionChanged = true;
+        return {
+          ...msg,
+          generatedImages: nextGenerated,
+          attachments: nextAttachments,
+        };
+      });
+
+      if (!sessionChanged) return session;
+      anyChanged = true;
+      const updatedSession: ChatSession = {
+        ...session,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
+      };
+      modifiedSessions.push(updatedSession);
+      return updatedSession;
+    });
+
+    if (anyChanged) {
+      this.saveSessions(updatedSessions);
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        modifiedSessions.forEach((s) => {
+          firestoreStorageService.saveUserChat(userId, s).catch(() => {});
+        });
+      }
+    }
+
+    return updatedSessions;
+  },
+
+  toggleImageFavoriteInSessions(imageUrl?: string, imageId?: string): ChatSession[] {
+    const sessions = this.getSessions();
+    let anyChanged = false;
+    const modifiedSessions: ChatSession[] = [];
+
+    const updatedSessions = sessions.map((session) => {
+      let sessionChanged = false;
+      const updatedMessages = (session.messages || []).map((msg) => {
+        if (!Array.isArray(msg.generatedImages) || msg.generatedImages.length === 0) return msg;
+        let msgChanged = false;
+        const nextGenerated = msg.generatedImages.map((g) => {
+          const matchId = Boolean(imageId && g.id === imageId);
+          const matchUrl = Boolean(imageUrl && g.imageUrl === imageUrl);
+          if (matchId || matchUrl) {
+            msgChanged = true;
+            return { ...g, isFavorite: !g.isFavorite };
+          }
+          return g;
+        });
+        if (!msgChanged) return msg;
+        sessionChanged = true;
+        return { ...msg, generatedImages: nextGenerated };
+      });
+
+      if (!sessionChanged) return session;
+      anyChanged = true;
+      const updatedSession: ChatSession = {
+        ...session,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
+      };
+      modifiedSessions.push(updatedSession);
+      return updatedSession;
+    });
+
+    if (anyChanged) {
+      this.saveSessions(updatedSessions);
+      const userId = authService.getCurrentUserId();
+      if (userId && userId !== 'guest') {
+        modifiedSessions.forEach((s) => {
+          firestoreStorageService.saveUserChat(userId, s).catch(() => {});
+        });
+      }
+    }
+
+    return updatedSessions;
+  },
+
   appendMessagesToSession(
     sessionId: string,
     messagesToAppend: ChatMessage[],
@@ -342,6 +461,7 @@ export const chatService = {
           'Content-Type': 'application/json',
           ...(geminiApiKey ? { 'x-api-key': geminiApiKey } : {}),
         },
+        signal: AbortSignal.timeout(60000),
         body: JSON.stringify({
           message: userContent,
           history,
@@ -359,45 +479,54 @@ export const chatService = {
         let accumulated = '';
         let buffer = '';
 
+        const processLine = (rawLine: string) => {
+          const trimmed = rawLine.trim();
+          if (!trimmed.startsWith('data:')) return;
+          const payloadStr = trimmed.slice(5).trim();
+          if (!payloadStr) return;
+          try {
+            const data = JSON.parse(payloadStr);
+            if (data.searching && onSearchStatus) {
+              onSearchStatus(true, data.searchQuery);
+            }
+            if (data.groundingSources && Array.isArray(data.groundingSources)) {
+              responseGroundingSources = data.groundingSources;
+            }
+            if (data.searchedWeb !== undefined) {
+              responseSearchedWeb = Boolean(data.searchedWeb);
+            }
+            if (Array.isArray(data.searchQueries)) {
+              responseSearchQueries = data.searchQueries;
+            }
+            if (data.model) {
+              modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+            }
+            if (data.text) {
+              if (onSearchStatus) onSearchStatus(false);
+              accumulated += data.text;
+              if (onStreamChunk) {
+                onStreamChunk(accumulated, modelUsedName, responseGroundingSources);
+              }
+            }
+          } catch (_parseErr) {
+            // Ignore partial chunk parsing
+          }
+        };
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
-
           for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data:')) continue;
-            const payloadStr = trimmed.slice(5).trim();
-            if (!payloadStr) continue;
-            try {
-              const data = JSON.parse(payloadStr);
-              if (data.searching && onSearchStatus) {
-                onSearchStatus(true, data.searchQuery);
-              }
-              if (data.groundingSources && Array.isArray(data.groundingSources)) {
-                responseGroundingSources = data.groundingSources;
-              }
-              if (data.searchedWeb !== undefined) {
-                responseSearchedWeb = Boolean(data.searchedWeb);
-              }
-              if (Array.isArray(data.searchQueries)) {
-                responseSearchQueries = data.searchQueries;
-              }
-              if (data.model) {
-                modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
-              }
-              if (data.text) {
-                if (onSearchStatus) onSearchStatus(false);
-                accumulated += data.text;
-                if (onStreamChunk) {
-                  onStreamChunk(accumulated, modelUsedName, responseGroundingSources);
-                }
-              }
-            } catch (_parseErr) {
-              // Ignore partial chunk parsing
-            }
+            processLine(line);
+          }
+        }
+
+        if (buffer.trim()) {
+          for (const line of buffer.split('\n')) {
+            processLine(line);
           }
         }
 
@@ -421,6 +550,7 @@ export const chatService = {
             'Content-Type': 'application/json',
             ...(geminiApiKey ? { 'x-api-key': geminiApiKey } : {}),
           },
+          signal: AbortSignal.timeout(45000),
           body: JSON.stringify({
             message: userContent,
             history,

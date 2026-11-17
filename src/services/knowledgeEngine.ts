@@ -4,7 +4,7 @@
  * language-specific code generation, and factual answers.
  */
 
-import { retrieveTrainingContext } from './trainingCorpus';
+import { retrieveTrainingContext } from './trainingCorpus.ts';
 
 export interface KnowledgeResponse {
   reply: string;
@@ -998,22 +998,72 @@ Would you like to explore Python fundamentals, specific libraries (like Pandas o
   }
 
   // 5. Artificial Intelligence, Neural Networks & Machine Learning
-  if (/(?:what\s+is|tell\s+me\s+about|explain)\s+(?:artificial\s+intelligence|machine\s+learning|neural\s+networks?|deep\s+learning|llm|large\s+language\s+model|transformers?)/i.test(clean)) {
-    return `### Artificial Intelligence & Deep Learning Explained
+  if (
+    /\b(?:ai|artificial\s+intelligence|generative\s+ai|genai|machine\s+learning|neural\s+networks?|deep\s+learning|llms?|large\s+language\s+models?|transformers?|agi)\b/i.test(clean) &&
+    /(?:what\s+(?:is|are)|tell\s+me\s+about|explain|define|overview\s+of|how\s+does|meaning\s+of|^ai$|^artificial\s+intelligence$)/i.test(clean)
+  ) {
+    return `### What is Artificial Intelligence (AI)?
 
-**Artificial Intelligence (AI)** is the discipline of creating computational systems that perform tasks requiring human-like intelligence: perception, reasoning, decision-making, and natural language understanding.
+**Artificial Intelligence (AI)** is the field of computer science dedicated to creating machines and software capable of performing tasks that normally require human intelligence—such as learning from experience, understanding language, recognizing images, reasoning, and making decisions.
 
 ---
 
-### Core Layers:
-1. **Machine Learning (ML)**: Algorithms learn patterns directly from empirical data rather than following hardcoded if-else rules.
-2. **Deep Learning (DL)**: Uses multi-layered **Artificial Neural Networks** inspired by biological brains. Layers of interconnected artificial neurons apply linear transformations ($W \cdot x + b$) followed by non-linear activation functions (ReLU, GELU).
-3. **The Transformer Architecture (2017)**: The foundation of all modern Large Language Models (LLMs). It replaces recurrent loops with **Self-Attention**:
+### Core Layers & Technologies:
+1. **Machine Learning (ML)**: Instead of following rigid, manually coded \`if/else\` rules, ML algorithms learn statistical patterns directly from data and improve with experience.
+2. **Deep Learning & Neural Networks**: Inspired by biological brains, deep neural networks stack many layers of interconnected nodes applying linear weights ($W \\cdot x + b$) and non-linear activations (like ReLU or GELU) to master complex vision, audio, and language tasks.
+3. **Generative AI & Large Language Models (LLMs)**: Built on the **Transformer architecture** (2017) using **Self-Attention**:
    $$\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V$$
-   This enables models to calculate the contextual relationship between every word in a document simultaneously in parallel.
-4. **Training Process**:
-   - **Pre-training**: Predicting the next token across massive text datasets to build world knowledge.
-   - **Fine-Tuning & RLHF**: Alignment with human values, safety criteria, and specific domain instructions.`;
+   LLMs learn world knowledge through large-scale pre-training and align with human instructions via fine-tuning and RLHF/DPO.
+4. **Narrow AI vs. AGI**:
+   - **Narrow AI**: Specialized systems powering search engines, voice assistants, medical imaging, code generation, and autonomous vehicles today.
+   - **AGI (Artificial General Intelligence)**: A theoretical future stage where AI matches broad human adaptability across virtually any cognitive domain.
+
+---
+
+### Everyday Applications:
+* **Software & Productivity**: Writing and debugging code, summarizing documents, and automating workflows.
+* **Science & Medicine**: Protein structure prediction, drug discovery, and early disease detection in radiology.
+* **Vision & Robotics**: Autonomous navigation, speech recognition, and real-time translation.`;
+  }
+
+  // 5.1 Black Holes, Solar System & Astronomy
+  if (/\b(?:black\s+hole|solar\s+system|milky\s+way|big\s+bang|galaxy|galaxies|exoplanets?)\b/i.test(clean)) {
+    return `### Space & Astrophysics Overview
+
+* **Black Holes**: Regions of spacetime where mass is compressed so densely that gravity prevents even light from escaping past the **event horizon** (defined by the Schwarzschild radius $r_s = \\frac{2GM}{c^2}$). Stellar black holes form from collapsing massive stars, while supermassive black holes sit at the centers of most galaxies (such as *Sagittarius A\\** in our Milky Way).
+* **Our Solar System**: Orbiting the Sun are 4 rocky inner planets (**Mercury, Venus, Earth, Mars**), 2 gas giants (**Jupiter, Saturn**), and 2 ice giants (**Uranus, Neptune**).
+* **The Big Bang**: The prevailing cosmological model showing the observable universe expanded from an ultra-hot, dense state roughly **13.8 billion years ago**, supported by cosmic microwave background radiation and galactic redshift.`;
+  }
+
+  // 5.2 Gravity & Fundamental Forces
+  if (/(?:what\s+is|explain|how\s+does)\s+gravity\b/i.test(clean)) {
+    return `### What is Gravity?
+
+**Gravity** is the fundamental attraction between objects with mass or energy. It governs everything from falling apples and planetary orbits to the large-scale structure of galaxies.
+
+1. **Newtonian Gravity**: Isaac Newton described gravity as an attractive force proportional to the product of two masses and inversely proportional to the square of their distance:
+   $$F = G \\frac{m_1 m_2}{r^2}$$
+2. **Einstein's General Relativity**: Albert Einstein showed that gravity is actually the **curvature of four-dimensional spacetime** caused by mass and energy—planets orbit the Sun because they follow the straightest paths (geodesics) through curved spacetime.`;
+  }
+
+  // 5.3 Blockchain & Cryptocurrency
+  if (/\b(?:blockchain|cryptocurrency|bitcoin|smart\s+contracts?)\b/i.test(clean)) {
+    return `### What is Blockchain?
+
+A **blockchain** is a decentralized, append-only digital ledger replicated across a peer-to-peer network of computers (nodes).
+
+1. **Cryptographic Blocks**: Transactions are bundled into blocks, and each block contains a cryptographic hash of the previous block—making past records tamper-evident.
+2. **Distributed Consensus**: Instead of a central bank or single server, network participants validate new blocks using consensus protocols such as **Proof of Work (PoW)** or **Proof of Stake (PoS)**.
+3. **Smart Contracts**: Self-executing code stored on platforms like Ethereum that automatically enforces agreements when predefined conditions are met.`;
+  }
+
+  // 5.4 Cloud Computing & Operating Systems
+  if (/(?:what\s+is|explain)\s+(?:cloud\s+computing|an?\s+operating\s+system|cpu|gpu)\b/i.test(clean)) {
+    return `### Computing Architecture & Cloud Fundamentals
+
+* **Operating System (OS)**: System software (like Linux, Windows, or macOS) that manages hardware resources, memory allocation, file systems, device drivers, and process scheduling between applications.
+* **CPU vs. GPU**: A **CPU** has a few high-speed cores optimized for sequential logic and low latency; a **GPU** contains thousands of parallel cores ideal for graphics rendering and matrix math in AI.
+* **Cloud Computing**: On-demand delivery of compute, storage, and networking over the internet across **IaaS** (virtual machines/storage), **PaaS** (managed app runtimes), and **SaaS** (ready-to-use web software).`;
   }
 
   // 6. Quantum Computing & Quantum Physics
@@ -1339,22 +1389,11 @@ ForgeX is architected with enterprise-grade privacy and per-user data isolation:
     return `${corpusMatch.contextText}\n\n---\n*Let me know if you want step-by-step derivations, runnable code examples, or deeper analysis on **${corpusMatch.matchedTitles[0]}**.*`;
   }
 
-  // 16. Intelligent Conversational & Direct Answer Engine
+  // 16. Transparent fallback notice if live AI service could not be reached
   const subject = clean.replace(/^(how does|what is|explain|why is|why does|tell me about|can you)\s*/i, '').replace(/\?+$/, '').trim();
-  const title = subject ? subject.charAt(0).toUpperCase() + subject.slice(1) : 'This Topic';
+  const displayTopic = subject || clean || 'your request';
 
-  return `### ${title}
+  return `I could not reach the live AI reasoning engine to answer **"${displayTopic}"** right now due to a temporary network or API interruption.
 
-Here is a clear, direct breakdown of **${title}**:
-
-1. **Core Concept**:
-   ${clean.endsWith('?') ? `Regarding your question, *"${clean}"*:` : `Regarding **${clean}**:`}
-   This involves understanding key principles, practical trade-offs, and effective execution methods.
-
-2. **Key Considerations**:
-   * **Purpose & Objectives**: Focus on the specific outcome you want to achieve.
-   * **Best Practices**: Start with standard conventions and verified methods before optimizing further.
-   * **Next Steps**: Let me know if you would like step-by-step guidance, code, examples, or deeper technical analysis on this.
-
-How would you like to proceed or explore further?`;
+Please try sending your message again (or switch to **Forge 1** / **Forge 1.5** in the model selector for instant response, or verify your Gemini API key in **Settings**).`;
 }
