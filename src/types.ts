@@ -60,6 +60,7 @@ export const FORGEX_MODELS: ForgeXModel[] = [
 
 export type ActiveWorkspace = 
   | 'chat' 
+  | 'library'
   | 'image' 
   | 'video' 
   | 'music' 
@@ -76,6 +77,22 @@ export type ActiveWorkspace =
   | 'data_analysis'
   | 'vault'
   | (string & {});
+
+export interface LibraryReferenceItem {
+  id: string;
+  title: string;
+  imageUrl: string;
+  createdAt: number;
+  isFavorite?: boolean;
+  folderId?: string;
+  source?: 'reference' | 'generated' | 'chat';
+}
+
+export interface LibraryFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+}
 
 export interface VaultDocument {
   id: string;
@@ -211,6 +228,14 @@ export interface ChatMessage {
   }[];
   generatedImages?: GeneratedImage[];
   isGeneratingImage?: boolean;
+  toolBadge?: 'deep_research' | 'image' | 'search' | 'thinking';
+  deepResearch?: {
+    query: string;
+    status: 'planning' | 'running' | 'completed' | 'cancelled';
+    steps: string[];
+    planDurationSec?: number;
+    researchDurationSec?: number;
+  };
 }
 
 export interface ChatSession {
@@ -225,6 +250,7 @@ export interface ChatSession {
 export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '4:3';
 export type ImageStyle = 
   | 'None'
+  | 'Claymation'
   | 'Realistic' 
   | 'Cinematic' 
   | 'Anime' 

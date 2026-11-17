@@ -6,7 +6,6 @@ import {
   Check,
   CheckCircle2,
   Trash2,
-  Sparkles,
   MessageSquare,
   Image as ImageIcon,
   Music,
@@ -74,7 +73,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Cpu,
   Flame,
   Rocket,
-  Sparkles,
+  Sparkles: Cpu,
   Wand2,
   Building2,
 };
@@ -116,7 +115,7 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
   const [isEditingStudioName, setIsEditingStudioName] = useState(false);
   const [regStudioName, setRegStudioName] = useState('');
   const [regStudioBio, setRegStudioBio] = useState('');
-  const [regStudioIcon, setRegStudioIcon] = useState('Sparkles');
+  const [regStudioIcon, setRegStudioIcon] = useState('Cpu');
   const [regStudioColor, setRegStudioColor] = useState('text-amber-400');
   const [regError, setRegError] = useState('');
   const [isCheckingName, setIsCheckingName] = useState(false);
@@ -156,7 +155,7 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
         if (p?.studioName) {
           setRegStudioName(p.studioName);
           setRegStudioBio(p.bio || '');
-          setRegStudioIcon(p.iconName || 'Sparkles');
+          setRegStudioIcon(p.iconName || 'Cpu');
           setRegStudioColor(p.accentColor || 'text-amber-400');
         } else {
           const defaultName = userName ? `${userName}'s Studio` : '';
@@ -903,8 +902,8 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                       <div>
                         <label className="block text-xs font-semibold mb-1.5">Studio Brand Icon</label>
                         <div className="flex flex-wrap gap-2">
-                          {['Sparkles', 'Building2', 'Crown', 'Bot', 'Rocket', 'Flame', 'Cpu', 'Code2'].map((iconKey) => {
-                            const IconComp = ICON_MAP[iconKey] || Sparkles;
+                          {['Cpu', 'Building2', 'Crown', 'Bot', 'Rocket', 'Flame', 'Code2'].map((iconKey) => {
+                            const IconComp = ICON_MAP[iconKey] || Cpu;
                             const isSelected = regStudioIcon === iconKey;
                             return (
                               <button
@@ -954,7 +953,7 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                       <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
                         isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
                       }`}>
-                        {React.createElement(ICON_MAP[regStudioIcon] || Sparkles, { className: `w-5 h-5 ${regStudioColor}` })}
+                        {React.createElement(ICON_MAP[regStudioIcon] || Cpu, { className: `w-5 h-5 ${regStudioColor}` })}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-sm truncate">{regStudioName || 'Your Studio Name'}</div>
@@ -1016,7 +1015,7 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                   }`}>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-700/80 flex items-center justify-center shrink-0">
-                        {React.createElement(ICON_MAP[studioProfile.iconName || 'Sparkles'] || Sparkles, {
+                        {React.createElement(ICON_MAP[studioProfile.iconName || 'Cpu'] || Cpu, {
                           className: `w-5 h-5 ${studioProfile.accentColor || 'text-amber-400'}`
                         })}
                       </div>
@@ -1168,7 +1167,7 @@ export const StudioStoreModal: React.FC<StudioStoreModalProps> = ({
                     <div>
                       <label className="block text-xs font-semibold mb-1">Select Icon</label>
                       <div className="flex flex-wrap gap-2">
-                        {['Bot', 'Crown', 'Gamepad2', 'Sparkles', 'Cpu', 'Flame', 'Rocket', 'Code2', 'PenTool'].map((iconKey) => {
+                        {['Bot', 'Crown', 'Gamepad2', 'Cpu', 'Flame', 'Rocket', 'Code2', 'PenTool'].map((iconKey) => {
                           const IconComp = ICON_MAP[iconKey] || Bot;
                           const isSelected = newIconName === iconKey;
                           return (

@@ -27,7 +27,7 @@ export const OFFICIAL_STUDIOS: StudioCatalogueItem[] = [
     id: 'chat',
     title: 'ForgeX Chat',
     category: 'intelligence',
-    accentColor: 'text-amber-400',
+    accentColor: 'text-black dark:text-white',
     badge: 'Assistant',
     description: 'Multi-turn conversational reasoning with markdown & code',
     author: 'ForgeX',

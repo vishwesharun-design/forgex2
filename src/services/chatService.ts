@@ -69,7 +69,26 @@ export const chatService = {
         });
       }
     } catch (e) {
-      console.error('Failed to save chat sessions', e);
+      // If browser localStorage quota is full due to image data URLs, strip heavy data URLs from older sessions and retry
+      try {
+        const key = getChatStorageKey();
+        const compacted = sessions.map((s, sIdx) => ({
+          ...s,
+          messages: s.messages.map((m, mIdx, arr) => {
+            const isRecentTurn = sIdx < 2 && mIdx >= arr.length - 4;
+            if (isRecentTurn || !m.attachments?.length) return m;
+            return {
+              ...m,
+              attachments: m.attachments.map((att) =>
+                att.url && att.url.startsWith('data:') ? { ...att, url: undefined } : att
+              ),
+            };
+          }),
+        }));
+        localStorage.setItem(key, JSON.stringify(compacted));
+      } catch (retryErr) {
+        console.error('Failed to save chat sessions', e, retryErr);
+      }
     }
   },
 
@@ -132,6 +151,58 @@ export const chatService = {
     return session;
   },
 
+  appendMessagesToSession(
+    sessionId: string,
+    messagesToAppend: ChatMessage[],
+    modelId: ForgeXModelId = 'forge-2-ultra',
+    titleFallback = 'Deep research'
+  ): ChatSession {
+    let sessions = this.getSessions();
+    let session = sessions.find((s) => s.id === sessionId);
+    if (!session) {
+      session = {
+        id: sessionId && sessionId !== 'new' ? sessionId : 'chat_' + Date.now(),
+        title: titleFallback.slice(0, 28) + (titleFallback.length > 28 ? '...' : ''),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        modelId,
+        messages: [],
+      };
+      sessions = [session, ...sessions.filter((s) => s.id !== session!.id)];
+    }
+
+    session.messages.push(...messagesToAppend);
+    if (session.title === 'New Chat' || session.title === 'New project') {
+      session.title = titleFallback.slice(0, 28) + (titleFallback.length > 28 ? '...' : '');
+    }
+    session.updatedAt = Date.now();
+    session.modelId = modelId;
+    this.saveSessions(sessions);
+    return session;
+  },
+
+  updateMessageInSession(
+    sessionId: string,
+    messageId: string,
+    updater: (msg: ChatMessage) => ChatMessage
+  ): ChatSession | null {
+    const sessions = this.getSessions();
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return null;
+    let found = false;
+    session.messages = session.messages.map((m) => {
+      if (m.id === messageId) {
+        found = true;
+        return updater(m);
+      }
+      return m;
+    });
+    if (!found) return null;
+    session.updatedAt = Date.now();
+    this.saveSessions(sessions);
+    return session;
+  },
+
   async sendMessage(
     sessionId: string,
     userContent: string,
@@ -140,14 +211,16 @@ export const chatService = {
     onStreamChunk?: (streamedText: string, modelName?: string, sources?: any[]) => void,
     searchMode: 'auto' | 'on' | 'off' = 'auto',
     onSearchStatus?: (searching: boolean, searchQuery?: string) => void,
-    onImageProgress?: (progress: number) => void
+    onImageProgress?: (progress: number) => void,
+    toolBadge?: ChatMessage['toolBadge']
   ): Promise<{ updatedSession: ChatSession; assistantMessage: ChatMessage }> {
     let sessions = this.getSessions();
+    const trimmedTitleSource = userContent.trim() || (attachments?.some((a) => a.type === 'image') ? 'Image Analysis' : 'New Chat');
     let session = sessions.find((s) => s.id === sessionId);
     if (!session) {
       session = {
         id: 'chat_' + Date.now(),
-        title: userContent.slice(0, 28) + (userContent.length > 28 ? '...' : '') || 'New Chat',
+        title: trimmedTitleSource.slice(0, 28) + (trimmedTitleSource.length > 28 ? '...' : ''),
         createdAt: Date.now(),
         updatedAt: Date.now(),
         modelId,
@@ -162,11 +235,12 @@ export const chatService = {
       content: userContent,
       timestamp: Date.now(),
       attachments,
+      ...(toolBadge ? { toolBadge } : {}),
     };
 
     session.messages.push(userMessage);
     if (session.title === 'New Chat' || session.title === 'New project') {
-      session.title = userContent.slice(0, 28) + (userContent.length > 28 ? '...' : '');
+      session.title = trimmedTitleSource.slice(0, 28) + (trimmedTitleSource.length > 28 ? '...' : '');
     }
     session.updatedAt = Date.now();
     session.modelId = modelId;
@@ -177,17 +251,19 @@ export const chatService = {
     // Image Generation in Chat via Black Forest Labs FLUX
     // When generating image: do NOT output conversational text!
     // After created: ONLY show the image!
-    const imgIntent = detectImageGenerationIntent(userContent);
+    const attachedImageUrl = attachments?.find((a) => a.type === 'image' && a.url)?.url;
+    const imgIntent = detectImageGenerationIntent(userContent, Boolean(attachedImageUrl));
     if (imgIntent.isImage && imgIntent.prompt) {
       let generatedImagesForTurn: GeneratedImage[] = [];
       try {
         const generated = await imageService.generateImages(
           {
             prompt: imgIntent.prompt,
-            aspectRatio: imgIntent.style === 'Handwritten Notes' ? '16:9' : '16:9',
+            aspectRatio: imgIntent.style === 'Handwritten Notes' ? '16:9' : imgIntent.style === 'Claymation' ? '4:3' : '16:9',
             count: 1,
             style: (imgIntent.style as ImageStyle) || 'None',
             modelId,
+            referenceImage: attachedImageUrl,
           },
           onImageProgress
         );
@@ -243,10 +319,19 @@ export const chatService = {
       responseGroundingSources = [...vaultSources];
     }
 
-    const history = session.messages.slice(0, -1).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const priorMessages = session.messages.slice(0, -1);
+    const history = priorMessages.map((m, idx) => {
+      // Keep image attachments from the most recent 4 history turns so follow-up image questions ("how many people?", "what color shirt?") work seamlessly
+      const keepAttachments = idx >= Math.max(0, priorMessages.length - 4);
+      const imageAttachments = keepAttachments
+        ? m.attachments?.filter((att) => att.type === 'image' && att.url)
+        : undefined;
+      return {
+        role: m.role,
+        content: m.content,
+        ...(imageAttachments && imageAttachments.length > 0 ? { attachments: imageAttachments } : {}),
+      };
+    });
 
     // 1. Try real-time streaming first for instant token output
     let streamedSuccessfully = false;

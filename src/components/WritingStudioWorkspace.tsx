@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   PenTool,
-  Sparkles,
+  Cpu,
   FileText,
   Copy,
   Check,
@@ -521,7 +521,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               disabled={isProcessing}
               className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Cpu className="w-3.5 h-3.5" />
               <span>{isProcessing ? 'Generating Prose...' : 'Generate Writing'}</span>
             </button>
           </div>
@@ -622,7 +622,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               </div>
 
               {[
-                { id: 'improve', label: 'Improve Flow', icon: Sparkles },
+                { id: 'improve', label: 'Improve Flow', icon: Cpu },
                 { id: 'rewrite', label: 'Rewrite', icon: RefreshCw },
                 { id: 'shorten', label: 'Shorten', icon: Scissors },
                 { id: 'expand', label: 'Expand', icon: Maximize2 },

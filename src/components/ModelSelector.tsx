@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, ChevronDown } from 'lucide-react';
+import { Cpu, ChevronDown } from 'lucide-react';
 import { ForgeXModel, ForgeXModelId, FORGEX_MODELS, ForgeXTheme } from '../types';
 
 interface ModelSelectorProps {
@@ -136,7 +136,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             >
               Models
             </span>
-            <Sparkles className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`} />
+            <Cpu className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`} />
           </div>
 
           <div className="py-1 space-y-1">

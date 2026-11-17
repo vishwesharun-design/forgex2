@@ -3,7 +3,7 @@ import {
   BarChart3,
   Upload,
   FileSpreadsheet,
-  Sparkles,
+  Cpu,
   Download,
   Search,
   Filter,
@@ -452,7 +452,7 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
                     : 'text-neutral-600 hover:text-black'
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Cpu className="w-3.5 h-3.5" />
                 <span>Executive Insights</span>
               </button>
 
@@ -913,7 +913,7 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
                       onClick={() => activeDataset && runAnalysis(activeDataset, customQuery)}
                       className="px-4 py-2 rounded-xl bg-amber-500 text-black text-xs font-bold hover:bg-amber-400 transition-colors shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center gap-1.5"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Cpu className="w-3.5 h-3.5" />
                       <span>{isAnalyzing ? 'Evaluating Query...' : 'Run Query'}</span>
                     </button>
                   </div>

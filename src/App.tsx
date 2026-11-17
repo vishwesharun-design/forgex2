@@ -41,6 +41,7 @@ import { PresentationWorkspace } from './components/PresentationWorkspace';
 import { CanvasWorkspace } from './components/CanvasWorkspace';
 import { ProjectWorkspace } from './components/ProjectWorkspace';
 import { VaultWorkspace } from './components/VaultWorkspace';
+import { LibraryWorkspace } from './components/LibraryWorkspace';
 import { VoiceModeModal } from './components/VoiceModeModal';
 import { voiceController } from './services/voiceService';
 
@@ -495,7 +496,7 @@ export default function App() {
 
             {/* Workspace Core Views */}
             <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden">
-              {activeWorkspace !== 'chat' && !user ? (
+              {activeWorkspace !== 'chat' && activeWorkspace !== 'library' && !user ? (
                 <div className={`flex-1 flex flex-col items-center justify-center p-6 text-center ${
                   isDark ? 'bg-neutral-950 text-white' : 'bg-neutral-50 text-neutral-900'
                 }`}>
@@ -534,6 +535,7 @@ export default function App() {
                   onDeleteSession={handleDeleteChat}
                   onNewChat={handleNewChat}
                   selectedModelId={selectedModelId}
+                  onSelectModel={setSelectedModelId}
                   theme={settings.theme}
                   onNavigateToImage={() => setActiveWorkspace('image')}
                   onNavigateToMusic={() => setActiveWorkspace('music')}
@@ -543,10 +545,29 @@ export default function App() {
                     }
                     setActiveWorkspace('code');
                   }}
+                  onNavigateToLibrary={() => setActiveWorkspace('library')}
+                  onNavigateToProjects={() => setActiveWorkspace('projects')}
+                  onNavigateToResearch={() => setActiveWorkspace('research')}
+                  onOpenStudioStore={() => setIsStudioStoreOpen(true)}
                   onOpenVoiceMode={() => {
                     voiceController.unlockAudio();
                     setIsVoiceModeOpen(true);
                   }}
+                />
+              )}
+
+              {activeWorkspace === 'library' && (
+                <LibraryWorkspace
+                  theme={settings.theme}
+                  images={images}
+                  onUpdateImages={setImages}
+                  videos={videos}
+                  chatSessions={chatSessions}
+                  onSelectChat={handleSelectChat}
+                  onNewChat={handleNewChat}
+                  onNavigateToImage={() => setActiveWorkspace('image')}
+                  onViewFullscreen={(type, item) => setViewingMedia({ type, item })}
+                  userId={user?.id}
                 />
               )}
 

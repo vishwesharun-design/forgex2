@@ -4,7 +4,7 @@ import {
   Globe,
   Zap,
   ExternalLink,
-  Sparkles,
+  Cpu,
   ArrowRight,
   Copy,
   Check,
@@ -413,7 +413,7 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
                     isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-amber-300 bg-amber-50 text-amber-900'
                   }`}>
                     <div className="flex items-center gap-2.5">
-                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                      <Cpu className="w-4 h-4 text-amber-500 shrink-0" />
                       <div className="text-xs">
                         <span>Did you mean: </span>
                         <button

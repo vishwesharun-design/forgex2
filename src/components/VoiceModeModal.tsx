@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Mic,
   MicOff,
-  VolumeX,
+  Volume2,
   X,
   Menu,
   Settings,
@@ -21,9 +21,12 @@ import {
   Lightbulb,
   ClipboardCheck,
   Languages,
+  Download,
 } from 'lucide-react';
-import { VoiceOption, ForgeXModelId, ForgeXTheme } from '../types';
+import { VoiceOption, ForgeXModelId, ForgeXTheme, ImageStyle } from '../types';
 import { voiceController } from '../services/voiceService';
+import { imageService } from '../services/imageService';
+import { detectImageGenerationIntent } from '../utils/imageIntent';
 
 interface VoiceModeModalProps {
   isOpen: boolean;
@@ -40,38 +43,49 @@ interface ConversationTurn {
   content: string;
   interrupted?: boolean;
   timestamp: number;
+  audioBase64?: string;
+  mimeType?: string;
+  generatedImageUrl?: string;
+  imagePrompt?: string;
 }
 
+type VoiceToolMode = 'general' | 'image' | 'ideas' | 'task' | 'translate';
+
 interface QuickPromptCard {
-  id: string;
+  id: VoiceToolMode;
   label: string;
   prompt: string;
+  placeholder: string;
   icon: React.ReactNode;
 }
 
 const QUICK_PROMPTS: QuickPromptCard[] = [
   {
-    id: 'create-image',
+    id: 'image',
     label: 'Create an image',
-    prompt: 'Help me brainstorm a creative image concept and prompt.',
+    prompt: 'A luminous floating crystal conservatory at twilight under aurora skies, vibrant ultra-detailed digital art',
+    placeholder: 'Describe an image to create...',
     icon: <ImageIcon className="w-4 h-4 text-[#5A52BA]" />,
   },
   {
-    id: 'give-ideas',
+    id: 'ideas',
     label: 'Give me ideas',
-    prompt: 'Give me three creative and exciting ideas to explore today.',
+    prompt: 'Give me three creative, practical, and exciting ideas I can explore right now. Keep them punchy.',
+    placeholder: 'Ask for ideas on any topic...',
     icon: <Lightbulb className="w-4 h-4 text-[#6A56C8]" />,
   },
   {
-    id: 'do-task',
+    id: 'task',
     label: 'Do the task',
-    prompt: 'Help me plan and organize an important task step by step.',
+    prompt: 'I need help completing a task step by step. Give me a quick action framework and ask what task we are tackling.',
+    placeholder: 'Tell me the task to break down...',
     icon: <ClipboardCheck className="w-4 h-4 text-[#5249B3]" />,
   },
   {
-    id: 'translate-text',
+    id: 'translate',
     label: 'Translate the text',
-    prompt: 'I want to translate something. Ask me what phrase and language I need.',
+    prompt: 'Translate mode ready! Ask me what phrase or sentence to translate and which language I want.',
+    placeholder: 'Say or type text + target language...',
     icon: <Languages className="w-4 h-4 text-[#5C53BE]" />,
   },
 ];
@@ -248,6 +262,9 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState<boolean>(false);
   const [waveTick, setWaveTick] = useState<number>(0);
+  const [hasBlockedPlayback, setHasBlockedPlayback] = useState<boolean>(false);
+  const [voiceToolMode, setVoiceToolMode] = useState<VoiceToolMode>('general');
+  const [latestStageImage, setLatestStageImage] = useState<{ url: string; prompt: string } | null>(null);
 
   // Expressive Eye Blinking & Gaze Micro-Drift
   const [isBlinking, setIsBlinking] = useState<boolean>(false);
@@ -255,13 +272,27 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
 
   const silenceTimerRef = useRef<any>(null);
   const vadSilenceTimerRef = useRef<any>(null);
+  const resumeTimerRef = useRef<any>(null);
   const userSpokeRef = useRef<boolean>(false);
+  const noiseFloorRef = useRef<number>(4);
   const continuousCallRef = useRef<boolean>(continuousCall);
   const isMutedRef = useRef<boolean>(isMuted);
+  const activeTabRef = useRef<'stage' | 'transcript'>(activeTab);
   const turnsRef = useRef<ConversationTurn[]>(turns);
   const isProcessingRef = useRef<boolean>(false);
+  const isOpenRef = useRef<boolean>(isOpen);
+  const voiceToolModeRef = useRef<VoiceToolMode>(voiceToolMode);
+  const startListeningLoopRef = useRef<() => Promise<void>>(async () => {});
   const transcriptScrollRef = useRef<HTMLDivElement>(null);
   const optionsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    voiceToolModeRef.current = voiceToolMode;
+  }, [voiceToolMode]);
 
   useEffect(() => {
     continuousCallRef.current = continuousCall;
@@ -270,6 +301,22 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+    // Release hardware microphone while browsing/typing in Conversation view so Windows/Bluetooth audio stays in stereo output
+    if (activeTab === 'transcript') {
+      voiceController.pauseListening();
+      voiceController.releaseMicStream();
+      setLiveAudioLevel(0);
+    } else if (isOpenRef.current && continuousCallRef.current && !isMutedRef.current && !isProcessingRef.current && !voiceController.isCurrentlySpeaking()) {
+      setTimeout(() => {
+        if (isOpenRef.current && activeTabRef.current === 'stage') {
+          startListeningLoopRef.current();
+        }
+      }, 150);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     turnsRef.current = turns;
@@ -383,13 +430,13 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen]);
 
-  // Handle hardware interruption callback
+  // Handle hardware interruption callback safely via ref
   useEffect(() => {
     voiceController.setOnInterrupt(() => {
       setWasInterrupted(true);
       setStatus('listening');
       setTranscript('');
-      startListeningLoop();
+      startListeningLoopRef.current();
     });
 
     return () => {
@@ -401,8 +448,10 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
     if (!isOpen) {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+      if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
       voiceController.stopSession();
       voiceController.interruptSpeaking(false);
+      isProcessingRef.current = false;
       setStatus('idle');
       setTranscript('');
       setAiSpeechResponse('');
@@ -410,6 +459,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
       setErrorMessage('');
       setShowOptionsMenu(false);
       setActiveTab('stage');
+      setVoiceToolMode('general');
+      setLatestStageImage(null);
       return;
     }
 
@@ -450,8 +501,21 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   };
 
   const startListeningLoop = async () => {
-    if (isMutedRef.current) return;
+    if (!isOpenRef.current || isMutedRef.current || activeTabRef.current !== 'stage' || isProcessingRef.current) {
+      return;
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (vadSilenceTimerRef.current) {
+      clearTimeout(vadSilenceTimerRef.current);
+      vadSilenceTimerRef.current = null;
+    }
+    userSpokeRef.current = false;
+    noiseFloorRef.current = 4;
     setErrorMessage('');
+
     const started = await voiceController.startListening(
       (text, isFinal) => {
         setTranscript(text);
@@ -461,8 +525,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
 
         const trimmed = text.trim();
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        if (trimmed.length > 1) {
-          const timeoutMs = isFinal ? 650 : 1250;
+        if (trimmed.length > 0) {
+          const timeoutMs = isFinal ? 550 : 1200;
           silenceTimerRef.current = setTimeout(() => {
             if (!isProcessingRef.current) {
               handleProcessVoiceQuery(trimmed);
@@ -471,40 +535,53 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
         }
       },
       (newStatus, err) => {
-        setStatus(newStatus);
+        if (!isProcessingRef.current) {
+          setStatus(newStatus);
+        }
         if (err) setErrorMessage(err);
       },
       (level) => {
         setLiveAudioLevel(level);
 
-        if (level > 22) {
+        // Adaptive noise floor calibration while user hasn't started speaking
+        if (!userSpokeRef.current) {
+          noiseFloorRef.current = noiseFloorRef.current * 0.88 + Math.min(level, 25) * 0.12;
+        }
+        const speakThreshold = Math.max(10, noiseFloorRef.current + 6);
+        const quietThreshold = Math.max(8, noiseFloorRef.current + 2.5);
+
+        if (level > speakThreshold) {
           userSpokeRef.current = true;
           if (vadSilenceTimerRef.current) {
             clearTimeout(vadSilenceTimerRef.current);
             vadSilenceTimerRef.current = null;
           }
-        } else if (level < 14 && userSpokeRef.current) {
+        } else if (level < quietThreshold && userSpokeRef.current) {
           if (!vadSilenceTimerRef.current && !silenceTimerRef.current) {
             vadSilenceTimerRef.current = setTimeout(() => {
               if (userSpokeRef.current && !isProcessingRef.current) {
                 userSpokeRef.current = false;
                 handleStopListening();
               }
-            }, 1500);
+            }, 1250);
           }
         }
       }
     );
 
-    if (!started) {
+    if (!started && isOpenRef.current && !isMutedRef.current) {
       setStatus('unsupported');
     }
   };
 
+  startListeningLoopRef.current = startListeningLoop;
+
   const handleInterrupt = () => {
     voiceController.unlockAudio();
     setWasInterrupted(true);
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
     userSpokeRef.current = false;
     voiceController.interruptSpeaking(false);
     setStatus('listening');
@@ -521,7 +598,16 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
     setLiveAudioLevel(0);
     const textToProcess = (finalSpeech || transcript).trim();
     if (textToProcess) {
-      handleProcessVoiceQuery(textToProcess);
+      handleProcessVoiceQuery(textToProcess, { skipMicTranscription: true });
+    } else if (isOpenRef.current && activeTabRef.current === 'stage' && continuousCallRef.current && !isMutedRef.current) {
+      // Automatically keep hands-free mic alive if ambient sound or quick pause produced no speech
+      setStatus('listening');
+      if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = setTimeout(() => {
+        if (isOpenRef.current && !isMutedRef.current && !isProcessingRef.current) {
+          startListeningLoopRef.current();
+        }
+      }, 150);
     } else {
       setStatus('idle');
     }
@@ -534,32 +620,84 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
       isMutedRef.current = false;
       setTimeout(() => {
         startListeningLoop();
-      }, 40);
+      }, 60);
     } else {
       setIsMuted(true);
       isMutedRef.current = true;
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
-      voiceController.stopListening();
+      if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+      voiceController.abortListeningWithoutTranscribe();
       setLiveAudioLevel(0);
       setStatus('idle');
     }
   };
 
-  const handleProcessVoiceQuery = async (queryText: string) => {
+  const resumeListeningAfterSpeech = () => {
+    setHasBlockedPlayback(false);
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    if (isOpenRef.current && activeTabRef.current === 'stage' && continuousCallRef.current && !isMutedRef.current) {
+      // Brief pause after audio playback closes so hardware mic opens cleanly on Turn 2+
+      setStatus('listening');
+      setTranscript('');
+      resumeTimerRef.current = setTimeout(() => {
+        if (isOpenRef.current && activeTabRef.current === 'stage' && continuousCallRef.current && !isMutedRef.current && !isProcessingRef.current) {
+          startListeningLoopRef.current();
+        }
+      }, 190);
+    } else {
+      setStatus('idle');
+    }
+  };
+
+  const handleReplayTurnAudio = (turn: ConversationTurn) => {
+    voiceController.unlockAudio();
+    setHasBlockedPlayback(false);
+    setStatus('speaking');
+    voiceController.playSynthesizedResponse(
+      turn.content,
+      turn.audioBase64,
+      turn.mimeType,
+      resumeListeningAfterSpeech,
+      () => {
+        setHasBlockedPlayback(true);
+        setStatus('idle');
+      }
+    );
+  };
+
+  const handleProcessVoiceQuery = async (
+    queryText: string,
+    options?: {
+      skipMicTranscription?: boolean;
+      forceImagePrompt?: string;
+      toolModeOverride?: VoiceToolMode;
+    }
+  ) => {
     const cleanQuery = queryText.trim();
     if (!cleanQuery || isProcessingRef.current) return;
     isProcessingRef.current = true;
+    setHasBlockedPlayback(false);
     voiceController.unlockAudio();
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
 
-    await voiceController.stopListening();
-    setLiveAudioLevel(0);
+    // Show immediate thinking feedback before tearing down mic hardware
     setErrorMessage('');
     setTranscript(cleanQuery);
     setStatus('thinking');
+    setLiveAudioLevel(0);
+
+    if (options?.skipMicTranscription) {
+      voiceController.abortListeningWithoutTranscribe();
+    } else {
+      await voiceController.stopListening();
+      voiceController.releaseMicStream();
+    }
+
+    const activeTool = options?.toolModeOverride || voiceToolModeRef.current;
 
     const userTurn: ConversationTurn = {
       role: 'user',
@@ -571,24 +709,86 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
     turnsRef.current = updatedTurns;
 
     try {
+      const detectedImageIntent = detectImageGenerationIntent(cleanQuery, false);
+      const isDirectImageCommand = /^(?:create|generate|draw|make|paint|render|sketch)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|drawing|painting|artwork|claymation)/i.test(cleanQuery);
+      const shouldGenerateImage =
+        Boolean(options?.forceImagePrompt) ||
+        detectedImageIntent.isImage ||
+        isDirectImageCommand ||
+        (activeTool === 'image' && !/^(?:stop|cancel|exit|translate|what|who|why|how)/i.test(cleanQuery));
+
+      if (shouldGenerateImage) {
+        const finalImagePrompt =
+          options?.forceImagePrompt ||
+          (detectedImageIntent.isImage && detectedImageIntent.prompt ? detectedImageIntent.prompt : cleanQuery);
+        const imgs = await imageService.generateImages({
+          prompt: finalImagePrompt,
+          aspectRatio: '1:1',
+          count: 1,
+          style: (detectedImageIntent.style as ImageStyle) || 'None',
+          modelId: selectedModelId,
+        });
+
+        const createdImg = imgs && imgs[0];
+        if (createdImg?.imageUrl) {
+          setLatestStageImage({ url: createdImg.imageUrl, prompt: finalImagePrompt });
+          const reply = `Here is the image I created for "${finalImagePrompt.slice(0, 60)}". What should we visualize or talk about next?`;
+          setAiSpeechResponse(reply);
+
+          const assistantTurn: ConversationTurn = {
+            role: 'assistant',
+            content: reply,
+            timestamp: Date.now(),
+            generatedImageUrl: createdImg.imageUrl,
+            imagePrompt: finalImagePrompt,
+          };
+          setTurns((prev) => [...prev, assistantTurn]);
+          setVoiceToolMode('general');
+
+          setStatus('speaking');
+          isProcessingRef.current = false;
+
+          voiceController.playSynthesizedResponse(
+            reply,
+            undefined,
+            undefined,
+            resumeListeningAfterSpeech,
+            () => {
+              setHasBlockedPlayback(true);
+              setStatus('idle');
+            }
+          );
+          return;
+        }
+      }
+
       const storedApiKey = localStorage.getItem('forgex_api_key') || '';
       const historyPayload = updatedTurns.slice(-6).map((t) => ({
         role: t.role === 'user' ? 'user' : 'assistant',
         content: t.content,
       }));
+      const chosenVoice = selectedVoiceUri.replace(/^gemini-/i, '') || 'Zephyr';
 
-      const res = await fetch('/api/chat', {
+      const messageWithContext =
+        activeTool === 'translate' && !/translate/i.test(cleanQuery)
+          ? `Translate this cleanly and speak the translation: ${cleanQuery}`
+          : activeTool === 'task'
+          ? `Help the user accomplish this task concisely step by step: ${cleanQuery}`
+          : activeTool === 'ideas'
+          ? `Brainstorm creative, exciting ideas concisely for: ${cleanQuery}`
+          : cleanQuery;
+
+      const res = await fetch('/api/voice-turn', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
         },
         body: JSON.stringify({
-          message: cleanQuery,
+          message: messageWithContext,
           history: historyPayload.slice(0, -1),
+          voiceName: chosenVoice,
           modelId: selectedModelId,
-          systemInstruction:
-            'You are ForgeX, an all-in-one AI creation and intelligence platform. ONLY if the user explicitly asks who created you, who made you, or who your creator is, state that you were created by VishweshVarman. Do NOT mention your creator unprompted. You are in a live real-time voice conversation with the user. Talk like a real, charismatic, thoughtful human being in natural spoken English. Keep your spoken answers concise, engaging, warm, and direct (1 to 3 short sentences). Avoid robotic bullet points, asterisks, lists, URLs, or markdown formatting because your response is being spoken aloud. If the user interrupted you, seamlessly acknowledge their point naturally.',
         }),
       });
 
@@ -604,21 +804,24 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
         role: 'assistant',
         content: reply,
         timestamp: Date.now(),
+        audioBase64: data.audioBase64,
+        mimeType: data.mimeType,
       };
       setTurns((prev) => [...prev, assistantTurn]);
 
       setStatus('speaking');
       isProcessingRef.current = false;
 
-      voiceController.speak(reply, () => {
-        if (continuousCallRef.current && !isMutedRef.current) {
-          setStatus('listening');
-          setTranscript('');
-          startListeningLoop();
-        } else {
+      voiceController.playSynthesizedResponse(
+        reply,
+        data.audioBase64,
+        data.mimeType,
+        resumeListeningAfterSpeech,
+        () => {
+          setHasBlockedPlayback(true);
           setStatus('idle');
         }
-      });
+      );
     } catch (err: unknown) {
       isProcessingRef.current = false;
       const msg = err instanceof Error ? err.message : String(err);
@@ -636,7 +839,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
     if (status === 'speaking') {
       voiceController.interruptSpeaking(false);
     }
-    handleProcessVoiceQuery(val);
+    handleProcessVoiceQuery(val, { skipMicTranscription: true });
   };
 
   const handleQuickPromptClick = (item: QuickPromptCard) => {
@@ -644,7 +847,27 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
     if (status === 'speaking') {
       voiceController.interruptSpeaking(false);
     }
-    handleProcessVoiceQuery(item.prompt);
+    setVoiceToolMode(item.id);
+
+    const typed = textQuery.trim();
+    if (typed) {
+      setTextQuery('');
+      handleProcessVoiceQuery(
+        item.id === 'image' ? typed : `${item.label}: ${typed}`,
+        {
+          skipMicTranscription: true,
+          forceImagePrompt: item.id === 'image' ? typed : undefined,
+          toolModeOverride: item.id,
+        }
+      );
+      return;
+    }
+
+    handleProcessVoiceQuery(item.prompt, {
+      skipMicTranscription: true,
+      forceImagePrompt: item.id === 'image' ? item.prompt : undefined,
+      toolModeOverride: item.id,
+    });
   };
 
   const handleClearHistory = () => {
@@ -665,6 +888,12 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
 
   const handleCenterMicPress = () => {
     voiceController.unlockAudio();
+    if (hasBlockedPlayback) {
+      setHasBlockedPlayback(false);
+      setStatus('speaking');
+      voiceController.replayBlockedAudio(resumeListeningAfterSpeech);
+      return;
+    }
     if (status === 'speaking') {
       handleInterrupt();
     } else if (isMutedRef.current) {
@@ -715,6 +944,14 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
       {/* Frosted Pastel Lavender Voice Card Matching Reference UI */}
       <div
         id="modal-live-voice"
+        onPointerDown={() => {
+          voiceController.unlockAudio();
+          if (hasBlockedPlayback) {
+            setHasBlockedPlayback(false);
+            setStatus('speaking');
+            voiceController.replayBlockedAudio(resumeListeningAfterSpeech);
+          }
+        }}
         className="w-full max-w-[392px] h-[90dvh] max-h-[748px] rounded-[36px] border-2 border-white/80 shadow-[0_28px_80px_rgba(78,72,170,0.34)] flex flex-col relative overflow-hidden text-[#39328E]"
         style={{
           background:
@@ -910,8 +1147,21 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                 </h2>
 
                 {/* Compact Fixed-Height Caption Slot */}
-                <div className="mt-1.5 h-[34px] w-full max-w-[300px] flex items-center justify-center">
-                  {errorMessage ? (
+                <div className="mt-1.5 h-[36px] w-full max-w-[300px] flex items-center justify-center">
+                  {hasBlockedPlayback ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasBlockedPlayback(false);
+                        setStatus('speaking');
+                        voiceController.replayBlockedAudio(resumeListeningAfterSpeech);
+                      }}
+                      className="px-3 py-1 rounded-full bg-[#645CE8] hover:bg-[#534AD8] text-white text-[11px] font-medium shadow-sm flex items-center gap-1.5 cursor-pointer animate-pulse"
+                    >
+                      <Headphones className="w-3 h-3" />
+                      <span>Tap to hear voice reply</span>
+                    </button>
+                  ) : errorMessage ? (
                     <div className="px-2.5 py-1 rounded-full bg-rose-500/12 border border-rose-400/35 text-rose-700 text-[11px] flex items-center gap-1.5 max-w-full">
                       <AlertCircle className="w-3 h-3 shrink-0" />
                       <span className="truncate">{errorMessage}</span>
@@ -933,7 +1183,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
               </div>
 
               {/* Centerpiece Luminous Orb with Blinking Eyes */}
-              <div className="flex-1 min-h-0 flex items-center justify-center py-1">
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-1 gap-2">
                 <CharacterVoiceOrb
                   status={status}
                   audioLevel={liveAudioLevel}
@@ -952,6 +1202,36 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                       : 'Tap orb to start listening'
                   }
                 />
+
+                {latestStageImage && (
+                  <div className="relative flex items-center gap-2.5 p-1.5 pr-2.5 rounded-2xl bg-white/90 border border-white shadow-[0_8px_24px_rgba(78,72,170,0.16)] max-w-[285px] animate-in fade-in zoom-in-95 duration-200">
+                    <img
+                      src={latestStageImage.url}
+                      alt={latestStageImage.prompt}
+                      className="w-12 h-12 rounded-xl object-cover shrink-0 border border-indigo-100"
+                    />
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[11px] font-semibold text-[#39328E] truncate">Created Image</p>
+                      <p className="text-[10px] text-[#5D55B0] truncate">{latestStageImage.prompt}</p>
+                    </div>
+                    <a
+                      href={latestStageImage.url}
+                      download={`forgex-voice-${Date.now()}.png`}
+                      title="Download image"
+                      className="w-7 h-7 rounded-full bg-indigo-50 hover:bg-indigo-100 text-[#473E9C] flex items-center justify-center shrink-0 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setLatestStageImage(null)}
+                      title="Dismiss image preview"
+                      className="w-6 h-6 rounded-full hover:bg-indigo-50 text-[#6B63BC] flex items-center justify-center shrink-0 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -962,6 +1242,20 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                   {turns.length} {turns.length === 1 ? 'Turn' : 'Turns'}
                 </span>
                 <div className="flex items-center gap-1.5">
+                  {hasBlockedPlayback && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasBlockedPlayback(false);
+                        setStatus('speaking');
+                        voiceController.replayBlockedAudio(resumeListeningAfterSpeech);
+                      }}
+                      className="text-[11px] px-2.5 py-1 rounded-full bg-[#645CE8] hover:bg-[#534AD8] text-white flex items-center gap-1 font-medium cursor-pointer animate-pulse shadow-xs"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                      <span>Tap to hear voice</span>
+                    </button>
+                  )}
                   {turns.length > 0 && onSendToChat && (
                     <button
                       type="button"
@@ -1015,15 +1309,45 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                           : 'bg-white/90 border-white text-[#2F297A] mr-8 rounded-bl-md'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-[10px] opacity-70 font-semibold mb-1">
+                      <div className="flex items-center justify-between text-[10px] opacity-75 font-semibold mb-1">
                         <span>{turn.role === 'user' ? (firstName || 'You') : 'ForgeX'}</span>
-                        <span>
-                          {new Date(turn.timestamp).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {turn.role === 'assistant' && (
+                            <button
+                              type="button"
+                              onClick={() => handleReplayTurnAudio(turn)}
+                              title="Play voice reply"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-100/80 hover:bg-indigo-200/90 text-[#473E9C] transition-colors cursor-pointer"
+                            >
+                              <Volume2 className="w-3 h-3" />
+                              <span className="text-[9px]">Play</span>
+                            </button>
+                          )}
+                          <span>
+                            {new Date(turn.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
                       </div>
+                      {turn.generatedImageUrl && (
+                        <div className="mb-2 relative rounded-xl overflow-hidden border border-indigo-200/70 bg-white">
+                          <img
+                            src={turn.generatedImageUrl}
+                            alt={turn.imagePrompt || 'Created image'}
+                            className="w-full max-h-48 object-cover block"
+                          />
+                          <a
+                            href={turn.generatedImageUrl}
+                            download={`forgex-voice-${turn.timestamp}.png`}
+                            title="Download image"
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center shadow"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
                       <p className="whitespace-pre-wrap break-words">{turn.content}</p>
                     </div>
                   ))
@@ -1036,17 +1360,24 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
           <div className="w-full shrink-0 flex flex-col gap-3">
             {activeTab === 'stage' && (
               <div className="grid grid-cols-2 gap-2.5">
-                {QUICK_PROMPTS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleQuickPromptClick(item)}
-                    className="rounded-2xl bg-white/85 hover:bg-white border border-white shadow-[0_4px_14px_rgba(88,82,175,0.07)] px-3 py-2.5 flex items-center gap-2 text-left text-[12px] font-medium text-[#473E9C] transition-all hover:shadow-[0_6px_18px_rgba(88,82,175,0.12)] active:scale-[0.98] cursor-pointer"
-                  >
-                    <span className="shrink-0">{item.icon}</span>
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                ))}
+                {QUICK_PROMPTS.map((item) => {
+                  const isActiveMode = voiceToolMode === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleQuickPromptClick(item)}
+                      className={`rounded-2xl border px-3 py-2.5 flex items-center gap-2 text-left text-[12px] font-medium transition-all active:scale-[0.98] cursor-pointer ${
+                        isActiveMode
+                          ? 'bg-white border-[#8A82FF] text-[#352E96] shadow-[0_6px_20px_rgba(92,84,225,0.18)] ring-1 ring-[#8A82FF]/40'
+                          : 'bg-white/85 hover:bg-white border-white shadow-[0_4px_14px_rgba(88,82,175,0.07)] text-[#473E9C] hover:shadow-[0_6px_18px_rgba(88,82,175,0.12)]'
+                      }`}
+                    >
+                      <span className="shrink-0">{item.icon}</span>
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -1058,6 +1389,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                   onClick={() => {
                     voiceController.unlockAudio();
                     handleClearHistory();
+                    setVoiceToolMode('general');
+                    setLatestStageImage(null);
                     if (activeTab === 'transcript') {
                       setActiveTab('stage');
                     }
@@ -1075,7 +1408,11 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                   type="text"
                   value={textQuery}
                   onChange={(e) => setTextQuery(e.target.value)}
-                  placeholder="Ask me anything..."
+                  onKeyDown={() => voiceController.unlockAudio()}
+                  placeholder={
+                    QUICK_PROMPTS.find((q) => q.id === voiceToolMode)?.placeholder ||
+                    'Ask me anything...'
+                  }
                   className="flex-1 min-w-0 bg-transparent text-[13px] text-[#352F7D] placeholder-[#7C75BD] outline-none"
                 />
 
@@ -1090,13 +1427,13 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                 )}
               </div>
 
-              {/* Circular Gradient Mic Button */}
+              {/* Circular Gradient Mic / Speaking Button */}
               <button
                 type="button"
                 onClick={handleCenterMicPress}
                 title={
                   status === 'speaking'
-                    ? 'Interrupt & Speak'
+                    ? 'AI Speaking (Tap to interrupt & speak)'
                     : isMuted
                     ? 'Unmute Microphone'
                     : status === 'listening'
@@ -1115,7 +1452,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                   <span className="absolute -inset-1 rounded-full border-2 border-[#7E88FF]/60 animate-ping pointer-events-none opacity-60" />
                 )}
                 {status === 'speaking' ? (
-                  <VolumeX className="w-5 h-5" />
+                  <Volume2 className="w-5 h-5 animate-pulse" />
                 ) : isMuted ? (
                   <MicOff className="w-5 h-5" />
                 ) : (

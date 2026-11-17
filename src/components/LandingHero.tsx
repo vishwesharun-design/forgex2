@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, ArrowRight, Sparkles, MessageSquare, Image as ImageIcon, Code2, BookOpen } from 'lucide-react';
+import { Zap, ArrowRight, Cpu, MessageSquare, Image as ImageIcon, Code2, BookOpen } from 'lucide-react';
 import { ForgeXTheme, ActiveWorkspace, ForgeXModelId, FORGEX_MODELS } from '../types';
 import { ForgeXLogo } from './ForgeXLogo';
 
@@ -124,7 +124,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
                 : 'bg-white hover:bg-neutral-50 border-neutral-300 text-neutral-900 shadow-sm'
             }`}
           >
-            <Sparkles className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+            <Cpu className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
             <span>{isAuthenticated ? 'Open Studio' : 'Enter Studio'}</span>
           </button>
         </div>

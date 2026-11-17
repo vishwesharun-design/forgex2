@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   FileText,
   Upload,
-  Sparkles,
+  Cpu,
   HelpCircle,
   Table as TableIcon,
   BookOpen,
@@ -214,7 +214,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
               : 'text-neutral-600 hover:text-black'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Cpu className="w-3.5 h-3.5" />
           <span>Analysis & Results</span>
         </button>
       </div>
@@ -334,7 +334,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
                 { id: 'notes', label: 'Generate Notes', icon: BookOpen },
                 { id: 'quiz', label: 'Quiz Me', icon: CheckCircle },
                 { id: 'compare', label: 'Compare Docs', icon: GitCompare },
-                { id: 'analyze', label: 'Data Analysis', icon: Sparkles },
+                { id: 'analyze', label: 'Data Analysis', icon: Cpu },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeMode === tab.id;
@@ -366,7 +366,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
                 disabled={isProcessing || activeDocs.length === 0}
                 className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-50 flex items-center gap-1.5 transition-all active:scale-95"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Cpu className="w-3.5 h-3.5" />
                 <span>{isProcessing ? 'Processing...' : 'Run Intelligence'}</span>
               </button>
             </div>
@@ -545,7 +545,7 @@ export const DocumentWorkspace: React.FC<DocumentWorkspaceProps> = ({
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
-                <Sparkles className="w-10 h-10 text-amber-400/40 mb-1" />
+                <Cpu className="w-10 h-10 text-amber-400/40 mb-1" />
                 <h3 className="text-sm font-bold">Document Ready for Analysis</h3>
                 <p className="text-xs text-neutral-400 max-w-md">
                   Selected: <span className="text-amber-400 font-semibold">{activeDocs[0].name}</span> (

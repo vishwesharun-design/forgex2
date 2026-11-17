@@ -3,7 +3,7 @@ import {
   Compass,
   Search,
   Globe,
-  Sparkles,
+  Cpu,
   ExternalLink,
   Copy,
   Check,
@@ -294,7 +294,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <Cpu className="w-4 h-4" />
                     <span>Deep Research</span>
                   </>
                 )}
@@ -535,7 +535,7 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
                   isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50/60 border-amber-200'
                 }`}>
                   <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Cpu className="w-3.5 h-3.5" />
                     Key Research Takeaways & Empirical Evidence
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">

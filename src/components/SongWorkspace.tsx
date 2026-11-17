@@ -6,7 +6,7 @@ import {
   Download, 
   Heart, 
   Trash2, 
-  Sparkles, 
+  Cpu, 
   Volume2, 
   VolumeX, 
   Disc3, 
@@ -408,7 +408,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5 fill-current" />
+                    <Cpu className="w-3.5 h-3.5" />
                     <span>Synthesize Song</span>
                   </>
                 )}
@@ -680,7 +680,7 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 fill-current" />
+                  <Cpu className="w-4 h-4" />
                   <span>Synthesize AI Song</span>
                 </>
               )}

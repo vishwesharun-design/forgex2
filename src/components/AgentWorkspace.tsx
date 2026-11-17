@@ -26,7 +26,6 @@ import {
   AlertTriangle,
   Check,
   Copy,
-  Sparkles,
   ExternalLink,
   ChevronRight,
   Eye,
@@ -1269,7 +1268,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     <span className={`text-[10px] font-mono uppercase font-bold shrink-0 flex items-center gap-1 mr-1 ${
                       isDark ? 'text-amber-400' : 'text-amber-800'
                     }`}>
-                      <Sparkles className="w-3 h-3" /> Quick Directives:
+                      <Cpu className="w-3 h-3" /> Quick Directives:
                     </span>
                     {getPromptStarters(activeAgent).map((starter, idx) => (
                       <button

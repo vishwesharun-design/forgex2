@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Bell, Sparkles, Check, Info } from 'lucide-react';
+import { Bell, Cpu, Check, Info } from 'lucide-react';
 import { NotificationItem, ForgeXTheme } from '../types';
 
 interface NotificationsPopoverProps {
@@ -77,7 +77,7 @@ export const NotificationsPopover: React.FC<NotificationsPopoverProps> = ({
           >
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold text-xs text-amber-400 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
+                <Cpu className="w-3 h-3" />
                 {n.title}
               </span>
               <span className="text-[10px] text-neutral-500">

@@ -6,7 +6,6 @@ import {
   User, 
   Cpu, 
   Sliders, 
-  Sparkles, 
   Layers, 
   Eye, 
   LogOut, 
@@ -287,7 +286,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     const isSelected = (settings.themeEffect || 'connected_dots') === eff.id;
                     const IconComponent = 
                       eff.iconName === 'Network' ? Network :
-                      eff.iconName === 'Sparkles' ? Sparkles :
+                      eff.iconName === 'Sparkles' ? Cpu :
                       eff.iconName === 'Terminal' ? Terminal :
                       eff.iconName === 'Activity' ? Activity :
                       eff.iconName === 'Flame' ? Flame :

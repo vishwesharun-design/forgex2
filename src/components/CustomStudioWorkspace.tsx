@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Send,
-  Sparkles,
   Bot,
   User,
   Trash2,
@@ -47,7 +46,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Bot,
   Crown,
   Gamepad2,
-  Sparkles,
+  Sparkles: Cpu,
   Cpu,
   Flame,
   Rocket,

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   LayoutDashboard,
-  Sparkles,
+  Cpu,
   Plus,
   Trash2,
   Move,
@@ -237,7 +237,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
               : 'text-neutral-600 hover:text-black'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Cpu className="w-3.5 h-3.5" />
           <span>Generator & Boards ({boards.length})</span>
         </button>
         <button
@@ -330,7 +330,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
               disabled={isGenerating || !topicInput.trim()}
               className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Cpu className="w-3.5 h-3.5" />
               <span>{isGenerating ? 'Structuring Nodes...' : 'Generate Canvas'}</span>
             </button>
           </div>

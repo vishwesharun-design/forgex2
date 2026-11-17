@@ -38,6 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
     switch (activeWorkspace) {
       case 'chat':
         return { title: 'ForgeX', category: 'Studio' };
+      case 'library':
+        return { title: 'Library', category: 'Media' };
       case 'image':
         return { title: 'Image Studio', category: 'Creative' };
       case 'music':

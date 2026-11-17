@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Check, AlertCircle, X, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react';
+import { Key, Check, AlertCircle, X, ExternalLink, ShieldCheck, Cpu } from 'lucide-react';
 import { ForgeXTheme } from '../types';
 import { videoService } from '../services/videoService';
 import { imageService } from '../services/imageService';
@@ -190,7 +190,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
-              <Sparkles className="w-3.5 h-3.5" />
+              <Cpu className="w-3.5 h-3.5" />
               <span>Neural Fallback Active (No Key Required)</span>
             </div>
           )}

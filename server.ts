@@ -13,6 +13,10 @@ dotenv.config();
 
 const STYLE_PROMPTS: Record<string, string> = {
   None: "",
+  Claymation:
+    "handcrafted stop-motion claymation sculpture made entirely from polymer plasticine modeling clay, subtle real thumbprints, faint fingerprint impressions and sculpting tool marks on matte-satin clay skin and molded clothing folds, expressive rounded sculpted facial features, thick clay eyelids and glossy sculpted eyes with warm catchlights, carved clay hair texture, physical miniature diorama studio lighting, shallow depth of field 85mm macro photography with soft bokeh city/background lights, authentic Aardman and Laika stop-motion film aesthetic, 8k macro detail",
+  Clay:
+    "handcrafted stop-motion claymation sculpture made entirely from polymer plasticine modeling clay, subtle real thumbprints, faint fingerprint impressions and sculpting tool marks on matte-satin clay skin and molded clothing folds, expressive rounded sculpted facial features, thick clay eyelids and glossy sculpted eyes with warm catchlights, carved clay hair texture, physical miniature diorama studio lighting, shallow depth of field 85mm macro photography with soft bokeh city/background lights, authentic Aardman and Laika stop-motion film aesthetic, 8k macro detail",
   Realistic: "photorealistic, ultra-detailed photography, 8k resolution, raw photo, Hasselblad 50mm, natural soft lighting, hyperrealistic textures, masterwork",
   Cinematic: "cinematic movie still, 35mm anamorphic lens, dramatic volumetric lighting, color graded, blockbuster atmosphere, shallow depth of field, IMAX quality",
   Anime: "modern Japanese anime visual aesthetic, Makoto Shinkai style, Studio Ghibli inspired, vibrant colors, clean cel-shaded lineart, Japanese animation masterpiece",
@@ -712,17 +716,29 @@ async function generateRealAiImage(
   customStyleDesc?: string,
   fluxModel?: string,
   apiKey?: string,
-  puterAuthToken?: string
+  puterAuthToken?: string,
+  referenceImage?: string
 ): Promise<{ imageUrl: string; engine: string }> {
   const cleanPrompt = (prompt || "A cinematic visual masterpiece").trim();
+  const isClayRequested =
+    style === "Claymation" ||
+    style === "Clay" ||
+    /\b(?:claymation|clay\s*mation|plasticine|polymer\s+clay|modeling\s+clay|modelling\s+clay|stop[\s-]*motion\s+clay|made\s+(?:of|with|out\s+of|from|using)\s+clay|looks?\s+(?:like|as\s+if\s+it\s+was\s+made\s+(?:of|with|using))\s+clay|clay\s+(?:style|sculpture|figure|figurine|character|portrait|model|scene|world))\b/i.test(
+      cleanPrompt
+    );
+
   let fullPrompt = cleanPrompt;
-  if (style && style !== "None") {
+  if (referenceImage && isClayRequested) {
+    fullPrompt = `Transform this reference photo faithfully preserving the exact subject, facial expression, pose, clothing, and background setting into a ${STYLE_PROMPTS.Claymation}: ${cleanPrompt}`;
+  } else if (style && style !== "None") {
     const styleDesc = customStyleDesc?.trim() || STYLE_PROMPTS[style] || `${style} style`;
     if (styleDesc) {
       fullPrompt = `${cleanPrompt}, ${styleDesc}`;
     }
   } else if (customStyleDesc?.trim()) {
     fullPrompt = `${cleanPrompt}, ${customStyleDesc.trim()}`;
+  } else if (isClayRequested) {
+    fullPrompt = `${cleanPrompt}, ${STYLE_PROMPTS.Claymation}`;
   }
 
   let width = 1024;
@@ -749,11 +765,16 @@ async function generateRealAiImage(
       if (puter && typeof puter.setAuthToken === "function" && puter.ai?.txt2img) {
         puter.setAuthToken(puterAuthToken);
         const targetModel = fluxModel || "black-forest-labs/flux-1.1-pro";
-        const puterRes = await puter.ai.txt2img(fullPrompt, {
+        const puterOpts: Record<string, any> = {
           model: targetModel,
           width,
           height,
-        });
+        };
+        if (referenceImage) {
+          puterOpts.image_url = referenceImage;
+          puterOpts.input_image = referenceImage;
+        }
+        const puterRes = await puter.ai.txt2img(fullPrompt, puterOpts);
         const resAny = puterRes as any;
         const url = typeof puterRes === "string" ? puterRes : resAny?.src || resAny?.url;
         if (url) {
@@ -816,11 +837,37 @@ async function generateRealAiImage(
   if (effectiveKey) {
     try {
       const ai = getGenAiClient(effectiveKey);
+      let imagenPrompt = fullPrompt;
+      if (referenceImage && referenceImage.startsWith("data:image/")) {
+        try {
+          const match = referenceImage.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+          if (match) {
+            const visionRes = await ai.models.generateContent({
+              model: "gemini-4-hydrogen",
+              contents: {
+                parts: [
+                  { inlineData: { mimeType: match[1], data: match[2] } },
+                  {
+                    text: `Describe this image in concise, concrete visual detail (subject appearance, hair, facial expression, pose, exact clothing/accessories, colors, camera framing, background elements, and lighting) in one paragraph so an image generator can recreate the exact same subject & scene: ${cleanPrompt}`,
+                  },
+                ],
+              },
+            });
+            const visualDesc = visionRes.text?.trim();
+            if (visualDesc) {
+              const activeStyle = isClayRequested
+                ? STYLE_PROMPTS.Claymation
+                : (STYLE_PROMPTS[style] || customStyleDesc?.trim() || "");
+              imagenPrompt = activeStyle ? `${visualDesc}, ${activeStyle}` : `${visualDesc}, ${cleanPrompt}`;
+            }
+          }
+        } catch {}
+      }
       const validRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
       const targetRatio = validRatios.includes(aspectRatio) ? aspectRatio : "16:9";
       const imagenRes = await ai.models.generateImages({
         model: "imagen-3.0-generate-002",
-        prompt: fullPrompt,
+        prompt: imagenPrompt,
         config: {
           numberOfImages: 1,
           aspectRatio: targetRatio as any,
@@ -863,7 +910,7 @@ You possess complete, accurate knowledge about the ForgeX platform, its studios,
    - Step 5: Publish & Launch — Save and launch! The studio is published under your registered Studio Name and saved to your private cloud storage. Only the creator's logged-in email has permissions to manage or delete it.
 
 2. AVAILABLE FORGEX STUDIOS:
-   - Images Studio: AI image generation with multiple aspect ratios (16:9, 1:1, 9:16, 4:3, 3:4), style presets (Cinematic, Anime, Realistic, 3D, Cyberpunk, Fantasy, Watercolor, Pixel Art, Minimal, Custom), seeds, reference images, and prompt enhancement.
+   - Images Studio: AI image generation with multiple aspect ratios (16:9, 1:1, 9:16, 4:3, 3:4), style presets (Claymation, Handwritten Notes, Realistic, Cinematic, Anime, 3D, Illustration, Minimal, Custom), seeds, reference images, and prompt enhancement.
    - Make Song Studio: AI music composition with custom genres, moods, BPM, lyrics generation, and audio synthesis.
    - Music Player & Spotify Studio: Integrated audio player with visualizer waveforms, queue management, volume controls, and playback.
    - Deep Research Studio: In-depth autonomous research reports with live Google Search grounding, verified source citations, and executive summaries.
@@ -1200,8 +1247,15 @@ async function startServer() {
         });
       }
 
-      // Intelligently evaluate whether web search is needed (ChatGPT style)
-      const searchIntent = analyzeWebSearchIntent(cleanMessage, searchMode);
+      const hasImageAttachments =
+        (Array.isArray(attachments) && attachments.some((att: any) => att?.url)) ||
+        (Array.isArray(history) && history.some((h: any) => Array.isArray(h?.attachments) && h.attachments.some((att: any) => att?.url)));
+
+      // Intelligently evaluate whether web search is needed (skip auto search when analyzing an attached image unless explicitly asked)
+      const shouldSkipAutoSearchForVision = hasImageAttachments && searchMode === "auto" && !/(?:search\s+(?:the\s+web|google|online)|look\s+up\s+online)/i.test(cleanMessage);
+      const searchIntent = shouldSkipAutoSearchForVision
+        ? { shouldSearch: false, searchQuery: "", reason: "Analyzing attached image directly via Gemini Vision." }
+        : analyzeWebSearchIntent(cleanMessage, searchMode);
       let liveGrounding: WebGroundingResult = {
         searchedWeb: false,
         searchQueries: [],
@@ -1223,6 +1277,14 @@ async function startServer() {
         searchIntent.shouldSearch ? liveGrounding.groundingContext : undefined
       );
 
+      if (hasImageAttachments) {
+        enhancedSystemInstruction += `\n\n=== MANDATORY MULTIMODAL VISION ANALYSIS DIRECTIVE ===
+The user attached one or more images to analyze.
+1. Carefully examine EVERY region of the attached image(s), including foreground, midground, background, reflections, and small details.
+2. When asked to count people, faces, objects, or items (e.g. "how many people are in this image"), scan systematically left-to-right and top-to-bottom, count each visible person individually, mention if anyone is partially occluded or blurry in the background, and state the exact count clearly first.
+3. When asked to read text, solve problems, or identify details from a photo or screenshot, inspect the visual pixels directly and answer accurately without guessing.`;
+      }
+
       if (isQuizQuery(cleanMessage)) {
         enhancedSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
 The user requested an interactive quiz ("${cleanMessage}").
@@ -1232,43 +1294,72 @@ The user requested an interactive quiz ("${cleanMessage}").
 The UI renders this as an interactive playable quiz widget!`;
       }
 
+      const resolveAttachmentParts = async (attList: any[]) => {
+        const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+        if (!Array.isArray(attList)) return parts;
+        for (const att of attList) {
+          const url = typeof att?.url === "string" ? att.url.trim() : "";
+          if (!url) continue;
+          if (url.startsWith("data:")) {
+            const b64Idx = url.indexOf(";base64,");
+            if (b64Idx !== -1) {
+              const header = url.slice(5, b64Idx);
+              const mimeType = header.split(";")[0]?.trim() || "image/jpeg";
+              const base64Data = url.slice(b64Idx + 8).replace(/\s+/g, "");
+              if (base64Data) {
+                parts.push({ inlineData: { mimeType, data: base64Data } });
+              }
+            }
+          } else if (url.startsWith("https://") || url.startsWith("http://")) {
+            try {
+              const imgRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
+              if (imgRes.ok) {
+                const buf = Buffer.from(await imgRes.arrayBuffer());
+                if (buf.length > 0 && buf.length <= 10 * 1024 * 1024) {
+                  const contentType = imgRes.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
+                  parts.push({ inlineData: { mimeType: contentType, data: buf.toString("base64") } });
+                }
+              }
+            } catch {
+              // Skip unreachable remote URL attachment
+            }
+          }
+        }
+        return parts;
+      };
+
+      const preResolvedCurrentAttParts = await resolveAttachmentParts(attachments);
+
       // Try live Gemini with candidate keys
       for (const currentKey of candidateKeys) {
         try {
           const ai = getGenAiClient(currentKey);
           const contents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> = [];
 
-          // Add past history turns
+          // Add past history turns (including attached images on recent turns)
           if (Array.isArray(history)) {
             for (const item of history) {
               if (item.role === "user" || item.role === "assistant") {
-                contents.push({
-                  role: item.role === "assistant" ? "model" : "user",
-                  parts: [{ text: item.content }],
-                });
-              }
-            }
-          }
-
-          // Build current user message parts
-          const currentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-
-          // Multimodal image attachments
-          if (Array.isArray(attachments)) {
-            for (const att of attachments) {
-              if (att.url && typeof att.url === "string" && att.url.startsWith("data:")) {
-                const matches = att.url.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-                if (matches && matches[2]) {
-                  currentParts.push({
-                    inlineData: {
-                      mimeType: matches[1] || "image/jpeg",
-                      data: matches[2],
-                    },
+                const histParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+                if (item.role === "user" && Array.isArray(item.attachments) && item.attachments.length > 0) {
+                  const histImgParts = await resolveAttachmentParts(item.attachments);
+                  histParts.push(...histImgParts);
+                }
+                if (item.content) {
+                  histParts.push({ text: item.content });
+                }
+                if (histParts.length > 0) {
+                  contents.push({
+                    role: item.role === "assistant" ? "model" : "user",
+                    parts: histParts,
                   });
                 }
               }
             }
           }
+
+          // Build current user message parts
+          const currentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [...preResolvedCurrentAttParts];
 
           if (cleanMessage) {
             currentParts.push({ text: cleanMessage });
@@ -1446,8 +1537,15 @@ The UI renders this as an interactive playable quiz widget!`;
         return res.end();
       }
 
-      // Automatically evaluate if web search is needed
-      const searchIntent = analyzeWebSearchIntent(cleanMessage, searchMode);
+      const hasImageAttachments =
+        (Array.isArray(attachments) && attachments.some((att: any) => att?.url)) ||
+        (Array.isArray(history) && history.some((h: any) => Array.isArray(h?.attachments) && h.attachments.some((att: any) => att?.url)));
+
+      // Automatically evaluate if web search is needed (skip auto search when analyzing an attached image unless explicitly asked)
+      const shouldSkipAutoSearchForVision = hasImageAttachments && searchMode === "auto" && !/(?:search\s+(?:the\s+web|google|online)|look\s+up\s+online)/i.test(cleanMessage);
+      const searchIntent = shouldSkipAutoSearchForVision
+        ? { shouldSearch: false, searchQuery: "", reason: "Analyzing attached image directly via Gemini Vision." }
+        : analyzeWebSearchIntent(cleanMessage, searchMode);
       let liveGrounding: WebGroundingResult = {
         searchedWeb: false,
         searchQueries: [],
@@ -1475,6 +1573,14 @@ The UI renders this as an interactive playable quiz widget!`;
         searchIntent.shouldSearch ? liveGrounding.groundingContext : undefined
       );
 
+      if (hasImageAttachments) {
+        forgexSystemInstruction += `\n\n=== MANDATORY MULTIMODAL VISION ANALYSIS DIRECTIVE ===
+The user attached one or more images to analyze.
+1. Carefully examine EVERY region of the attached image(s), including foreground, midground, background, reflections, and small details.
+2. When asked to count people, faces, objects, or items (e.g. "how many people are in this image"), scan systematically left-to-right and top-to-bottom, count each visible person individually, mention if anyone is partially occluded or blurry in the background, and state the exact count clearly first.
+3. When asked to read text, solve problems, or identify details from a photo or screenshot, inspect the visual pixels directly and answer accurately without guessing.`;
+      }
+
       if (isQuizQuery(cleanMessage)) {
         forgexSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
 The user requested an interactive quiz ("${cleanMessage}").
@@ -1483,6 +1589,42 @@ The user requested an interactive quiz ("${cleanMessage}").
 3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
 The UI renders this as an interactive playable quiz widget!`;
       }
+
+      const resolveAttachmentParts = async (attList: any[]) => {
+        const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+        if (!Array.isArray(attList)) return parts;
+        for (const att of attList) {
+          const url = typeof att?.url === "string" ? att.url.trim() : "";
+          if (!url) continue;
+          if (url.startsWith("data:")) {
+            const b64Idx = url.indexOf(";base64,");
+            if (b64Idx !== -1) {
+              const header = url.slice(5, b64Idx);
+              const mimeType = header.split(";")[0]?.trim() || "image/jpeg";
+              const base64Data = url.slice(b64Idx + 8).replace(/\s+/g, "");
+              if (base64Data) {
+                parts.push({ inlineData: { mimeType, data: base64Data } });
+              }
+            }
+          } else if (url.startsWith("https://") || url.startsWith("http://")) {
+            try {
+              const imgRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
+              if (imgRes.ok) {
+                const buf = Buffer.from(await imgRes.arrayBuffer());
+                if (buf.length > 0 && buf.length <= 10 * 1024 * 1024) {
+                  const contentType = imgRes.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
+                  parts.push({ inlineData: { mimeType: contentType, data: buf.toString("base64") } });
+                }
+              }
+            } catch {
+              // Skip unreachable remote URL attachment
+            }
+          }
+        }
+        return parts;
+      };
+
+      const preResolvedCurrentAttParts = await resolveAttachmentParts(attachments);
 
       // Try streaming with live Gemini candidate keys
       for (const currentKey of candidateKeys) {
@@ -1493,30 +1635,25 @@ The UI renders this as an interactive playable quiz widget!`;
           if (Array.isArray(history)) {
             for (const item of history) {
               if (item.role === "user" || item.role === "assistant") {
-                contents.push({
-                  role: item.role === "assistant" ? "model" : "user",
-                  parts: [{ text: item.content }],
-                });
-              }
-            }
-          }
-
-          const currentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-          if (Array.isArray(attachments)) {
-            for (const att of attachments) {
-              if (att.url && typeof att.url === "string" && att.url.startsWith("data:")) {
-                const matches = att.url.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-                if (matches && matches[2]) {
-                  currentParts.push({
-                    inlineData: {
-                      mimeType: matches[1] || "image/jpeg",
-                      data: matches[2],
-                    },
+                const histParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+                if (item.role === "user" && Array.isArray(item.attachments) && item.attachments.length > 0) {
+                  const histImgParts = await resolveAttachmentParts(item.attachments);
+                  histParts.push(...histImgParts);
+                }
+                if (item.content) {
+                  histParts.push({ text: item.content });
+                }
+                if (histParts.length > 0) {
+                  contents.push({
+                    role: item.role === "assistant" ? "model" : "user",
+                    parts: histParts,
                   });
                 }
               }
             }
           }
+
+          const currentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [...preResolvedCurrentAttParts];
 
           if (cleanMessage) {
             currentParts.push({ text: cleanMessage });
@@ -1661,10 +1798,9 @@ The UI renders this as an interactive playable quiz widget!`;
         return res.status(400).json({ error: "audioBase64 data is required" });
       }
 
-      const apiKey = getEffectiveApiKey(req);
-      if (apiKey) {
+      const candidateKeys = getEffectiveApiKeys(req);
+      if (candidateKeys.length > 0) {
         try {
-          const ai = getGenAiClient(apiKey);
           const cleanBase64 = audioBase64.includes(",") ? audioBase64.split(",")[1].trim() : audioBase64.trim();
           let resolvedMime = (mimeType || "audio/webm").split(";")[0].trim();
           if (audioBase64.startsWith("data:")) {
@@ -1673,19 +1809,25 @@ The UI renders this as an interactive playable quiz widget!`;
             if (detectedMime) resolvedMime = detectedMime;
           }
 
+          // Skip ultra-short / empty audio clips (< ~1.4KB binary) that only contain codec headers or silence
+          if (cleanBase64.length < 1800) {
+            return res.json({ success: true, transcript: "" });
+          }
+
           let response;
           // Ultra-fast and high-quota multimodal models for robust audio transcription
           const candidateModels = [
-            "gemini-3.5-transcribe",
-            "gemini-3.8-flash",
             "gemini-3.1-flash-lite",
-            "gemini-flash-latest",
+            "gemini-4-hydrogen",
+            "gemini-3.5-transcribe",
           ];
           let lastErr: any = null;
           let isQuotaExhausted = false;
           let transcript = "";
 
-          for (const model of candidateModels) {
+          for (const apiKey of candidateKeys) {
+            const ai = getGenAiClient(apiKey);
+            for (const model of candidateModels) {
             try {
               response = await ai.models.generateContent({
                 model,
@@ -1700,19 +1842,22 @@ The UI renders this as an interactive playable quiz widget!`;
                         },
                       },
                       {
-                        text: "Transcribe the spoken words in this audio verbatim. If there are no spoken words or only silence/music, return nothing. Return ONLY the exact transcribed text, without markdown, quotes, explanations, or introductory text.",
+                        text: "Strict speech-to-text transcription. Output ONLY clearly audible human speech words verbatim. If there is only silence, static, breathing, clicks, or no clear speech, output an EMPTY string with zero characters. NEVER invent quotes, filler phrases, or guesses.",
                       },
                     ],
                   },
                 ],
+                config: {
+                  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+                },
               });
               const rawText = response?.text || response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
               if (rawText) {
                 const cleaned = rawText.trim();
-                // Filter out non-speech tags or assistant chatter on empty/silent audio
+                // Filter out non-speech tags or known zero-audio hallucination artifacts
                 if (
                   /^\[?(no speech|silence|inaudible|music only|none|empty)\]?\.?$/i.test(cleaned) ||
-                  /^(please provide|i cannot hear|there is no (speech|audio)|no spoken words|could you provide)/i.test(cleaned)
+                  /^(please provide|i cannot hear|there is no (speech|audio)|no spoken words|could you provide|thanks? for watching|everything you can imagine is real)/i.test(cleaned)
                 ) {
                   transcript = "";
                 } else {
@@ -1734,6 +1879,8 @@ The UI renders this as an interactive playable quiz widget!`;
               }
               continue;
             }
+          }
+          if (transcript) break;
           }
 
           if (!transcript && lastErr) {
@@ -1817,7 +1964,7 @@ The UI renders this as an interactive playable quiz widget!`;
         });
 
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken, referenceImage);
 
         generatedImagesList.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1875,7 +2022,7 @@ The UI renders this as an interactive playable quiz widget!`;
 
       for (let i = 0; i < numToGen; i++) {
         const seed = Math.floor(Math.random() * 999999) + i;
-        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken);
+        const genResult = await generateRealAiImage(cleanPrompt, style, aspectRatio, seed, customStyle, fluxModel, apiKey, puterAuthToken, referenceImage);
         results.push({
           id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
           prompt: cleanPrompt,
@@ -2024,9 +2171,77 @@ The UI renders this as an interactive playable quiz widget!`;
   });
 
   // Deep Research Endpoint with Live Web Search & Grounding
+  // Deep Research Planning Endpoint: Quickly generates 5 tailored research steps for interactive approval
+  app.post("/api/deep-research/plan", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.body;
+      const cleanQuery = (query || "").trim();
+      if (!cleanQuery) {
+        return res.status(400).json({ error: "Query is required" });
+      }
+
+      const defaultSteps = [
+        `Survey recent web and academic sources for "${cleanQuery}".`,
+        `Identify multiple interpretations, mechanisms, and use cases of "${cleanQuery}" across domains.`,
+        `Collect authoritative definitions, quantitative benchmarks, and notable references.`,
+        `Compare findings and highlight key distinctions, trade-offs, and trends.`,
+        `Synthesize verified insights into a structured report with actionable takeaways.`,
+      ];
+
+      const candidateKeys = getEffectiveApiKeys(req);
+      for (const apiKey of candidateKeys) {
+        try {
+          const ai = getGenAiClient(apiKey);
+          const result = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: `Create a concise 5-step research plan to thoroughly investigate: "${cleanQuery}". Return ONLY a valid JSON array of 5 short single-sentence action strings (no markdown, no numbering).`,
+                  },
+                ],
+              },
+            ],
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            },
+          });
+          const raw = (result.text || "").trim();
+          const jsonMatch = raw.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed) && parsed.length >= 3) {
+              return res.json({
+                success: true,
+                steps: parsed.slice(0, 6).map((s) => String(s).trim()).filter(Boolean),
+              });
+            }
+          }
+        } catch {
+          // Try next key or fall back cleanly
+        }
+      }
+
+      return res.json({ success: true, steps: defaultSteps });
+    } catch {
+      return res.json({
+        success: true,
+        steps: [
+          "Survey recent web and academic sources for the topic.",
+          "Identify core principles, context, and real-world applications.",
+          "Collect authoritative facts, data points, and notable references.",
+          "Compare competing perspectives and highlight key trends.",
+          "Synthesize findings into concise, cited recommendations.",
+        ],
+      });
+    }
+  });
+
   app.post("/api/deep-research", async (req: Request, res: Response) => {
     try {
-      const { query, depth = "deep", modelId = "gemini-3.8-flash" } = req.body;
+      const { query, depth = "deep", modelId = "forge-2-ultra", planSteps } = req.body;
       const cleanQuery = (query || "").trim();
 
       if (!cleanQuery) {
@@ -2037,6 +2252,10 @@ The UI renders this as an interactive playable quiz widget!`;
       let reportAnswer = "";
       const sources: { title: string; url: string; snippet: string; sourceDomain?: string }[] = [];
       const searchQueriesUsed: string[] = [];
+      const customPlanClause =
+        Array.isArray(planSteps) && planSteps.length > 0
+          ? `\nFollow this approved research plan:\n${planSteps.map((s: any, idx: number) => `${idx + 1}. ${String(s)}`).join("\n")}\n`
+          : "";
 
       if (apiKey) {
         try {
@@ -2061,7 +2280,7 @@ The UI renders this as an interactive playable quiz widget!`;
                     role: "user",
                     parts: [
                       {
-                        text: `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n\n` +
+                        text: `Execute an exhaustive, multi-step deep research investigation on the topic: "${cleanQuery}".\n${customPlanClause}\n` +
                           `Instructions for the report structure:\n` +
                           `1. Start with a direct, comprehensive executive summary and core answer.\n` +
                           `2. Provide a 'Key Findings' section with bulleted facts, statistics, and verifiable takeaways.\n` +
@@ -4166,6 +4385,162 @@ ${currentContent}
     const wavBuf = Buffer.concat([header, rawBuf]);
     return { base64: wavBuf.toString("base64"), mimeType: "audio/wav" };
   };
+
+  // ==========================================
+  // 6b-2. ULTRA-FAST REAL-TIME VOICE TURN (/api/voice-turn)
+  // Generates concise spoken reply + neural WAV audio in a single fast roundtrip
+  // ==========================================
+  app.post("/api/voice-turn", async (req: Request, res: Response) => {
+    try {
+      const { message, history = [], voiceName = "Zephyr" } = req.body;
+      const cleanMessage = (message || "").trim();
+
+      if (!cleanMessage) {
+        return res.status(400).json({ error: "Voice message is required." });
+      }
+
+      const validVoices = ["Zephyr", "Aoede", "Kore", "Puck", "Fenrir", "Charon"];
+      const normalizedVoiceName = (voiceName || "").replace(/^gemini-/i, "").trim();
+      const chosenVoice =
+        validVoices.find((v) => v.toLowerCase() === normalizedVoiceName.toLowerCase()) || "Zephyr";
+
+      const candidateKeys = getEffectiveApiKeys(req);
+      const isCreatorQuery = /(?:who\s+(?:created|made|developed|built|designed|founded)\s+(?:you|forgex)|who\s+is\s+your\s+(?:creator|maker|founder)|who\s+is\s+vishwesh)/i.test(cleanMessage);
+
+      let replyText = "";
+      let modelUsed = "ForgeX Voice Engine";
+
+      if (isCreatorQuery) {
+        replyText = "I was created by VishweshVarman as part of ForgeX.";
+      } else {
+        const needsLiveSearch = /\b(?:weather|forecast|latest\s+news|breaking\s+news|today'?s|right\s+now|current\s+(?:price|score|time))\b/i.test(cleanMessage);
+        const nowUtc = new Date().toISOString().slice(0, 10);
+        const voiceSystemInstruction =
+          `You are ForgeX in a live real-time voice call. Current UTC date: ${nowUtc}. ` +
+          `Respond in warm, natural, conversational spoken English in 1 to 2 concise sentences (under 40 words). ` +
+          `Never use bullet points, markdown symbols, asterisks, or URLs. Be accurate and direct.`;
+
+        const voiceCascade: Array<{ model: string; thinking: ThinkingLevel; label: string }> = [
+          { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Gemini 3.1 Flash Lite (Voice)" },
+          { model: "gemini-4-hydrogen", thinking: ThinkingLevel.LOW, label: "Gemini 4 Hydrogen (Voice)" },
+        ];
+
+        for (const currentKey of candidateKeys) {
+          const ai = getGenAiClient(currentKey);
+          for (const candidate of voiceCascade) {
+            try {
+              const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+              if (Array.isArray(history)) {
+                for (const item of history.slice(-6)) {
+                  if ((item.role === "user" || item.role === "assistant") && item.content) {
+                    contents.push({
+                      role: item.role === "assistant" ? "model" : "user",
+                      parts: [{ text: String(item.content) }],
+                    });
+                  }
+                }
+              }
+              contents.push({ role: "user", parts: [{ text: cleanMessage }] });
+
+              const requestConfig: any = {
+                systemInstruction: voiceSystemInstruction,
+                thinkingConfig: { thinkingLevel: candidate.thinking },
+              };
+              if (needsLiveSearch) {
+                requestConfig.tools = [{ googleSearch: {} }];
+              }
+
+              const genRes = await ai.models.generateContent({
+                model: candidate.model,
+                contents,
+                config: requestConfig,
+              });
+              const candidateText = genRes.text?.trim();
+              if (candidateText) {
+                replyText = candidateText;
+                modelUsed = candidate.label;
+                break;
+              }
+            } catch (err: any) {
+              console.log(`[/api/voice-turn] ${candidate.model} notice:`, err?.message?.slice(0, 120));
+            }
+          }
+          if (replyText) break;
+        }
+
+        if (!replyText) {
+          replyText = generateFallbackChatReply(cleanMessage, "forge-1")
+            .replace(/```[\s\S]*?```/g, "")
+            .replace(/[*#_`~]/g, "")
+            .replace(/\s+/g, " ")
+            .split(/(?<=[.!?])\s+/)
+            .slice(0, 2)
+            .join(" ")
+            .trim() || "I hear you! How can I help you next?";
+        }
+      }
+
+      const cleanSpeech = replyText
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/[*#_~\[\]\(\)\{\}]/g, "")
+        .replace(/https?:\/\/\S+/g, "")
+        .replace(/\s+/g, " ")
+        .slice(0, 800)
+        .trim();
+
+      let audioBase64: string | undefined;
+      let mimeType: string | undefined;
+      let ttsEngine: string | undefined;
+
+      for (const currentKey of candidateKeys) {
+        const ai = getGenAiClient(currentKey);
+        const ttsModels = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"];
+        for (const ttsModel of ttsModels) {
+          try {
+            const ttsRes = await ai.models.generateContent({
+              model: ttsModel,
+              contents: [{ role: "user", parts: [{ text: cleanSpeech }] }],
+              config: {
+                // @ts-ignore
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: chosenVoice },
+                  },
+                },
+              },
+            });
+            const parts = ttsRes.candidates?.[0]?.content?.parts || [];
+            const audioPart = parts.find((p: any) => p?.inlineData?.data);
+            if (audioPart?.inlineData?.data) {
+              const playable = ensureWavBase64(audioPart.inlineData.data, audioPart.inlineData.mimeType);
+              audioBase64 = playable.base64;
+              mimeType = playable.mimeType;
+              ttsEngine = ttsModel;
+              break;
+            }
+          } catch (ttsErr: any) {
+            console.log(`[/api/voice-turn] ${ttsModel} notice:`, ttsErr?.message?.slice(0, 120));
+          }
+        }
+        if (audioBase64) break;
+      }
+
+      return res.json({
+        success: true,
+        reply: cleanSpeech || replyText,
+        audioBase64,
+        mimeType,
+        voiceName: chosenVoice,
+        model: modelUsed,
+        ttsEngine,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
+    }
+  });
 
   // ==========================================
   // 6c. AI TEXT-TO-SPEECH (TTS) ENDPOINT

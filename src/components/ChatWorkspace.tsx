@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, 
   Mic, 
   Send, 
-  Sparkles, 
+  Cpu, 
   Copy, 
   Check, 
   CornerDownLeft, 
@@ -27,16 +27,41 @@ import {
   Download,
   Code2,
   Maximize2,
-  Pencil
+  Pencil,
+  Folder,
+  Telescope,
+  Lightbulb,
+  LayoutTemplate,
+  Search,
+  Eraser,
+  Brain
 } from 'lucide-react';
-import { ChatMessage, ChatSession, ForgeXModelId, ForgeXTheme, FORGEX_MODELS } from '../types';
+import { ChatMessage, ChatSession, ForgeXModelId, ForgeXProject, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { chatService } from '../services/chatService';
+import { imageService } from '../services/imageService';
+import { libraryService } from '../services/libraryService';
+import { projectService } from '../services/projectService';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { detectWebSearchIntent } from '../utils/searchIntent';
 import { detectImageGenerationIntent } from '../utils/imageIntent';
 import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
 import { FullscreenImageModal } from './FullscreenImageModal';
+import { InlineDeepResearchCard } from './InlineDeepResearchCard';
+
+const MenuLibraryIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="4" y="4" width="4" height="16" rx="1" />
+    <rect x="10" y="4" width="4" height="16" rx="1" />
+    <path d="M16 5.5l3.5-.8 2 14.8-3.5.8z" />
+  </svg>
+);
+
+const MenuSketchIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 17c2-6 5-10 7-10s1 9 3 9 3.5-6 6-8" />
+  </svg>
+);
 
 interface ChatWorkspaceProps {
   currentSession: ChatSession | null;
@@ -44,11 +69,16 @@ interface ChatWorkspaceProps {
   onDeleteSession?: (sessionId: string) => void;
   onNewChat?: () => void;
   selectedModelId: ForgeXModelId;
+  onSelectModel?: (modelId: ForgeXModelId) => void;
   theme: ForgeXTheme;
   onNavigateToImage: () => void;
   onNavigateToVideo?: () => void;
   onNavigateToMusic?: () => void;
   onNavigateToCode?: (initialCode?: string, initialLang?: any) => void;
+  onNavigateToLibrary?: () => void;
+  onNavigateToProjects?: () => void;
+  onNavigateToResearch?: () => void;
+  onOpenStudioStore?: () => void;
   onOpenVoiceMode?: () => void;
 }
 
@@ -58,11 +88,16 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   onDeleteSession,
   onNewChat,
   selectedModelId,
+  onSelectModel,
   theme,
   onNavigateToImage,
   onNavigateToVideo,
   onNavigateToMusic,
   onNavigateToCode,
+  onNavigateToLibrary,
+  onNavigateToProjects,
+  onNavigateToResearch,
+  onOpenStudioStore,
   onOpenVoiceMode,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -72,10 +107,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [expandedDomainGroup, setExpandedDomainGroup] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<{ type: 'file' | 'image'; name: string; url?: string }[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [activeComposerTool, setActiveComposerTool] = useState<'none' | 'image' | 'search' | 'thinking' | 'deep_research'>('none');
+  const [activeProjectInChat, setActiveProjectInChat] = useState<ForgeXProject | null>(null);
+  const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
+  const [librarySearchQuery, setLibrarySearchQuery] = useState('');
+  const [isSketchOpen, setIsSketchOpen] = useState(false);
+  const [sketchColor, setSketchColor] = useState('#111827');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [pendingUserTurn, setPendingUserTurn] = useState<{
     text: string;
     attachments?: ChatMessage['attachments'];
+    toolBadge?: ChatMessage['toolBadge'];
   } | null>(null);
   const [streamingReply, setStreamingReply] = useState<{
     text: string;
@@ -85,6 +129,104 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [fullscreenImage, setFullscreenImage] = useState<{ url: string; prompt: string; id?: string; initialEdit?: boolean } | null>(null);
   const [downloadedImageId, setDownloadedImageId] = useState<string | null>(null);
   const [generatingImageState, setGeneratingImageState] = useState<{ prompt: string; progress: number } | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const attachMenuContainerRef = useRef<HTMLDivElement | null>(null);
+  const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isSketchDrawingRef = useRef(false);
+  const deepResearchAbortMapRef = useRef<Record<string, AbortController>>({});
+
+  const optimizeImageFileToDataUrl = (file: File, maxDim = 1600, quality = 0.88): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.onload = (ev) => {
+        const rawDataUrl = ev.target?.result as string;
+        if (!rawDataUrl) {
+          reject(new Error('Empty image data'));
+          return;
+        }
+        // Keep already compact images directly so lossless text screenshots stay razor-sharp
+        if (file.size <= 350 * 1024) {
+          resolve(rawDataUrl);
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          const w = img.naturalWidth || img.width;
+          const h = img.naturalHeight || img.height;
+          if (!w || !h) {
+            resolve(rawDataUrl);
+            return;
+          }
+          const scale = Math.min(1, maxDim / Math.max(w, h));
+          const targetW = Math.max(1, Math.round(w * scale));
+          const targetH = Math.max(1, Math.round(h * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(rawDataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const outMime = file.type === 'image/png' && targetW * targetH <= 900 * 900 ? 'image/png' : 'image/jpeg';
+          try {
+            const optimized = canvas.toDataURL(outMime, quality);
+            resolve(optimized.length < rawDataUrl.length ? optimized : rawDataUrl);
+          } catch {
+            resolve(rawDataUrl);
+          }
+        };
+        img.onerror = () => resolve(rawDataUrl);
+        img.src = rawDataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const attachIncomingFiles = async (files: File[], explicitType?: 'file' | 'image') => {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const resolvedType: 'file' | 'image' =
+        explicitType === 'image' || file.type.startsWith('image/') ? 'image' : 'file';
+      const fallbackName =
+        file.name && file.name.trim()
+          ? file.name
+          : `pasted-image-${Date.now()}${files.length > 1 ? `-${i + 1}` : ''}.png`;
+      if (resolvedType === 'image' && (file.type.startsWith('image/') || explicitType === 'image')) {
+        try {
+          const url = await optimizeImageFileToDataUrl(file);
+          setAttachedFiles((prev) => [...prev, { type: 'image', name: fallbackName, url }]);
+        } catch (err) {
+          console.warn('Could not attach image file:', err);
+        }
+      } else {
+        setAttachedFiles((prev) => [...prev, { type: resolvedType, name: fallbackName }]);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (attachMenuContainerRef.current && !attachMenuContainerRef.current.contains(e.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [attachMenuOpen]);
+
+  useEffect(() => {
+    if (!isSketchOpen || !sketchCanvasRef.current) return;
+    const canvas = sketchCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }, [isSketchOpen]);
 
   const handleDownloadImage = async (imageUrl: string, imageId?: string) => {
     try {
@@ -270,6 +412,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             content: pendingUserTurn.text,
             timestamp: Date.now(),
             attachments: pendingUserTurn.attachments,
+            toolBadge: pendingUserTurn.toolBadge,
           },
         ]
       : []),
@@ -432,6 +575,213 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   }, [inputText]);
 
+  const buildDefaultResearchSteps = (query: string): string[] => {
+    const topic = query.trim().slice(0, 70) || 'the requested topic';
+    return [
+      `Survey authoritative sources and recent developments for "${topic}".`,
+      `Clarify key definitions, core mechanisms, and primary context around "${topic}".`,
+      `Gather concrete data points, real-world examples, and technical details.`,
+      `Compare differing viewpoints, trade-offs, and notable trends.`,
+      `Synthesize validated findings into a structured report with citations.`,
+    ];
+  };
+
+  const executeDeepResearchMessage = async (sessionId: string, messageId: string, steps: string[]) => {
+    const startTs = Date.now();
+    const targetSession = chatService.getSessions().find((s) => s.id === sessionId);
+    const targetMsg = targetSession?.messages.find((m) => m.id === messageId);
+    const query = targetMsg?.deepResearch?.query || 'requested topic';
+
+    const runningSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => ({
+      ...msg,
+      deepResearch: {
+        ...(msg.deepResearch || { query, steps }),
+        query,
+        steps,
+        status: 'running',
+      },
+    }));
+    if (runningSession) {
+      onUpdateSession(runningSession);
+    }
+
+    const abortController = new AbortController();
+    deepResearchAbortMapRef.current[messageId] = abortController;
+
+    try {
+      const storedApiKey = localStorage.getItem('forgex_api_key') || '';
+      const res = await fetch('/api/deep-research', {
+        method: 'POST',
+        signal: abortController.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
+        },
+        body: JSON.stringify({
+          query: activeProjectInChat
+            ? `${query}\n\n[Project Context: ${activeProjectInChat.name} — ${activeProjectInChat.description || ''}]`
+            : query,
+          planSteps: steps,
+          depth: 'deep',
+          modelId: selectedModelId,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Deep research failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      const report = data.report || data;
+      const durationSec = Math.max(1, Math.round((Date.now() - startTs) / 1000));
+      const sources = Array.isArray(report.sources)
+        ? report.sources.map((s: any) => ({
+            title: s.title || s.sourceDomain || 'Source',
+            url: s.url || '#',
+            snippet: s.snippet || '',
+            sourceDomain: s.sourceDomain,
+          }))
+        : [];
+
+      const completedSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => ({
+        ...msg,
+        content: report.answer || report.summary || 'Research completed.',
+        searchedWeb: true,
+        searchQueries: [query],
+        groundingSources: sources,
+        deepResearch: {
+          ...(msg.deepResearch || { query, steps }),
+          query,
+          steps,
+          status: 'completed',
+          researchDurationSec: durationSec,
+        },
+      }));
+      if (completedSession) {
+        onUpdateSession(completedSession);
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      const errSession = chatService.updateMessageInSession(sessionId, messageId, (msg) => ({
+        ...msg,
+        content: `Could not complete deep research: ${err?.message || 'Network error'}. Please try again.`,
+        deepResearch: {
+          ...(msg.deepResearch || { query, steps }),
+          query,
+          steps,
+          status: 'completed',
+          researchDurationSec: Math.max(1, Math.round((Date.now() - startTs) / 1000)),
+        },
+      }));
+      if (errSession) {
+        onUpdateSession(errSession);
+      }
+    } finally {
+      delete deepResearchAbortMapRef.current[messageId];
+    }
+  };
+
+  const handleCancelDeepResearch = (sessionId: string, messageId: string) => {
+    const controller = deepResearchAbortMapRef.current[messageId];
+    if (controller) {
+      controller.abort();
+      delete deepResearchAbortMapRef.current[messageId];
+    }
+    const updated = chatService.updateMessageInSession(sessionId, messageId, (msg) =>
+      msg.deepResearch
+        ? {
+            ...msg,
+            deepResearch: { ...msg.deepResearch, status: 'cancelled' },
+          }
+        : msg
+    );
+    if (updated) onUpdateSession(updated);
+  };
+
+  const handleUpdateDeepResearchSteps = (sessionId: string, messageId: string, steps: string[]) => {
+    const updated = chatService.updateMessageInSession(sessionId, messageId, (msg) =>
+      msg.deepResearch
+        ? {
+            ...msg,
+            deepResearch: { ...msg.deepResearch, steps },
+          }
+        : msg
+    );
+    if (updated) onUpdateSession(updated);
+  };
+
+  const handleStartDeepResearchPlan = async (
+    query: string,
+    effectiveModel: ForgeXModelId,
+    filesToAttach: ChatMessage['attachments']
+  ) => {
+    const planStartTs = Date.now();
+    const initialSteps = buildDefaultResearchSteps(query);
+    const userMsg: ChatMessage = {
+      id: 'usr_msg_' + Date.now(),
+      role: 'user',
+      content: query,
+      timestamp: Date.now(),
+      attachments: filesToAttach,
+      toolBadge: 'deep_research',
+    };
+    const planMsgId = 'asst_dr_' + (Date.now() + 1);
+    const planMsg: ChatMessage = {
+      id: planMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now() + 1,
+      modelUsed: 'Deep Research',
+      deepResearch: {
+        query,
+        status: 'planning',
+        steps: initialSteps,
+      },
+    };
+
+    const targetSessionId = currentSession?.id || 'chat_' + Date.now();
+    const createdSession = chatService.appendMessagesToSession(
+      targetSessionId,
+      [userMsg, planMsg],
+      effectiveModel,
+      query
+    );
+    setPendingUserTurn(null);
+    onUpdateSession(createdSession);
+
+    try {
+      const storedApiKey = localStorage.getItem('forgex_api_key') || '';
+      const res = await fetch('/api/deep-research/plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(storedApiKey ? { 'x-api-key': storedApiKey } : {}),
+        },
+        body: JSON.stringify({ query }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.steps) && data.steps.length > 0) {
+          const planSecs = Math.max(1, Math.round((Date.now() - planStartTs) / 1000));
+          const updated = chatService.updateMessageInSession(createdSession.id, planMsgId, (m) => {
+            if (!m.deepResearch || m.deepResearch.status !== 'planning') return m;
+            return {
+              ...m,
+              deepResearch: {
+                ...m.deepResearch,
+                steps: data.steps.slice(0, 5),
+                planDurationSec: planSecs,
+              },
+            };
+          });
+          if (updated) onUpdateSession(updated);
+        }
+      }
+    } catch {
+      // Keep clean default 5 steps if plan fetch fails
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend !== undefined ? textToSend : inputText).trim();
     if ((!text && attachedFiles.length === 0) || isSubmitting) return;
@@ -443,13 +793,53 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       textareaRef.current.style.height = 'auto';
     }
 
+    const activeToolSnapshot = activeComposerTool;
+    setActiveComposerTool('none');
+
+    const activeToolBadge: ChatMessage['toolBadge'] | undefined =
+      activeToolSnapshot === 'deep_research'
+        ? 'deep_research'
+        : activeToolSnapshot === 'image'
+        ? 'image'
+        : activeToolSnapshot === 'search'
+        ? 'search'
+        : activeToolSnapshot === 'thinking'
+        ? 'thinking'
+        : undefined;
+
+    const effectiveModelForTurn: ForgeXModelId =
+      activeToolSnapshot === 'thinking' || activeToolSnapshot === 'deep_research'
+        ? 'forge-2-ultra'
+        : selectedModelId;
+
+    // Inline ChatGPT-style Deep Research Plan -> Countdown -> Report workflow
+    if (activeToolSnapshot === 'deep_research') {
+      await handleStartDeepResearchPlan(
+        text || 'Analyze the attached content deeply',
+        effectiveModelForTurn,
+        filesToAttach
+      );
+      return;
+    }
+
     // Set optimistic message so user never sees input vanish without response
-    setPendingUserTurn({ text, attachments: filesToAttach });
+    setPendingUserTurn({ text, attachments: filesToAttach, toolBadge: activeToolBadge });
     setStreamingReply(null);
 
     // Check for image generation intent vs web search vs general chat
-    const imgIntent = detectImageGenerationIntent(text);
-    const localSearchIntent = detectWebSearchIntent(text);
+    const hasAttachedImage = filesToAttach.some((f) => f.type === 'image');
+    const rawTextForService =
+      activeToolSnapshot === 'image' && !/^\/image\b/i.test(text) && !detectImageGenerationIntent(text, hasAttachedImage).isImage
+        ? `/image ${text}`
+        : activeProjectInChat && !detectImageGenerationIntent(text, hasAttachedImage).isImage
+        ? `${text}\n\n[Project Context — ${activeProjectInChat.name}: ${activeProjectInChat.description || ''}${activeProjectInChat.contextNotes ? ` | Notes: ${activeProjectInChat.contextNotes}` : ''}]`
+        : text;
+    const imgIntent = detectImageGenerationIntent(rawTextForService, hasAttachedImage);
+    const effectiveSearchMode: 'auto' | 'on' | 'off' = activeToolSnapshot === 'search' ? 'on' : 'auto';
+    const localSearchIntent =
+      effectiveSearchMode === 'on'
+        ? { shouldSearch: true, searchQuery: text }
+        : detectWebSearchIntent(text);
 
     if (imgIntent.isImage) {
       setSearchingQuery(null);
@@ -472,8 +862,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       const sessionId = currentSession?.id || 'new';
       const { updatedSession } = await chatService.sendMessage(
         sessionId,
-        text,
-        selectedModelId,
+        rawTextForService,
+        effectiveModelForTurn,
         filesToAttach,
         (streamedText, modelName, sources) => {
           // If generating image, never display streaming text!
@@ -484,7 +874,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             groundingSources: sources,
           });
         },
-        'auto',
+        effectiveSearchMode,
         (isSearching, q) => {
           if (imgIntent.isImage) return;
           if (isSearching) {
@@ -501,7 +891,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             prompt: imgIntent.prompt,
             progress: Math.min(100, Math.max(1, Math.round(realProgress))),
           });
-        }
+        },
+        activeToolBadge
       );
 
       // Ensure progress reaches exactly 100% before showing the image
@@ -552,19 +943,55 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
-  const handleAttachFile = (e: React.ChangeEvent<HTMLInputElement>, type: 'file' | 'image') => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (type === 'image' && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const url = event.target?.result as string;
-          setAttachedFiles((prev) => [...prev, { type, name: file.name, url }]);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setAttachedFiles((prev) => [...prev, { type, name: file.name }]);
+  const handleAttachFile = (e: React.ChangeEvent<HTMLInputElement>, explicitType?: 'file' | 'image') => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length > 0) {
+      void attachIncomingFiles(files, explicitType);
+    }
+    e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLElement>) => {
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    const pastedImages: File[] = [];
+    const seenKeys = new Set<string>();
+
+    if (clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            const key = `${file.type}:${file.size}:${file.name}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              pastedImages.push(file);
+            }
+          }
+        }
       }
+    }
+
+    if (pastedImages.length === 0 && clipboardData.files) {
+      for (let i = 0; i < clipboardData.files.length; i++) {
+        const file = clipboardData.files[i];
+        if (file && file.type.startsWith('image/')) {
+          const key = `${file.type}:${file.size}:${file.name}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            pastedImages.push(file);
+          }
+        }
+      }
+    }
+
+    if (pastedImages.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      void attachIncomingFiles(pastedImages, 'image');
+      textareaRef.current?.focus();
     }
   };
 
@@ -597,34 +1024,56 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const hasContent = Boolean(inputText.trim() || attachedFiles.length > 0);
 
     return (
-      <div className="w-full relative">
+      <div className="w-full relative" onPaste={handlePaste}>
         {/* Attached files preview */}
         {attachedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2 px-1">
-            {attachedFiles.map((file, idx) => (
-              <div
-                key={idx}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs border ${
-                  isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'
-                }`}
-              >
-                {file.type === 'image' && file.url ? (
-                  <img src={file.url} alt={file.name} className="w-5 h-5 rounded object-cover border border-amber-500/40" />
-                ) : file.type === 'image' ? (
-                  <ImageIcon className="w-3.5 h-3.5" />
-                ) : (
-                  <Paperclip className="w-3.5 h-3.5" />
-                )}
-                <span className="truncate max-w-[140px]">{file.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
-                  className={`${isDark ? 'hover:text-white' : 'hover:text-neutral-900'} ml-1`}
+          <div className="flex flex-wrap items-end gap-2.5 mb-2.5 px-1">
+            {attachedFiles.map((file, idx) =>
+              file.type === 'image' && file.url ? (
+                <div
+                  key={idx}
+                  className={`relative group rounded-2xl overflow-hidden border shadow-sm ${
+                    isDark ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-300 bg-white'
+                  }`}
                 >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
+                  <img
+                    src={file.url}
+                    alt={file.name}
+                    title={file.name}
+                    className="w-16 h-16 sm:w-20 sm:h-20 object-cover block"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    title="Remove attached image"
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/75 hover:bg-black text-white flex items-center justify-center transition-opacity cursor-pointer shadow"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border ${
+                    isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-800 font-medium'
+                  }`}
+                >
+                  {file.type === 'image' ? (
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  ) : (
+                    <Paperclip className="w-3.5 h-3.5" />
+                  )}
+                  <span className="truncate max-w-[140px]">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    className={`${isDark ? 'hover:text-white' : 'hover:text-neutral-900'} ml-1 cursor-pointer`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )
+            )}
           </div>
         )}
 
@@ -638,14 +1087,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           }`}
         >
           {/* Plus Attach Button on Left */}
-          <div className="relative shrink-0">
+          <div ref={attachMenuContainerRef} className="relative shrink-0">
             <button
               id="btn-chat-attach"
               type="button"
               onClick={() => setAttachMenuOpen(!attachMenuOpen)}
-              title="Attach files or images"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                isDark
+              title="Add photos, files, or tools"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                attachMenuOpen
+                  ? isDark
+                    ? 'bg-neutral-800 text-white'
+                    : 'bg-neutral-200 text-neutral-900'
+                  : isDark
                   ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
                   : 'hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
               }`}
@@ -653,73 +1106,280 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <Plus className="w-4 h-4" />
             </button>
 
-            {/* Attach Dropdown Menu */}
+            {/* Plus Popover Menu matching ChatGPT reference */}
             {attachMenuOpen && (
               <div
-                className={`absolute bottom-full left-0 mb-2 w-48 rounded-2xl border p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                className={`absolute ${
+                  hasMessages ? 'bottom-full mb-2.5' : 'top-full mt-2.5'
+                } left-0 w-[308px] sm:w-[336px] max-h-[340px] overflow-y-auto custom-scrollbar rounded-2xl border p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.14)] z-50 animate-in fade-in zoom-in-95 duration-100 ${
                   isDark
-                    ? 'bg-neutral-900 border-neutral-800 text-white'
-                    : 'bg-white border-neutral-200 text-neutral-900'
+                    ? 'bg-neutral-900 border-neutral-800 text-white shadow-black/60'
+                    : 'bg-white border-neutral-200/90 text-neutral-900'
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
-                    imageInputRef.current?.click();
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
-                  }`}
-                >
-                  <ImageIcon className="w-4 h-4 text-amber-500" />
-                  <span>Upload Image</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachMenuOpen(false);
                     fileInputRef.current?.click();
                   }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
                   }`}
                 >
-                  <FileText className="w-4 h-4 text-blue-500" />
-                  <span>Upload Document</span>
+                  <Paperclip className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Add photos & files</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Upload from computer
+                    </span>
+                  </div>
                 </button>
-                <div className={`my-1 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`} />
+
                 <button
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
-                    setInputText('/image ');
-                    textareaRef.current?.focus();
+                    setLibrarySearchQuery('');
+                    setIsLibraryPickerOpen(true);
                   }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-amber-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-amber-600'
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>Generate Image (FLUX)</span>
+                  <MenuLibraryIcon className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Add from library</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Browse and search your files
+                    </span>
+                  </div>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
-                    setInputText('Write clean TypeScript code to ');
+                    setActiveComposerTool('image');
                     textareaRef.current?.focus();
                   }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'hover:bg-neutral-800 text-neutral-300 hover:text-blue-400' : 'hover:bg-neutral-100 text-neutral-700 hover:text-blue-600'
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    activeComposerTool === 'image'
+                      ? isDark
+                        ? 'bg-neutral-800'
+                        : 'bg-neutral-100'
+                      : isDark
+                      ? 'hover:bg-neutral-800'
+                      : 'hover:bg-neutral-100'
                   }`}
                 >
-                  <Code2 className="w-4 h-4 text-blue-500" />
-                  <span>Write Code</span>
+                  <ImageIcon className="w-4 h-4 shrink-0 text-sky-500" />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Create image</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Visualize anything
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setActiveComposerTool('search');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    activeComposerTool === 'search'
+                      ? isDark
+                        ? 'bg-neutral-800'
+                        : 'bg-neutral-100'
+                      : isDark
+                      ? 'hover:bg-neutral-800'
+                      : 'hover:bg-neutral-100'
+                  }`}
+                >
+                  <Globe className="w-4 h-4 shrink-0 text-sky-500" />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Web search</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Find real-time news and info
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setIsProjectPickerOpen(true);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    activeProjectInChat
+                      ? isDark
+                        ? 'bg-neutral-800'
+                        : 'bg-neutral-100'
+                      : isDark
+                      ? 'hover:bg-neutral-800'
+                      : 'hover:bg-neutral-100'
+                  }`}
+                >
+                  <Folder className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Work in a project</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Start a chat in a project
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setActiveComposerTool('deep_research');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    activeComposerTool === 'deep_research'
+                      ? isDark
+                        ? 'bg-neutral-800'
+                        : 'bg-neutral-100'
+                      : isDark
+                      ? 'hover:bg-neutral-800'
+                      : 'hover:bg-neutral-100'
+                  }`}
+                >
+                  <Telescope className="w-4 h-4 shrink-0 text-sky-500" />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Deep research</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Get a detailed report
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setIsSketchOpen(true);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
+                  }`}
+                >
+                  <MenuSketchIcon className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Sketch</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Draw and attach an image
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    setActiveComposerTool('thinking');
+                    if (onSelectModel) onSelectModel('forge-2-ultra');
+                    textareaRef.current?.focus();
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    activeComposerTool === 'thinking'
+                      ? isDark
+                        ? 'bg-neutral-800'
+                        : 'bg-neutral-100'
+                      : isDark
+                      ? 'hover:bg-neutral-800'
+                      : 'hover:bg-neutral-100'
+                  }`}
+                >
+                  <Lightbulb className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Thinking</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      For detailed answers
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachMenuOpen(false);
+                    if (onOpenStudioStore) {
+                      onOpenStudioStore();
+                    } else {
+                      setInputText('Create a reusable prompt template for: ');
+                      textareaRef.current?.focus();
+                    }
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
+                  }`}
+                >
+                  <LayoutTemplate className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
+                  <div className="min-w-0 flex items-baseline gap-2 truncate">
+                    <span className="text-[13px] font-medium shrink-0">Template Creator</span>
+                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                      Create reusable templates saved as skills
+                    </span>
+                  </div>
                 </button>
               </div>
             )}
           </div>
+
+          {/* Active Project Chip if working inside a project */}
+          {activeProjectInChat && (
+            <button
+              type="button"
+              onClick={() => setActiveProjectInChat(null)}
+              title="Detach project context"
+              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                isDark
+                  ? 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                  : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
+              }`}
+            >
+              <Folder className="w-3.5 h-3.5" />
+              <span className="truncate max-w-[110px]">{activeProjectInChat.name}</span>
+              <X className="w-3 h-3 opacity-70" />
+            </button>
+          )}
+
+          {/* Active Composer Tool Chip when selected from + menu (matches Screenshot 1) */}
+          {activeComposerTool !== 'none' && (
+            <button
+              type="button"
+              onClick={() => setActiveComposerTool('none')}
+              title="Clear selected tool"
+              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors cursor-pointer ${
+                activeComposerTool === 'deep_research'
+                  ? 'bg-rose-500/8 hover:bg-rose-500/15 text-[#C84B82] dark:text-rose-400'
+                  : activeComposerTool === 'image' || activeComposerTool === 'search'
+                  ? 'bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                  : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200'
+              }`}
+            >
+              {activeComposerTool === 'deep_research' && <Telescope className="w-3.5 h-3.5 text-sky-500" />}
+              {activeComposerTool === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'search' && <Globe className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'thinking' && <Brain className="w-3.5 h-3.5" />}
+              <span>
+                {activeComposerTool === 'deep_research'
+                  ? 'Deep research'
+                  : activeComposerTool === 'image'
+                  ? 'Image'
+                  : activeComposerTool === 'search'
+                  ? 'Search'
+                  : 'Thinking'}
+              </span>
+              <X className="w-3 h-3 opacity-70" />
+            </button>
+          )}
 
           {/* Text Area */}
           <div className="flex-1 min-w-0 flex items-center">
@@ -730,11 +1390,20 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder={
                 voiceModeState === 'listening' || isListening
                   ? 'Listening...'
                   : voiceModeState === 'transcribing' || isProcessing
                   ? 'Transcribing...'
+                  : activeComposerTool === 'deep_research'
+                  ? 'Enter a topic for deep research...'
+                  : activeComposerTool === 'image'
+                  ? 'Describe an image to create...'
+                  : activeComposerTool === 'search'
+                  ? 'Search the web...'
+                  : activeComposerTool === 'thinking'
+                  ? 'Ask a complex question for deep thinking...'
                   : 'Ask ForgeX'
               }
               className={`w-full bg-transparent px-2 py-1 text-sm sm:text-base resize-none outline-none max-h-36 leading-normal transition-colors ${
@@ -753,6 +1422,33 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
           {/* Action buttons on Right */}
           <div className="flex items-center gap-1 shrink-0">
+            {/* Think Toggle Pill matching Screenshot 1 */}
+            <button
+              type="button"
+              onClick={() => {
+                if (activeComposerTool === 'thinking') {
+                  setActiveComposerTool('none');
+                } else {
+                  setActiveComposerTool('thinking');
+                  if (onSelectModel) onSelectModel('forge-2-ultra');
+                }
+                textareaRef.current?.focus();
+              }}
+              title="Toggle deep thinking"
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                activeComposerTool === 'thinking'
+                  ? isDark
+                    ? 'bg-neutral-800 text-white border border-neutral-700'
+                    : 'bg-neutral-200/80 text-neutral-900 border border-neutral-300'
+                  : isDark
+                  ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+                  : 'hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              <Brain className="w-3.5 h-3.5" />
+              <span>Think</span>
+            </button>
+
             {/* Dictation Mic Button */}
             <button
               id="btn-voice-input"
@@ -778,7 +1474,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               {voiceModeState === 'listening' || isListening ? (
                 <StopCircle className="w-4 h-4 text-red-400 animate-pulse" />
               ) : voiceModeState === 'transcribing' || isProcessing ? (
-                <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+                <Cpu className="w-4 h-4 text-amber-400 animate-spin" />
               ) : (
                 <Mic className="w-4 h-4" />
               )}
@@ -793,8 +1489,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 title="Live Voice Mode (real-time voice conversation)"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                   isDark
-                    ? 'hover:bg-neutral-800 text-neutral-400 hover:text-amber-400'
-                    : 'hover:bg-neutral-100 text-neutral-600 hover:text-amber-600'
+                    ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
+                    : 'hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
                 }`}
               >
                 <AudioLines className="w-4 h-4" />
@@ -837,13 +1533,45 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 relative overflow-hidden">
-      {/* Hidden file inputs */}
+    <div
+      className="flex-1 flex flex-col h-full min-h-0 relative overflow-hidden"
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes('Files')) {
+          e.preventDefault();
+          setIsDraggingOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsDraggingOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDraggingOver(false);
+        const droppedFiles = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+        if (droppedFiles.length > 0) {
+          void attachIncomingFiles(droppedFiles);
+          textareaRef.current?.focus();
+        }
+      }}
+    >
+      {isDraggingOver && (
+        <div className="pointer-events-none absolute inset-3 z-40 rounded-3xl border-2 border-dashed border-sky-500/70 bg-sky-500/10 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2">
+          <ImageIcon className="w-8 h-8 text-sky-500" />
+          <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+            Drop images or files here to analyze
+          </p>
+        </div>
+      )}
+      {/* Hidden file inputs (accepts both photos & documents for Add photos & files) */}
       <input
         type="file"
         ref={fileInputRef}
+        multiple
+        accept="image/*,.pdf,.txt,.md,.csv,.json,.js,.ts,.tsx,.py,.doc,.docx"
         className="hidden"
-        onChange={(e) => handleAttachFile(e, 'file')}
+        onChange={(e) => handleAttachFile(e)}
       />
       <input
         type="file"
@@ -939,15 +1667,47 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         </div>
                       )}
 
-                      {/* User message text bubble: Clean light/white style for light theme, neutral dark for dark theme */}
+                      {/* User message text bubble: Clean light/white style or tool-tinted badge matching Screenshot 2 */}
                       <div
                         className={`rounded-2xl px-4 py-2.5 sm:px-4.5 sm:py-3 font-normal rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap font-sans transition-colors ${
-                          isDark
+                          message.toolBadge === 'deep_research'
+                            ? isDark
+                              ? 'bg-rose-950/30 border border-rose-800/45 text-neutral-100 shadow-md shadow-black/25'
+                              : 'bg-[#FDF2F7] border border-rose-200/70 text-neutral-900 shadow-xs'
+                            : isDark
                             ? 'bg-neutral-800 border border-neutral-700/70 text-neutral-100 shadow-md shadow-black/25'
                             : 'bg-neutral-100/95 border border-neutral-200/90 text-neutral-900 shadow-sm'
                         }`}
                       >
-                        {message.content}
+                        {message.toolBadge && (
+                          <span className="inline-flex items-center gap-1.5 mr-2 align-middle">
+                            {message.toolBadge === 'deep_research' && (
+                              <>
+                                <Telescope className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                                <span className="text-[#C84B82] dark:text-rose-400 font-medium">Deep research</span>
+                              </>
+                            )}
+                            {message.toolBadge === 'image' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/12 text-sky-600 dark:text-sky-400">
+                                <ImageIcon className="w-3 h-3" />
+                                <span>Image</span>
+                              </span>
+                            )}
+                            {message.toolBadge === 'search' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/12 text-sky-600 dark:text-sky-400">
+                                <Globe className="w-3 h-3" />
+                                <span>Web search</span>
+                              </span>
+                            )}
+                            {message.toolBadge === 'thinking' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-neutral-500/15 text-neutral-700 dark:text-neutral-300">
+                                <Brain className="w-3 h-3" />
+                                <span>Think</span>
+                              </span>
+                            )}
+                          </span>
+                        )}
+                        <span>{message.content}</span>
                       </div>
 
                       {/* Action Bar for User Messages */}
@@ -977,6 +1737,31 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     </div>
                   ) : (
                     (() => {
+                      if (message.deepResearch) {
+                        const targetSessionId = currentSession?.id || '';
+                        return (
+                          <InlineDeepResearchCard
+                            message={message}
+                            theme={theme}
+                            onStart={(msgId, steps) =>
+                              void executeDeepResearchMessage(targetSessionId, msgId, steps)
+                            }
+                            onCancel={(msgId) => handleCancelDeepResearch(targetSessionId, msgId)}
+                            onUpdateSteps={(msgId, steps) =>
+                              handleUpdateDeepResearchSteps(targetSessionId, msgId, steps)
+                            }
+                            onCopy={copyToClipboard}
+                            copiedMessageId={copiedMessageId}
+                            renderSourcePills={renderSourcePills}
+                            onOpenInCodeStudio={(code, lang) => onNavigateToCode?.(code, lang)}
+                            onOpenInImageStudio={onNavigateToImage}
+                            onViewImageFullscreen={(url, prompt) =>
+                              setFullscreenImage({ url, prompt })
+                            }
+                          />
+                        );
+                      }
+
                       const hasImages = Boolean(
                         message.generatedImages &&
                         message.generatedImages.length > 0
@@ -1263,6 +2048,371 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           handleSendMessage(newPrompt);
         }}
       />
+
+      {/* Add from Library Picker Modal */}
+      {isLibraryPickerOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsLibraryPickerOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[80vh] ${
+              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+            }`}
+          >
+            <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
+              <div className="flex items-center gap-2">
+                <MenuLibraryIcon className="w-4 h-4" />
+                <h3 className="text-sm font-semibold">Add from Library</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {onNavigateToLibrary && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLibraryPickerOpen(false);
+                      onNavigateToLibrary();
+                    }}
+                    className={`text-xs px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                    }`}
+                  >
+                    Open Library
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsLibraryPickerOpen(false)}
+                  className="p-1 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 border-b border-neutral-200/70 dark:border-neutral-800">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs ${
+                isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+              }`}>
+                <Search className="w-3.5 h-3.5 text-neutral-400" />
+                <input
+                  type="text"
+                  value={librarySearchQuery}
+                  onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                  placeholder="Search saved images and references..."
+                  className="flex-1 bg-transparent outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {(() => {
+                const q = librarySearchQuery.trim().toLowerCase();
+                const refItems = libraryService.getReferences().map((r) => ({
+                  id: r.id,
+                  name: r.title || 'Reference Image',
+                  url: r.imageUrl,
+                }));
+                const genItems = imageService.getImages().map((img) => ({
+                  id: img.id,
+                  name: img.prompt || 'Generated Image',
+                  url: img.imageUrl,
+                }));
+                const all = [...refItems, ...genItems].filter(
+                  (item) => !q || item.name.toLowerCase().includes(q)
+                );
+
+                if (all.length === 0) {
+                  return (
+                    <div className="col-span-full py-10 text-center text-xs text-neutral-500">
+                      No matching images found in your Library yet.
+                    </div>
+                  );
+                }
+
+                return all.slice(0, 24).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setAttachedFiles((prev) => [
+                        ...prev,
+                        { type: 'image', name: item.name.slice(0, 40), url: item.url },
+                      ]);
+                      setIsLibraryPickerOpen(false);
+                      textareaRef.current?.focus();
+                    }}
+                    className={`group rounded-xl border overflow-hidden text-left transition-all cursor-pointer ${
+                      isDark ? 'border-neutral-800 hover:border-neutral-600 bg-neutral-950' : 'border-neutral-200 hover:border-neutral-400 bg-neutral-50'
+                    }`}
+                  >
+                    <img src={item.url} alt={item.name} className="w-full h-28 object-cover group-hover:scale-105 transition-transform" />
+                    <p className="px-2 py-1.5 text-[11px] truncate font-medium">{item.name}</p>
+                  </button>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sketch Pad Modal ("Sketch — Draw and attach an image") */}
+      {isSketchOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsSketchOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden flex flex-col ${
+              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+            }`}
+          >
+            <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
+              <div className="flex items-center gap-2">
+                <MenuSketchIcon className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-sm font-semibold">Sketch Pad</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSketchOpen(false)}
+                className="p-1 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  {['#111827', '#0284c7', '#16a34a', '#d97706', '#dc2626'].map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setSketchColor(color)}
+                      className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${
+                        sketchColor === color ? 'scale-110 border-neutral-400' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={`Select ink color ${color}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const canvas = sketchCanvasRef.current;
+                    const ctx = canvas?.getContext('2d');
+                    if (canvas && ctx) {
+                      ctx.fillStyle = '#ffffff';
+                      ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 cursor-pointer ${
+                    isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                  }`}
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
+              </div>
+
+              <canvas
+                ref={sketchCanvasRef}
+                width={460}
+                height={280}
+                onPointerDown={(e) => {
+                  const canvas = sketchCanvasRef.current;
+                  const ctx = canvas?.getContext('2d');
+                  if (!canvas || !ctx) return;
+                  const rect = canvas.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) * canvas.width) / rect.width;
+                  const y = ((e.clientY - rect.top) * canvas.height) / rect.height;
+                  isSketchDrawingRef.current = true;
+                  ctx.strokeStyle = sketchColor;
+                  ctx.lineWidth = 3.5;
+                  ctx.lineCap = 'round';
+                  ctx.lineJoin = 'round';
+                  ctx.beginPath();
+                  ctx.moveTo(x, y);
+                }}
+                onPointerMove={(e) => {
+                  if (!isSketchDrawingRef.current) return;
+                  const canvas = sketchCanvasRef.current;
+                  const ctx = canvas?.getContext('2d');
+                  if (!canvas || !ctx) return;
+                  const rect = canvas.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) * canvas.width) / rect.width;
+                  const y = ((e.clientY - rect.top) * canvas.height) / rect.height;
+                  ctx.lineTo(x, y);
+                  ctx.stroke();
+                }}
+                onPointerUp={() => {
+                  isSketchDrawingRef.current = false;
+                }}
+                onPointerLeave={() => {
+                  isSketchDrawingRef.current = false;
+                }}
+                className="w-full h-[260px] rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white touch-none cursor-crosshair"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSketchOpen(false)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-medium cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const dataUrl = sketchCanvasRef.current?.toDataURL('image/png');
+                    if (dataUrl) {
+                      setAttachedFiles((prev) => [
+                        ...prev,
+                        { type: 'image', name: 'sketch.png', url: dataUrl },
+                      ]);
+                    }
+                    setIsSketchOpen(false);
+                    textareaRef.current?.focus();
+                  }}
+                  className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 cursor-pointer"
+                >
+                  Attach Sketch
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Project Picker Modal ("Work in a project") */}
+      {isProjectPickerOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsProjectPickerOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[80vh] ${
+              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
+            }`}
+          >
+            <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
+              <div className="flex items-center gap-2">
+                <Folder className="w-4 h-4" />
+                <h3 className="text-sm font-semibold">Work in a project</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {onNavigateToProjects && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProjectPickerOpen(false);
+                      onNavigateToProjects();
+                    }}
+                    className={`text-xs px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                    }`}
+                  >
+                    Open Projects Studio
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsProjectPickerOpen(false)}
+                  className="p-1 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const title = newProjectTitle.trim();
+                  if (!title) return;
+                  const created = projectService.createProject({
+                    name: title,
+                    description: 'Inline chat project workspace',
+                  });
+                  setActiveProjectInChat(created);
+                  setNewProjectTitle('');
+                  setIsProjectPickerOpen(false);
+                  textareaRef.current?.focus();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={newProjectTitle}
+                  onChange={(e) => setNewProjectTitle(e.target.value)}
+                  placeholder="Create new project name..."
+                  className={`flex-1 px-3 py-2 rounded-xl border text-xs outline-none ${
+                    isDark ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+                  }`}
+                />
+                <button
+                  type="submit"
+                  disabled={!newProjectTitle.trim()}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-900 text-white dark:bg-white dark:text-neutral-950 disabled:opacity-40 cursor-pointer"
+                >
+                  Create
+                </button>
+              </form>
+
+              <div className="space-y-1.5">
+                {projectService.getProjects().length === 0 ? (
+                  <p className="text-xs text-neutral-500 text-center py-6">
+                    No saved projects yet. Create one above to ground your chat.
+                  </p>
+                ) : (
+                  projectService.getProjects().map((proj) => (
+                    <button
+                      key={proj.id}
+                      type="button"
+                      onClick={() => {
+                        projectService.setActiveProjectId(proj.id);
+                        setActiveProjectInChat(proj);
+                        setIsProjectPickerOpen(false);
+                        textareaRef.current?.focus();
+                      }}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                        activeProjectInChat?.id === proj.id
+                          ? isDark
+                            ? 'bg-neutral-800 border-neutral-700'
+                            : 'bg-neutral-100 border-neutral-300'
+                          : isDark
+                          ? 'border-neutral-800 hover:bg-neutral-800/70'
+                          : 'border-neutral-200 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold truncate">{proj.name}</p>
+                        {proj.description && (
+                          <p className="text-[11px] text-neutral-500 truncate">{proj.description}</p>
+                        )}
+                      </div>
+                      {activeProjectInChat?.id === proj.id && (
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

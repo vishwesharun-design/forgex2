@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Download, Copy, Heart, Sparkles, Zap, Trash2 } from 'lucide-react';
+import { X, Download, Copy, Heart, Zap, Trash2 } from 'lucide-react';
 import { GeneratedImage, GeneratedVideo, ForgeXTheme, FORGEX_MODELS } from '../types';
 import { SlideMotionPlayer } from './SlideMotionPlayer';
 

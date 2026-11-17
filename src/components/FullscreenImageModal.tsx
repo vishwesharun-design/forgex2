@@ -11,7 +11,7 @@ import {
   Maximize2, 
   GripVertical, 
   Check, 
-  Sparkles, 
+  Cpu, 
   ArrowRight, 
   Image as ImageIcon,
   RotateCcw,
@@ -418,7 +418,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
                 }}
                 className="w-full text-left px-3 py-2 rounded-xl hover:bg-neutral-100 text-neutral-800 flex items-center gap-2 cursor-pointer font-medium"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <Cpu className="w-3.5 h-3.5 text-amber-500" />
                 <span>Open in Image Studio</span>
               </button>
               <button

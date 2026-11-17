@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Zap, 
-  Sparkles, 
+  Cpu, 
   Download, 
   Maximize2, 
   Copy, 
@@ -49,6 +49,7 @@ const ASPECT_RATIOS: ImageAspectRatio[] = ['1:1', '16:9', '9:16', '4:3'];
 const IMAGE_COUNTS: number[] = [1, 2, 4];
 const STYLES: ImageStyle[] = [
   'None',
+  'Claymation',
   'Handwritten Notes',
   'Realistic',
   'Cinematic',
@@ -270,7 +271,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <Sparkles className="w-4 h-4" />
+                <Cpu className="w-4 h-4" />
               </div>
               <h2 className="font-display font-bold text-xl">Image Studio</h2>
             </div>
@@ -349,7 +350,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
           {/* Studio Tool Selection Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-none">
             {[
-              { id: 'text2img', label: 'Text to Image', icon: Sparkles },
+              { id: 'text2img', label: 'Text to Image', icon: Cpu },
               { id: 'img2img', label: 'Image to Image', icon: Wand2 },
               { id: 'inpaint', label: 'Inpaint / Edit', icon: Edit3 },
               { id: 'removeBg', label: 'Remove Background', icon: Scissors },
@@ -426,7 +427,11 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the image you want to create..."
+              placeholder={
+                style === 'Claymation'
+                  ? 'Describe your claymation scene (e.g. A smiling young man in a black puffy vest and grey hoodie wearing wired earphones on a warm glowing city street at night)...'
+                  : 'Describe the image you want to create...'
+              }
               className={`w-full p-4 rounded-2xl border text-sm leading-relaxed outline-none transition-all resize-none ${
                 isDark
                   ? 'bg-neutral-950 border-neutral-800 focus:border-amber-500 text-white placeholder:text-neutral-500'
@@ -546,6 +551,27 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                 </button>
               ))}
             </div>
+            {style === 'Claymation' && (
+              <div className={`mt-3 p-3 rounded-2xl border flex flex-wrap items-center justify-between gap-2 text-xs ${
+                isDark ? 'bg-amber-500/5 border-amber-500/20 text-neutral-300' : 'bg-amber-50 border-amber-200 text-neutral-700'
+              }`}>
+                <span>
+                  <strong className={isDark ? 'text-amber-400' : 'text-amber-700'}>Claymation Mode:</strong> Synthesizes handcrafted plasticine clay figures with thumbprints, sculpting marks, glossy eyes, and miniature diorama depth of field.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrompt('A smiling young man in a black puffy vest over a grey hoodie with white wired earphones standing on a softly blurred city street at night with warm yellow bokeh streetlights');
+                    if (aspectRatio === '16:9') setAspectRatio('4:3');
+                  }}
+                  className={`px-3 py-1 rounded-xl font-semibold transition-colors ${
+                    isDark ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-amber-500 text-neutral-950 hover:bg-amber-400'
+                  }`}
+                >
+                  Try Clay Example
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Main Button: Generate Image (Section 13) */}

@@ -5,7 +5,7 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Film, 
-  Sparkles, 
+  Cpu, 
   Volume2, 
   VolumeX, 
   Mic,
@@ -243,7 +243,7 @@ export const SlideMotionPlayer: React.FC<SlideMotionPlayerProps> = ({
             {/* Slide Index Badge */}
             <div className="flex items-center gap-1.5 pointer-events-auto">
               <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md text-amber-300 border border-amber-500/40 font-mono shadow-sm">
-                <Sparkles className="w-3 h-3 text-amber-400" />
+                <Cpu className="w-3 h-3 text-amber-400" />
                 Scene {currentSlideIndex + 1} of {slides.length}
               </span>
               <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-neutral-900/80 backdrop-blur-md text-neutral-300 border border-white/10 hidden sm:inline-block">

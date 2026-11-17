@@ -9,7 +9,6 @@ import {
   ExternalLink,
   ShieldCheck,
   Lock,
-  Sparkles,
   Terminal,
   Copy,
   Check,
@@ -434,7 +433,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
         {/* Agent Auto-Type Quick Actions Bar */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 shrink-0 flex items-center gap-1 mr-1">
-            <Sparkles className="w-3 h-3" /> Agent Auto-Type & Open:
+            <Cpu className="w-3 h-3" /> Agent Auto-Type & Open:
           </span>
           {PRESET_DESTINATIONS.map((preset) => (
             <button

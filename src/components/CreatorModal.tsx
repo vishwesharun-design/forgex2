@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ArrowLeft, User, Compass, Sparkles, Target } from 'lucide-react';
+import { X, ArrowLeft, User, Compass, Cpu, Target } from 'lucide-react';
 import { ForgeXTheme } from '../types';
 import { ForgeXLogo } from './ForgeXLogo';
 
@@ -111,7 +111,7 @@ export const CreatorModal: React.FC<CreatorModalProps> = ({
             }`}
           >
             <div className="flex items-center gap-2 mb-1.5 text-amber-400">
-              <Sparkles className="w-4 h-4" />
+              <Cpu className="w-4 h-4" />
               <h4 className="font-display font-semibold text-sm">Vision</h4>
             </div>
             <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>

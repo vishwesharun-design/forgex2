@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Presentation, 
-  Sparkles, 
+  Cpu, 
   Download, 
   ChevronLeft, 
   ChevronRight, 
@@ -355,7 +355,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
               disabled={isGenerating || !topic.trim()}
               className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center justify-center gap-1.5 transition-all active:scale-95"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Cpu className="w-3.5 h-3.5" />
               <span>{isGenerating ? 'Architecting Deck...' : 'Generate Presentation'}</span>
             </button>
           </div>

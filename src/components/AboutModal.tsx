@@ -6,7 +6,6 @@ import {
   Music, 
   ArrowLeft, 
   Zap,
-  Sparkles, 
   Cpu, 
   ShieldCheck, 
   Sliders, 
@@ -94,7 +93,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
           isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
         }`}>
           {[
-            { id: 'overview', label: 'Overview', icon: Sparkles },
+            { id: 'overview', label: 'Overview', icon: Cpu },
             { id: 'chat', label: 'AI Chat', icon: MessageSquare },
             { id: 'image', label: 'Image Studio', icon: ImageIcon },
             { id: 'music', label: 'Make Song', icon: Music },
@@ -351,7 +350,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'}`}>
                   <h4 className="font-semibold text-sm mb-1 text-yellow-400 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <Cpu className="w-4 h-4 shrink-0" />
                     <span>Polyphonic Web Audio</span>
                   </h4>
                   <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>

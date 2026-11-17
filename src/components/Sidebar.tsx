@@ -26,13 +26,11 @@ import {
   Trash2, 
   X,
   Database,
-  Sparkles,
   Search,
   Check,
   Palette,
   Cpu,
   Wrench,
-  Sparkles as SparklesIcon,
   Headphones,
   PanelLeftClose,
   PanelLeftOpen,
@@ -118,7 +116,7 @@ const STUDIOS: StudioDefinition[] = [
     title: 'ForgeX Chat',
     category: 'intelligence',
     icon: MessageSquare,
-    accentColor: 'text-amber-400',
+    accentColor: 'text-black dark:text-white',
     badge: 'Assistant',
     description: 'Multi-turn conversational reasoning with markdown & code',
   },
@@ -243,6 +241,23 @@ const CATEGORY_META = {
   },
 };
 
+const LibraryIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.9"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect x="3" y="4" width="3.8" height="16" rx="1" />
+    <rect x="8.3" y="4" width="3.8" height="16" rx="1" />
+    <rect x="13.8" y="4.8" width="3.8" height="15.2" rx="1" transform="rotate(-14 13.8 4.8)" />
+  </svg>
+);
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeWorkspace,
   onSelectWorkspace,
@@ -333,7 +348,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [accountMenuOpen, isCollapsed]);
 
   const handleSelectStudio = (ws: ActiveWorkspace) => {
-    if (ws !== 'chat' && !user) {
+    if (ws !== 'chat' && ws !== 'library' && !user) {
       if (onOpenAuth) onOpenAuth();
       return;
     }
@@ -532,7 +547,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'bg-white/50 hover:bg-white/90 text-neutral-800 hover:text-neutral-950 border border-neutral-900/10 hover:border-neutral-900/20 shadow-xs'
               }`}
             >
-              <Plus className="w-4 h-4 shrink-0 text-amber-500" />
+              <Plus className={`w-4 h-4 shrink-0 ${isDark ? 'text-white' : 'text-black'}`} />
               {!isCompact && <span>New chat</span>}
             </button>
           </div>
@@ -560,54 +575,104 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       const isSelected = activeWorkspace === studio.id;
                       const isChat = studio.id === 'chat';
                       return (
-                        <div
-                          key={studio.id}
-                          className="group/studio relative flex items-center"
-                        >
-                          <button
-                            type="button"
-                            id={`nav-workspace-${studio.id}`}
-                            onClick={() => handleSelectStudio(studio.id as ActiveWorkspace)}
-                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 ${!isChat ? 'pr-7' : ''} rounded-xl text-xs font-medium transition-all duration-150 ${
-                              isSelected
-                                ? isDark
-                                  ? 'bg-white/[0.12] text-amber-300 font-semibold border border-amber-400/35 shadow-[0_4px_16px_rgba(0,0,0,0.25)] backdrop-blur-md'
-                                  : 'bg-white/90 text-neutral-950 font-semibold border border-amber-400/50 shadow-sm backdrop-blur-md'
-                                : isDark
-                                  ? 'text-neutral-300 hover:text-white hover:bg-white/[0.08] border border-transparent'
-                                  : 'text-neutral-700 hover:text-neutral-950 hover:bg-white/60 border border-transparent'
-                            }`}
-                          >
-                            <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-500' : studio.accentColor}`} />
-                            <span className="truncate flex-1 text-left">{studio.title}</span>
-                            <span className={`text-[10px] font-mono lowercase ${
-                              studio.id === 'agents'
-                                ? isDark ? 'text-neutral-400 font-medium' : 'text-neutral-500 font-medium'
-                                : isSelected ? 'opacity-100 text-amber-500 dark:text-amber-300 font-bold' : 'opacity-65'
-                            }`}>
-                              {studio.badge}
-                            </span>
-                          </button>
-
-                          {/* Remove Studio From Sidebar Button (available for all added studios, cannot remove chat) */}
-                          {!isChat && (
+                        <React.Fragment key={studio.id}>
+                          <div className="group/studio relative flex items-center">
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveStudio(studio.id);
-                              }}
-                              title={`Remove ${studio.title} from sidebar`}
-                              className="absolute right-1.5 p-1 rounded-md text-neutral-400 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover/studio:opacity-100 transition-opacity"
+                              id={`nav-workspace-${studio.id}`}
+                              onClick={() => handleSelectStudio(studio.id as ActiveWorkspace)}
+                              className={`w-full flex items-center gap-2.5 px-2.5 py-2 ${!isChat ? 'pr-7' : ''} rounded-xl text-xs font-medium transition-all duration-150 ${
+                                isSelected
+                                  ? isChat
+                                    ? isDark
+                                      ? 'bg-white/[0.12] text-white font-semibold border border-white/25 shadow-[0_4px_16px_rgba(0,0,0,0.25)] backdrop-blur-md'
+                                      : 'bg-white/95 text-black font-semibold border border-neutral-300 shadow-sm backdrop-blur-md'
+                                    : isDark
+                                      ? 'bg-white/[0.12] text-amber-300 font-semibold border border-amber-400/35 shadow-[0_4px_16px_rgba(0,0,0,0.25)] backdrop-blur-md'
+                                      : 'bg-white/90 text-neutral-950 font-semibold border border-amber-400/50 shadow-sm backdrop-blur-md'
+                                  : isDark
+                                    ? 'text-neutral-300 hover:text-white hover:bg-white/[0.08] border border-transparent'
+                                    : 'text-neutral-700 hover:text-neutral-950 hover:bg-white/60 border border-transparent'
+                              }`}
                             >
-                              <X className="w-3.5 h-3.5" />
+                              <Icon
+                                className={`w-4 h-4 shrink-0 ${
+                                  isChat
+                                    ? isDark
+                                      ? 'text-white'
+                                      : 'text-black'
+                                    : isSelected
+                                      ? 'text-amber-500'
+                                      : studio.accentColor
+                                }`}
+                              />
+                              <span className="truncate flex-1 text-left">{studio.title}</span>
+                              <span
+                                className={`text-[10px] font-mono lowercase ${
+                                  isChat
+                                    ? isDark
+                                      ? 'text-white font-bold'
+                                      : 'text-black font-bold'
+                                    : studio.id === 'agents'
+                                      ? isDark
+                                        ? 'text-neutral-400 font-medium'
+                                        : 'text-neutral-500 font-medium'
+                                      : isSelected
+                                        ? 'opacity-100 text-amber-500 dark:text-amber-300 font-bold'
+                                        : 'opacity-65'
+                                }`}
+                              >
+                                {studio.badge}
+                              </span>
                             </button>
+
+                            {/* Remove Studio From Sidebar Button (available for all added studios, cannot remove chat) */}
+                            {!isChat && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveStudio(studio.id);
+                                }}
+                                title={`Remove ${studio.title} from sidebar`}
+                                className="absolute right-1.5 p-1 rounded-md text-neutral-400 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover/studio:opacity-100 transition-opacity"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Library row placed directly below ForgeX Chat with identical UI */}
+                          {isChat && (
+                            <div className="group/studio relative flex items-center">
+                              <button
+                                type="button"
+                                id="nav-workspace-library"
+                                onClick={() => handleSelectStudio('library')}
+                                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
+                                  activeWorkspace === 'library'
+                                    ? isDark
+                                      ? 'bg-white/[0.12] text-white font-semibold border border-white/25 shadow-[0_4px_16px_rgba(0,0,0,0.25)] backdrop-blur-md'
+                                      : 'bg-white/95 text-black font-semibold border border-neutral-300 shadow-sm backdrop-blur-md'
+                                    : isDark
+                                      ? 'text-neutral-300 hover:text-white hover:bg-white/[0.08] border border-transparent'
+                                      : 'text-neutral-700 hover:text-neutral-950 hover:bg-white/60 border border-transparent'
+                                }`}
+                              >
+                                <LibraryIcon
+                                  className={`w-4 h-4 shrink-0 ${
+                                    isDark ? 'text-white' : 'text-black'
+                                  }`}
+                                />
+                                <span className="truncate flex-1 text-left">Library</span>
+                              </button>
+                            </div>
                           )}
-                        </div>
+                        </React.Fragment>
                       );
                     })}
 
-                    {/* Add Studio Button directly below chat/active studios with a plus icon */}
+                    {/* Add Studio Button directly below chat/library/active studios with a black plus icon */}
                     <button
                       type="button"
                       id="sidebar-btn-add-studio"
@@ -620,11 +685,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold border border-dashed transition-all mt-1 ${
                         isDark
-                          ? 'border-amber-400/35 text-amber-300 hover:bg-amber-400/10 hover:border-amber-400/60'
-                          : 'border-amber-600/40 text-amber-800 hover:bg-amber-500/10 hover:border-amber-600'
+                          ? 'border-white/25 text-white hover:bg-white/10 hover:border-white/45'
+                          : 'border-neutral-900/25 text-black hover:bg-neutral-900/5 hover:border-neutral-900/50'
                       }`}
                     >
-                      <Plus className="w-4 h-4 shrink-0 text-amber-500" />
+                      <Plus className={`w-4 h-4 shrink-0 ${isDark ? 'text-white' : 'text-black'}`} />
                       <span className="truncate flex-1 text-left">Add Studio</span>
                     </button>
                   </div>
@@ -706,36 +771,75 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   const isSelected = activeWorkspace === studio.id;
                   const isChat = studio.id === 'chat';
                   return (
-                    <div key={studio.id} className="group/collapsed-studio relative flex items-center justify-center">
-                      <button
-                        id={`nav-workspace-${studio.id}`}
-                        onClick={() => handleSelectStudio(studio.id as ActiveWorkspace)}
-                        title={`${studio.title} — ${studio.description}`}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
-                          isSelected
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm'
-                            : isDark
-                              ? 'text-neutral-300 hover:text-white hover:bg-white/10'
-                              : 'text-neutral-700 hover:text-neutral-950 hover:bg-white/70'
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-400' : studio.accentColor}`} />
-                      </button>
-
-                      {!isChat && (
+                    <React.Fragment key={studio.id}>
+                      <div className="group/collapsed-studio relative flex items-center justify-center">
                         <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveStudio(studio.id);
-                          }}
-                          title={`Remove ${studio.title}`}
-                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[9px] opacity-0 group-hover/collapsed-studio:opacity-100 transition-opacity shadow-sm hover:scale-110"
+                          id={`nav-workspace-${studio.id}`}
+                          onClick={() => handleSelectStudio(studio.id as ActiveWorkspace)}
+                          title={`${studio.title} — ${studio.description}`}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
+                            isSelected
+                              ? isChat
+                                ? isDark
+                                  ? 'bg-white/15 text-white border border-white/30 shadow-sm'
+                                  : 'bg-neutral-900/10 text-black border border-neutral-300 shadow-sm'
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm'
+                              : isDark
+                                ? 'text-neutral-300 hover:text-white hover:bg-white/10'
+                                : 'text-neutral-700 hover:text-neutral-950 hover:bg-white/70'
+                          }`}
                         >
-                          <X className="w-2.5 h-2.5" />
+                          <Icon
+                            className={`w-4 h-4 ${
+                              isChat
+                                ? isDark
+                                  ? 'text-white'
+                                  : 'text-black'
+                                : isSelected
+                                  ? 'text-amber-400'
+                                  : studio.accentColor
+                            }`}
+                          />
                         </button>
+
+                        {!isChat && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveStudio(studio.id);
+                            }}
+                            title={`Remove ${studio.title}`}
+                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[9px] opacity-0 group-hover/collapsed-studio:opacity-100 transition-opacity shadow-sm hover:scale-110"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {isChat && (
+                        <div className="group/collapsed-studio relative flex items-center justify-center">
+                          <button
+                            id="nav-workspace-library"
+                            onClick={() => handleSelectStudio('library')}
+                            title="Library — Saved images, references, folders & media"
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs transition-all ${
+                              activeWorkspace === 'library'
+                                ? isDark
+                                  ? 'bg-white/15 text-white border border-white/30 shadow-sm'
+                                  : 'bg-neutral-900/10 text-black border border-neutral-300 shadow-sm'
+                                : isDark
+                                  ? 'text-neutral-300 hover:text-white hover:bg-white/10'
+                                  : 'text-neutral-700 hover:text-neutral-950 hover:bg-white/70'
+                            }`}
+                          >
+                            <LibraryIcon
+                              className={`w-4 h-4 ${isDark ? 'text-white' : 'text-black'}`}
+                            />
+                          </button>
+                        </div>
                       )}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
 
@@ -752,11 +856,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title="Add Studio"
                   className={`w-10 h-10 rounded-xl flex items-center justify-center border border-dashed transition-all ${
                     isDark
-                      ? 'border-amber-400/40 text-amber-300 hover:bg-amber-400/10'
-                      : 'border-amber-600/50 text-amber-800 hover:bg-amber-500/10'
+                      ? 'border-white/25 text-white hover:bg-white/10'
+                      : 'border-neutral-900/25 text-black hover:bg-neutral-900/5'
                   }`}
                 >
-                  <Plus className="w-4 h-4 text-amber-500" />
+                  <Plus className={`w-4 h-4 ${isDark ? 'text-white' : 'text-black'}`} />
                 </button>
               </div>
             )}
@@ -839,7 +943,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                      >
                        <div className="flex items-center justify-between text-xs mb-1.5">
                          <span className={`font-semibold flex items-center gap-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
-                           <Sparkles className="w-3 h-3" />
+                           <Cpu className="w-3 h-3" />
                            AI Studio Usage
                          </span>
                          <span className={`font-mono text-[11px] tabular-nums ${isDark ? 'text-neutral-400' : 'text-neutral-600 font-medium'}`}>

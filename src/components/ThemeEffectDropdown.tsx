@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Sparkles, 
+  Cpu, 
   Network, 
   Terminal, 
   Activity, 
@@ -50,13 +50,13 @@ export const ThemeEffectDropdown: React.FC<ThemeEffectDropdownProps> = ({
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'Network': return Network;
-      case 'Sparkles': return Sparkles;
+      case 'Sparkles': return Cpu;
       case 'Terminal': return Terminal;
       case 'Activity': return Activity;
       case 'Flame': return Flame;
       case 'Grid': return Grid;
       case 'EyeOff': return EyeOff;
-      default: return Sparkles;
+      default: return Cpu;
     }
   };
 

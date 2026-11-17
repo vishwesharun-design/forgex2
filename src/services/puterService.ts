@@ -69,6 +69,10 @@ export interface FluxGenerationResult {
 
 const STYLE_ENHANCEMENTS: Record<string, string> = {
   None: '',
+  Claymation:
+    'handcrafted stop-motion claymation sculpture made entirely from polymer plasticine modeling clay, subtle real thumbprints, faint fingerprint impressions and sculpting tool marks on matte-satin clay skin and molded clothing folds, expressive rounded sculpted facial features, thick clay eyelids and glossy sculpted eyes with warm catchlights, carved clay hair texture, physical miniature diorama studio lighting, shallow depth of field 85mm macro photography with soft bokeh city/background lights, authentic Aardman and Laika stop-motion film aesthetic, 8k macro detail',
+  Clay:
+    'handcrafted stop-motion claymation sculpture made entirely from polymer plasticine modeling clay, subtle real thumbprints, faint fingerprint impressions and sculpting tool marks on matte-satin clay skin and molded clothing folds, expressive rounded sculpted facial features, thick clay eyelids and glossy sculpted eyes with warm catchlights, carved clay hair texture, physical miniature diorama studio lighting, shallow depth of field 85mm macro photography with soft bokeh city/background lights, authentic Aardman and Laika stop-motion film aesthetic, 8k macro detail',
   Realistic: 'photorealistic, ultra-detailed photography, 8k resolution, raw photo, Hasselblad 50mm, natural soft lighting, hyperrealistic textures',
   Cinematic: 'cinematic movie still, 35mm anamorphic lens, dramatic volumetric lighting, color graded, blockbuster atmosphere, shallow depth of field, IMAX quality',
   Anime: 'modern Japanese anime visual aesthetic, Makoto Shinkai style, Studio Ghibli inspired, vibrant colors, clean cel-shaded lineart',
@@ -82,6 +86,12 @@ const STYLE_ENHANCEMENTS: Record<string, string> = {
   'Handwritten Notes': 'ultra-realistic, sharp student study textbook revision notes in an open lined notebook, perfectly legible neat student handwriting in blue gel ink with bold red ink key terms and definitions, zero spelling mistakes, 100% correct spelling, grammatically flawless and understandable English text, section headings in soft yellow pastel highlighter banner pills, faint blue ruled lines on white paper with vertical red left margin, hand-drawn illustrative diagrams, boxed definitions, bullet points, Think and Reflect boxes, authentic lined paper texture, natural warm ambient lighting, 8k resolution, photorealistic masterwork',
   Custom: 'custom bespoke artistic style, exquisite craftsmanship, balanced composition',
 };
+
+export function isClayStylePrompt(prompt: string): boolean {
+  return /\b(?:claymation|clay\s*mation|plasticine|polymer\s+clay|modeling\s+clay|modelling\s+clay|stop[\s-]*motion\s+clay|made\s+(?:of|with|out\s+of|from|using)\s+clay|looks?\s+(?:like|as\s+if\s+it\s+was\s+made\s+(?:of|with|using))\s+clay|clay\s+(?:style|sculpture|figure|figurine|character|portrait|model|scene|world|city|man|woman|boy|girl|person|animal|avatar))\b/i.test(
+    prompt || ''
+  );
+}
 
 class PuterService {
   private puterInstance: any = null;
@@ -297,17 +307,22 @@ class PuterService {
       throw new Error('Prompt cannot be empty for image generation.');
     }
 
-    // Build prompt: if style is 'None' (Raw exact mode), use cleanPrompt directly so FLUX obeys verbatim.
-    // If a specific style is selected and not 'None', append appropriate style cues without drowning out user specifics.
+    // Build prompt: apply explicit style OR automatic claymation cues when prompt describes clay sculpture.
     const styleName = options.style || 'None';
+    const isClayRequested = styleName === 'Claymation' || isClayStylePrompt(cleanPrompt);
     let fullPrompt = cleanPrompt;
-    if (styleName !== 'None') {
+
+    if (options.referenceImage && isClayRequested) {
+      fullPrompt = `Transform this reference photo faithfully preserving the exact person, pose, expression, clothing, accessories, and background composition into a ${STYLE_ENHANCEMENTS.Claymation}: ${cleanPrompt}`;
+    } else if (styleName !== 'None') {
       const styleKeywords = options.customStyle?.trim()
         ? options.customStyle.trim()
         : (STYLE_ENHANCEMENTS[styleName] || `${styleName} style`);
       if (styleKeywords) {
         fullPrompt = `${cleanPrompt}, ${styleKeywords}`;
       }
+    } else if (isClayRequested) {
+      fullPrompt = `${cleanPrompt}, ${STYLE_ENHANCEMENTS.Claymation}`;
     }
 
     // Map aspect ratio to dimensions and ratio configurations

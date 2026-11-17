@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Code2,
   Play,
-  Sparkles,
+  Cpu,
   Wrench,
   CheckCircle2,
   Copy,
@@ -844,7 +844,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             }`}
             title={isAiCollapsed ? 'Expand AI Assistant Bar' : 'Collapse AI Assistant Bar'}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <Cpu className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">AI Tools</span>
             {isAiCollapsed ? (
               <ChevronDown className="w-3 h-3 text-neutral-400" />
@@ -958,7 +958,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                   : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
               }`}
             >
-              <Sparkles className="w-3 h-3" />
+              <Cpu className="w-3 h-3" />
               <span>AI Generate Code</span>
             </button>
             <button
@@ -1044,7 +1044,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3 h-3" />
+                  <Cpu className="w-3 h-3" />
                   <span>Generate Code</span>
                 </>
               )}
