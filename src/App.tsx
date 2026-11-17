@@ -42,6 +42,7 @@ import { CanvasWorkspace } from './components/CanvasWorkspace';
 import { ProjectWorkspace } from './components/ProjectWorkspace';
 import { VaultWorkspace } from './components/VaultWorkspace';
 import { VoiceModeModal } from './components/VoiceModeModal';
+import { voiceController } from './services/voiceService';
 
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryModal } from './components/HistoryModal';
@@ -408,6 +409,7 @@ export default function App() {
             onOpenCreator={() => setIsCreatorOpen(true)}
             onOpenSignIn={() => setIsAuthOpen(true)}
             onOpenGetStarted={() => setIsAboutOpen(true)}
+            user={user}
           />
 
           <main className="flex-1 flex flex-col justify-center">
@@ -465,7 +467,10 @@ export default function App() {
             onOpenAuth={() => setIsAuthOpen(true)}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleToggleSidebarCollapse}
-            onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
+            onOpenVoiceMode={() => {
+              voiceController.unlockAudio();
+              setIsVoiceModeOpen(true);
+            }}
             onOpenStudioStore={() => setIsStudioStoreOpen(true)}
           />
 
@@ -484,6 +489,8 @@ export default function App() {
               onOpenSearch={() => setIsSearchOpen(true)}
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebarCollapse={handleToggleSidebarCollapse}
+              user={user}
+              onOpenAuth={() => setIsAuthOpen(true)}
             />
 
             {/* Workspace Core Views */}
@@ -536,7 +543,10 @@ export default function App() {
                     }
                     setActiveWorkspace('code');
                   }}
-                  onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
+                  onOpenVoiceMode={() => {
+                    voiceController.unlockAudio();
+                    setIsVoiceModeOpen(true);
+                  }}
                 />
               )}
 
@@ -850,6 +860,7 @@ export default function App() {
         isDark={isDark}
         theme={settings.theme}
         selectedModelId={selectedModelId}
+        userName={user?.name}
         onSendToChat={(text) => {
           setActiveWorkspace('chat');
           setIsInWorkspace(true);

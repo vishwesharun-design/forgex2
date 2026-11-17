@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { generateExpertChatReply, getStressTestUiShowcase } from "./src/services/knowledgeEngine";
+import { retrieveTrainingContext } from "./src/services/trainingCorpus";
 import { executeAgentTool, initAgentSandbox } from "./src/services/agentBackendExecutor";
 import { TOOL_REGISTRY, getToolsForAgent } from "./src/services/agentToolRegistry";
 
@@ -65,42 +66,155 @@ function getEffectiveApiKey(req: Request): string | undefined {
   return keys[0];
 }
 
-// Ultra-fast, highly accurate model cascades:
-// gemini-3.1-flash-lite delivers ~1s first-token latency with zero deliberation lag.
-// gemini-3.8-flash delivers premier multimodal reasoning with ThinkingLevel.LOW for high accuracy without delay.
-const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
-const PREMIER_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
-const RESILIENT_MODELS = FAST_MODELS;
+// Active Gemini model cascades & per-model execution profiles
+const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
+const PREMIER_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
+const RESILIENT_MODELS = PREMIER_MODELS;
+
+type CanonicalForgeModelId = "forge-1" | "forge-1.5" | "forge-2" | "forge-2-pro" | "forge-2-ultra";
+
+interface ModelExecutionProfile {
+  id: CanonicalForgeModelId;
+  displayName: string;
+  models: string[];
+  thinkingLevel: ThinkingLevel;
+  instruction: string;
+}
+
+function normalizeModelId(modelId?: string): CanonicalForgeModelId {
+  switch (modelId) {
+    case "forge-1":
+    case "unreal-1":
+      return "forge-1";
+    case "forge-1.5":
+    case "unreal-2":
+      return "forge-1.5";
+    case "forge-2":
+    case "unreal-3":
+      return "forge-2";
+    case "forge-2-pro":
+    case "unreal-4":
+      return "forge-2-pro";
+    case "forge-2-ultra":
+    case "unreal-5":
+    default:
+      return "forge-2-ultra";
+  }
+}
+
+function getModelExecutionProfile(modelId?: string): ModelExecutionProfile {
+  const id = normalizeModelId(modelId);
+  switch (id) {
+    case "forge-1":
+      return {
+        id,
+        displayName: "Forge 1",
+        models: FAST_MODELS,
+        thinkingLevel: ThinkingLevel.MINIMAL,
+        instruction:
+          "=== ACTIVE MODEL TIER: FORGE 1 (ULTRA-FAST BASIC AI) ===\n" +
+          "Operate in ultra-fast, concise mode: answer immediately with minimal overhead, short clear sentences, and essential facts only. Avoid lengthy elaboration unless explicitly asked.",
+      };
+    case "forge-1.5":
+      return {
+        id,
+        displayName: "Forge 1.5",
+        models: PREMIER_MODELS,
+        thinkingLevel: ThinkingLevel.LOW,
+        instruction:
+          "=== ACTIVE MODEL TIER: FORGE 1.5 (FAST BALANCED REASONING) ===\n" +
+          "Operate in fast balanced mode: give crisp, well-structured answers with practical clarity and helpful examples while keeping explanations concise.",
+      };
+    case "forge-2":
+      return {
+        id,
+        displayName: "Forge 2",
+        models: PREMIER_MODELS,
+        thinkingLevel: ThinkingLevel.MEDIUM,
+        instruction:
+          "=== ACTIVE MODEL TIER: FORGE 2 (ADVANCED RESPONSES & LOGIC) ===\n" +
+          "Operate in advanced logic mode: reason systematically step-by-step, verify calculations and code edge cases carefully, and provide clearly organized, thorough answers.",
+      };
+    case "forge-2-pro":
+      return {
+        id,
+        displayName: "Forge 2 Pro",
+        models: PREMIER_MODELS,
+        thinkingLevel: ThinkingLevel.HIGH,
+        instruction:
+          "=== ACTIVE MODEL TIER: FORGE 2 PRO (ADVANCED CREATIVE PRECISION) ===\n" +
+          "Operate in creative precision mode: combine deep analytical reasoning with nuanced insight, expressive craftsmanship, clean architecture, and high-precision execution.",
+      };
+    case "forge-2-ultra":
+    default:
+      return {
+        id: "forge-2-ultra",
+        displayName: "Forge 2 Ultra",
+        models: PREMIER_MODELS,
+        thinkingLevel: "XHIGH" as ThinkingLevel,
+        instruction:
+          "=== ACTIVE MODEL TIER: FORGE 2 ULTRA (HIGHEST CAPABILITY FLAGSHIP) ===\n" +
+          "Operate at maximum flagship intelligence: perform exhaustive multi-step verification, synthesize deep cross-domain nuances and trade-offs, anticipate edge cases, and deliver authoritative excellence.",
+      };
+  }
+}
 
 function getModelCascade(modelId?: string): string[] {
-  if (modelId === "forge-1" || modelId === "forge-1.5" || modelId === "forge-2") {
-    return FAST_MODELS;
-  }
-  if (modelId === "forge-2-ultra" || modelId === "forge-2-pro") {
-    return PREMIER_MODELS;
-  }
-  return FAST_MODELS;
+  return getModelExecutionProfile(modelId).models;
 }
 
 function buildModelConfig(model: string, baseConfig?: any): any {
   const config = { ...baseConfig };
-  
-  // Clean up any legacy or invalid thinkingBudget which causes 503 or parameter errors
+
+  // Clean up legacy thinkingBudget which causes 400/503 parameter errors
   if (config.thinkingConfig && "thinkingBudget" in config.thinkingConfig) {
     const { thinkingBudget: _, ...restThinking } = config.thinkingConfig;
     config.thinkingConfig = restThinking;
   }
 
-  if (model.startsWith("gemini-3.8") || model.startsWith("gemini-3.5")) {
+  // Gemini 4 models reject deprecated sampling params (temperature, topP, topK, candidateCount)
+  if (model.startsWith("gemini-4")) {
+    delete config.temperature;
+    delete config.topP;
+    delete config.topK;
+    delete config.candidateCount;
+  }
+
+  const requestedLevel = config.thinkingConfig?.thinkingLevel as ThinkingLevel | undefined;
+
+  if (model.startsWith("gemini-4-hydrogen")) {
+    // MINIMAL is unsupported on gemini-4-hydrogen; promote MINIMAL -> LOW, preserve LOW/MEDIUM/HIGH/XHIGH
+    const resolvedLevel =
+      !requestedLevel || requestedLevel === ThinkingLevel.MINIMAL
+        ? ThinkingLevel.LOW
+        : requestedLevel;
     config.thinkingConfig = {
       ...config.thinkingConfig,
-      thinkingLevel: config.thinkingConfig?.thinkingLevel || ThinkingLevel.LOW,
+      thinkingLevel: resolvedLevel,
+    };
+  } else if (model.startsWith("gemini-4")) {
+    // gemini-4-argon / gemini-4-carbon support LOW/MEDIUM/HIGH (not MINIMAL or XHIGH)
+    let resolvedLevel = requestedLevel || ThinkingLevel.MEDIUM;
+    if (resolvedLevel === ThinkingLevel.MINIMAL) resolvedLevel = ThinkingLevel.LOW;
+    if ((resolvedLevel as string) === "XHIGH") resolvedLevel = ThinkingLevel.HIGH;
+    config.thinkingConfig = {
+      ...config.thinkingConfig,
+      thinkingLevel: resolvedLevel,
     };
   } else if (model.includes("flash-lite")) {
-    // gemini-3.1-flash-lite natively operates at minimal thinking depth for instant token output
+    // flash-lite does not support XHIGH; clamp XHIGH -> HIGH, default MINIMAL
+    let resolvedLevel = requestedLevel || ThinkingLevel.MINIMAL;
+    if ((resolvedLevel as string) === "XHIGH") resolvedLevel = ThinkingLevel.HIGH;
     config.thinkingConfig = {
       ...config.thinkingConfig,
-      thinkingLevel: ThinkingLevel.MINIMAL,
+      thinkingLevel: resolvedLevel,
+    };
+  } else if (model.startsWith("gemini-3.8") || model.startsWith("gemini-3.5")) {
+    let resolvedLevel = requestedLevel || ThinkingLevel.LOW;
+    if ((resolvedLevel as string) === "XHIGH") resolvedLevel = ThinkingLevel.HIGH;
+    config.thinkingConfig = {
+      ...config.thinkingConfig,
+      thinkingLevel: resolvedLevel,
     };
   }
   return config;
@@ -330,9 +444,32 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
       } catch {}
     })();
 
+    // 3. Wikipedia REST Page Summary for rich factual overview (fast 900ms timeout)
+    const wikiSummaryPromise = (async () => {
+      try {
+        const slug = encodeURIComponent(searchQuery.trim().replace(/\s+/g, "_"));
+        const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`;
+        const res = await fetch(summaryUrl, {
+          headers: { "User-Agent": "ForgeX/1.0" },
+          signal: AbortSignal.timeout(900),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as any;
+          if (data?.extract && data?.content_urls?.desktop?.page) {
+            sources.unshift({
+              title: data.title || searchQuery,
+              url: data.content_urls.desktop.page,
+              snippet: String(data.extract).slice(0, 420),
+              sourceDomain: "wikipedia.org",
+            });
+          }
+        }
+      } catch {}
+    })();
+
     // Hard ceiling: never wait more than 950ms so response streaming begins immediately
     const timeoutGate = new Promise<void>((resolve) => setTimeout(resolve, 950));
-    await Promise.race([Promise.allSettled([ddgPromise, wikiPromise]), timeoutGate]);
+    await Promise.race([Promise.allSettled([ddgPromise, wikiPromise, wikiSummaryPromise]), timeoutGate]);
   } catch (err) {
     console.warn("Live web search grounding notice:", err);
   }
@@ -400,11 +537,35 @@ async function generateContentResilient(
       }
     } catch (err: any) {
       lastError = err;
+      // If XHIGH was rejected on this SDK/endpoint, immediately retry with ThinkingLevel.HIGH
+      if ((request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
+        try {
+          const highConfig = buildModelConfig(model, {
+            ...request.config,
+            thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH },
+          });
+          const response = await ai.models.generateContent({
+            model,
+            contents: request.contents,
+            config: highConfig,
+          });
+          const candidate = response.candidates?.[0];
+          const text = response.text || candidate?.content?.parts?.[0]?.text || "";
+          if (text) {
+            return { text, model, groundingMetadata: candidate?.groundingMetadata };
+          }
+        } catch (highErr: any) {
+          lastError = highErr;
+        }
+      }
       // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
       if (request.config?.tools && request.config.tools.length > 0) {
         try {
           const configWithoutTools = { ...request.config };
           delete configWithoutTools.tools;
+          if ((configWithoutTools.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
+            configWithoutTools.thinkingConfig = { ...configWithoutTools.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH };
+          }
           const retryConfig = buildModelConfig(model, configWithoutTools);
           const response = await ai.models.generateContent({
             model,
@@ -466,11 +627,46 @@ async function* generateContentStreamResilient(
       }
     } catch (err: any) {
       lastError = err;
+      // If XHIGH was rejected on this SDK/endpoint, immediately retry with ThinkingLevel.HIGH
+      if ((request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
+        try {
+          const highConfig = buildModelConfig(model, {
+            ...request.config,
+            thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH },
+          });
+          const responseStream = await ai.models.generateContentStream({
+            model,
+            contents: request.contents,
+            config: highConfig,
+          });
+
+          let emittedAny = false;
+          let lastGrounding: any = null;
+          for await (const chunk of responseStream) {
+            const text = chunk.text || "";
+            const grounding = chunk.candidates?.[0]?.groundingMetadata;
+            if (grounding) lastGrounding = grounding;
+            if (text) {
+              emittedAny = true;
+              yield { text, model, groundingMetadata: grounding };
+            }
+          }
+          if (emittedAny) {
+            yield { text: "", model, done: true, groundingMetadata: lastGrounding };
+            return;
+          }
+        } catch (highErr: any) {
+          lastError = highErr;
+        }
+      }
       // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
       if (request.config?.tools && request.config.tools.length > 0) {
         try {
           const configWithoutTools = { ...request.config };
           delete configWithoutTools.tools;
+          if ((configWithoutTools.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
+            configWithoutTools.thinkingConfig = { ...configWithoutTools.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH };
+          }
           const retryConfig = buildModelConfig(model, configWithoutTools);
           const responseStream = await ai.models.generateContentStream({
             model,
@@ -703,14 +899,14 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
    - Delivering the core answer cleanly in the first sentence minimizes token count and accelerates time-to-completion by up to 5x.
 2. ZERO TOLERANCE FOR WRONG ANSWERS OR HALLUCINATIONS:
    - Provide 100% factually accurate, verified information.
-   - Never invent or guess facts, statistics, formulas, dates, events, URLs, or people.
-   - When answering factual questions, rely strictly on verified truths. If something is unknown or ambiguous, state what is known and what requires verification rather than speculating.
-3. RIGOROUS MATHEMATICAL & LOGICAL EXACTNESS:
-   - For all mathematical, computational, algorithmic, or quantitative problems, compute each step internally with precision.
-   - Double-check arithmetic, signs, units, and order of operations before outputting results so calculations are 100% correct.
+   - Never invent or guess facts, statistics, formulas, dates, events, library APIs, URLs, or people.
+   - When answering factual questions, rely strictly on verified truths, the active Verified Training Corpus, and retrieved web/vault grounding context. If a specific figure or detail is unknown or unverified, explicitly state what is verified vs. what cannot be confirmed rather than speculating.
+3. RIGOROUS MATHEMATICAL & LOGICAL SELF-VERIFICATION:
+   - For all mathematical, computational, algorithmic, or quantitative problems, solve step-by-step internally AND double-check arithmetic, signs, units, edge cases, and order of operations before outputting the final result.
+   - Verify unit conversions, percentages, derivatives/integrals, and matrix dimensions twice so calculations are 100% exact.
 4. PRODUCTION-GRADE CODE QUALITY:
-   - All code snippets must be syntactically valid, modern, runnable, and include all necessary imports and declarations.
-   - Check edge cases, typings, and syntax before generating code.
+   - All code snippets must be syntactically valid, modern, runnable, and include all necessary imports, types, and error/edge-case handling.
+   - Never hallucinate non-existent package methods, flags, or browser APIs.
 5. STRUCTURE & ELEGANCE:
    - Use clean, structured Markdown with crisp headings, bullet points, and code blocks for effortless readability.
 
@@ -786,6 +982,27 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
 11. HANDWRITTEN STUDY NOTES & NOTEBOOK PAGES:
    - When the user asks to create or make handwritten notes (e.g. "create handwritten notes like this", "make handwritten notes on [topic]", "notes like this"):
    - This refers to aesthetic student revision notes in an open lined notebook with pastel highlighter headings (pink, green, yellow), neat handwriting in blue and black gel pen, hand-drawn diagrams, boxed definitions, bullet points, and cloud callouts matching their reference notebook page!`;
+
+function buildGroundedSystemInstruction(
+  baseInstruction: string,
+  userQuery: string,
+  liveWebContext?: string
+): string {
+  const now = new Date();
+  const dateStamp = now.toISOString().split("T")[0];
+  let out = `${baseInstruction}\n\n=== TEMPORAL & ACCURACY CONTEXT ===\nCurrent Date: ${dateStamp} (UTC: ${now.toUTCString()}). Treat this date as the real-time present when answering time-sensitive questions.`;
+
+  const trained = retrieveTrainingContext(userQuery, 4200);
+  if (trained.hasContext) {
+    out += `\n\n=== VERIFIED FORGEX TRAINING & REFERENCE CORPUS ===\nUse the following fact-checked reference data to verify formulas, constants, algorithms, security rules, and platform facts:\n${trained.contextText}`;
+  }
+
+  if (liveWebContext) {
+    out += `\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe following verified real-time web results were retrieved:\n${liveWebContext}\n\nInstructions for using search results:\n1. Ground facts, dates, metrics, and current developments directly in these verified web results and Google Search tool output.\n2. When citing sources, reference the provided domain or title cleanly.\n3. Never invent unsupported claims beyond what the verified sources state.`;
+  }
+
+  return out;
+}
 
 async function startServer() {
   const app = express();
@@ -995,21 +1212,16 @@ async function startServer() {
         liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
-      let forgexSystemInstruction = customSystemInstruction
-        ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${customSystemInstruction}`
-        : FORGEX_SYSTEM_INSTRUCTION;
+      const modelProfile = getModelExecutionProfile(modelId);
+      const baseWithTier = customSystemInstruction
+        ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${modelProfile.instruction}\n\n${customSystemInstruction}`
+        : `${FORGEX_SYSTEM_INSTRUCTION}\n\n${modelProfile.instruction}`;
 
-      if (isQuizQuery(cleanMessage)) {
-        forgexSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
-The user requested an interactive quiz ("${cleanMessage}").
-1. NEVER output Python, JavaScript, HTML, C++, or any programming code or script!
-2. NEVER output a console application or code block like \`\`\`python.
-3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
-The UI renders this as an interactive playable quiz widget!`;
-      }
-      let enhancedSystemInstruction = searchIntent.shouldSearch && liveGrounding.groundingContext
-        ? `${forgexSystemInstruction}\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe user's query requires current/external information. The following verified real-time web results were retrieved:\n${liveGrounding.groundingContext}\n\nInstructions for using search results:\n1. Use these real-time web results to improve and ground your answer with up-to-date facts, current developments, and accurate details.\n2. When citing sources, reference the provided domain or title cleanly in context.\n3. Provide a clear, natural, and comprehensive response.`
-        : forgexSystemInstruction;
+      let enhancedSystemInstruction = buildGroundedSystemInstruction(
+        baseWithTier,
+        cleanMessage,
+        searchIntent.shouldSearch ? liveGrounding.groundingContext : undefined
+      );
 
       if (isQuizQuery(cleanMessage)) {
         enhancedSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
@@ -1072,13 +1284,16 @@ The UI renders this as an interactive playable quiz widget!`;
           // If search is needed, attach googleSearch tool for dynamic search grounding
           const requestConfig: any = {
             systemInstruction: enhancedSystemInstruction,
+            thinkingConfig: {
+              thinkingLevel: modelProfile.thinkingLevel,
+            },
           };
 
           if (searchIntent.shouldSearch) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
-          const modelCascade = getModelCascade(modelId);
+          const modelCascade = modelProfile.models;
           const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
             {
@@ -1135,7 +1350,7 @@ The UI renders this as an interactive playable quiz widget!`;
             return res.json({
               success: true,
               reply: finalReply,
-              model: "ForgeX Neural Engine",
+              model: modelProfile.displayName,
               searchedWeb: hasActiveSearch,
               searchQueries: finalQueries,
               groundingSources: hasActiveSearch ? finalSources : [],
@@ -1245,12 +1460,20 @@ The UI renders this as an interactive playable quiz widget!`;
         if (typeof (res as any).flush === "function") {
           (res as any).flush();
         }
+        liveGrounding = await performLiveWebGrounding(searchIntent.searchQuery);
       }
 
-      const modelCascade = getModelCascade(modelId);
-      let forgexSystemInstruction = customSystemInstruction
-        ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${customSystemInstruction}`
-        : FORGEX_SYSTEM_INSTRUCTION;
+      const modelProfile = getModelExecutionProfile(modelId);
+      const modelCascade = modelProfile.models;
+      const baseWithTier = customSystemInstruction
+        ? `${FORGEX_SYSTEM_INSTRUCTION}\n\n${modelProfile.instruction}\n\n${customSystemInstruction}`
+        : `${FORGEX_SYSTEM_INSTRUCTION}\n\n${modelProfile.instruction}`;
+
+      let forgexSystemInstruction = buildGroundedSystemInstruction(
+        baseWithTier,
+        cleanMessage,
+        searchIntent.shouldSearch ? liveGrounding.groundingContext : undefined
+      );
 
       if (isQuizQuery(cleanMessage)) {
         forgexSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
@@ -1308,6 +1531,9 @@ The UI renders this as an interactive playable quiz widget!`;
 
           const requestConfig: any = {
             systemInstruction: forgexSystemInstruction,
+            thinkingConfig: {
+              thinkingLevel: modelProfile.thinkingLevel,
+            },
           };
 
           if (searchIntent.shouldSearch) {
@@ -1315,7 +1541,7 @@ The UI renders this as an interactive playable quiz widget!`;
           }
 
           let streamedAny = false;
-          let modelUsed = "ForgeX Neural Engine";
+          let modelUsed = modelProfile.displayName;
           const geminiSources: WebGroundingSource[] = [];
           const geminiQueries: string[] = [];
 
@@ -1359,7 +1585,7 @@ The UI renders this as an interactive playable quiz widget!`;
               }
             }
             if (chunk.done) {
-              modelUsed = "ForgeX Neural Engine";
+              modelUsed = modelProfile.displayName;
             }
           }
 
@@ -1450,9 +1676,9 @@ The UI renders this as an interactive playable quiz widget!`;
           let response;
           // Ultra-fast and high-quota multimodal models for robust audio transcription
           const candidateModels = [
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite",
+            "gemini-3.5-transcribe",
             "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
             "gemini-flash-latest",
           ];
           let lastErr: any = null;
@@ -1815,10 +2041,19 @@ The UI renders this as an interactive playable quiz widget!`;
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const candModels = RESILIENT_MODELS;
+          const modelProfile = getModelExecutionProfile(modelId);
+          const candModels = modelProfile.models;
 
           for (const cand of candModels) {
             try {
+              const researchTrained = retrieveTrainingContext(cleanQuery, 3000);
+              const reqConfig = buildModelConfig(cand, {
+                tools: [{ googleSearch: {} }],
+                systemInstruction: `You are an elite deep research engine. Current Date: ${new Date().toISOString().split("T")[0]}. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, verified intelligence reports.\n\n${modelProfile.instruction}${researchTrained.hasContext ? `\n\n=== VERIFIED REFERENCE DATA ===\n${researchTrained.contextText}` : ""}`,
+                thinkingConfig: {
+                  thinkingLevel: modelProfile.thinkingLevel,
+                },
+              });
               const result = await ai.models.generateContent({
                 model: cand,
                 contents: [
@@ -1837,13 +2072,7 @@ The UI renders this as an interactive playable quiz widget!`;
                     ]
                   }
                 ],
-                config: {
-                  tools: [{ googleSearch: {} }],
-                  systemInstruction: "You are an elite deep research engine. You browse the live web, cross-reference multiple authoritative domains, analyze nuanced technical and real-world data, and synthesize structured, objective, comprehensive intelligence reports.",
-                  thinkingConfig: {
-                    thinkingLevel: ThinkingLevel.LOW,
-                  },
-                }
+                config: reqConfig,
               });
 
               const candidate = result.candidates?.[0];
@@ -2046,11 +2275,19 @@ Format your response as:
             userPrompt = `Alter and improve this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nUser instructions: ${prompt || modeDescriptions[mode]}`;
           }
 
-          const candidateModels = RESILIENT_MODELS;
+          const modelProfile = getModelExecutionProfile(modelId);
+          const candidateModels = modelProfile.models;
           let modelSuccess = false;
 
           for (const cand of candidateModels) {
             try {
+              const codeTrained = retrieveTrainingContext(`${language} ${prompt || ""}`, 2800);
+              const reqConfig = buildModelConfig(cand, {
+                systemInstruction: `${modelProfile.instruction}${codeTrained.hasContext ? `\n\n=== VERIFIED ENGINEERING REFERENCE ===\n${codeTrained.contextText}` : ""}`,
+                thinkingConfig: {
+                  thinkingLevel: modelProfile.thinkingLevel,
+                },
+              });
               const result = await ai.models.generateContent({
                 model: cand,
                 contents: [
@@ -2059,11 +2296,7 @@ Format your response as:
                     parts: [{ text: `${systemTask}\n\n${userPrompt}` }]
                   }
                 ],
-                config: {
-                  thinkingConfig: {
-                    thinkingLevel: ThinkingLevel.LOW,
-                  },
-                },
+                config: reqConfig,
               });
 
               const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -2562,23 +2795,27 @@ store.set('counter', 42);`,
   }
 
   // Resilient multi-model Gemini text generation helper
-  async function generateGeminiText(ai: GoogleGenAI, contents: any, config?: any): Promise<string> {
-    const candidateModels = FAST_MODELS;
-    for (const model of candidateModels) {
-      try {
-        const modelConfig = buildModelConfig(model, config);
-        const response = await ai.models.generateContent({
-          model,
-          contents,
-          config: modelConfig,
-        });
-        const text = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text && text.trim()) return text;
-      } catch (err: any) {
-        console.log(`Gemini model ${model} notice:`, err?.message?.slice(0, 120));
-      }
-    }
-    return "";
+  async function generateGeminiText(ai: GoogleGenAI, contents: any, config?: any, modelId?: string): Promise<string> {
+    const profile = getModelExecutionProfile(modelId);
+    const candidateModels = profile.models;
+    const currentDateUtc = new Date().toISOString().split("T")[0];
+    const dateAnchor = `Current Date (UTC): ${currentDateUtc}. Prioritize factual precision and avoid fabricated claims or APIs.`;
+    const baseConfig = {
+      ...config,
+      systemInstruction: config?.systemInstruction
+        ? `${profile.instruction}\n${dateAnchor}\n\n${config.systemInstruction}`
+        : `${profile.instruction}\n${dateAnchor}`,
+      thinkingConfig: {
+        ...config?.thinkingConfig,
+        thinkingLevel: config?.thinkingConfig?.thinkingLevel || profile.thinkingLevel,
+      },
+    };
+    const { text } = await generateContentResilient(
+      ai,
+      { contents, config: baseConfig },
+      candidateModels
+    ).catch(() => ({ text: "" }));
+    return text || "";
   }
 
   // ==========================================
@@ -2619,9 +2856,18 @@ store.set('counter', 42);`,
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const { text: rawText } = await generateContentResilient(ai, {
-            contents: `${systemPrompt}\n\n=== DOCUMENT CONTEXT ===\n${docContext}`,
-          });
+          const modelProfile = getModelExecutionProfile(req.body?.modelId);
+          const { text: rawText } = await generateContentResilient(
+            ai,
+            {
+              contents: `${systemPrompt}\n\n=== DOCUMENT CONTEXT ===\n${docContext}`,
+              config: {
+                systemInstruction: modelProfile.instruction,
+                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+              },
+            },
+            modelProfile.models
+          );
 
           // If quiz requested, attempt JSON parsing
           if (action === "generate-quiz") {
@@ -2800,7 +3046,8 @@ CRITICAL RULES:
           let openBrowserTriggered = false;
           let browserTargetUrl = "https://www.google.com";
 
-          const candidateModels = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+          const modelProfile = getModelExecutionProfile(req.body?.modelId || agent?.modelId);
+          const candidateModels = modelProfile.models;
 
           while (loopCount < MAX_LOOPS) {
             loopCount++;
@@ -2813,10 +3060,11 @@ CRITICAL RULES:
                 response = await ai.models.generateContent({
                   model: modelToTry,
                   contents,
-                  config: {
-                    systemInstruction,
+                  config: buildModelConfig(modelToTry, {
+                    systemInstruction: `${systemInstruction}\n\n${modelProfile.instruction}`,
                     tools: [{ functionDeclarations }],
-                  },
+                    thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+                  }),
                 });
                 if (response) break;
               } catch (callErr: any) {
@@ -3427,8 +3675,11 @@ CRITICAL RULES:
       const didYouMean = detected.didYouMean;
       const effectiveSearchTerm = didYouMean || (exactApp ? exactApp.name : rawQuery);
 
-      // Pre-fetch Wikipedia grounding info in parallel
-      const wikiPromise = fetchWikipediaInfo(effectiveSearchTerm);
+      // Pre-fetch Wikipedia + live web grounding info in parallel
+      const [wikiData, liveGrounding] = await Promise.all([
+        fetchWikipediaInfo(effectiveSearchTerm),
+        performLiveWebGrounding(effectiveSearchTerm),
+      ]);
 
       let summaryText = "";
       const webSources: Array<{ title: string; url: string; snippet?: string }> = [];
@@ -3442,7 +3693,7 @@ CRITICAL RULES:
         });
       }
 
-      // 2. Attempt high-intelligence Gemini generation
+      // 2. Attempt high-intelligence Gemini generation with Google Search + verified web & corpus grounding
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
@@ -3451,6 +3702,7 @@ The user entered query: "${rawQuery}".
 ${didYouMean ? `NOTE: The user misspelled this. The intended entity or app is "${didYouMean}". Explicitly acknowledge the correction and focus on "${didYouMean}".` : ""}
 
 Provide an accurate, authoritative web briefing for: "${effectiveSearchTerm}".
+Only state verified facts, version details, and capabilities grounded in search results or established knowledge.
 
 Structure your markdown response:
 ${didYouMean ? `### 💡 Did you mean: **${didYouMean}**?\n*(Auto-corrected spelling from "${rawQuery}")*\n\n` : ""}
@@ -3470,33 +3722,53 @@ Explain how users can access it, supported platforms, and account requirements.
 ### 📌 Current Ecosystem & Context
 Explain recent developments, user reception, and best practices.`;
 
-          let response;
-          for (const candModel of RESILIENT_MODELS) {
-            try {
-              response = await ai.models.generateContent({
-                model: candModel,
-                contents: prompt,
-              });
-              if (response?.text) break;
-            } catch {
-              continue;
+          const modelProfile = getModelExecutionProfile(req.body?.modelId);
+          const groundedSysInstruction = buildGroundedSystemInstruction(
+            modelProfile.instruction,
+            effectiveSearchTerm,
+            liveGrounding.groundingContext
+          );
+          const result = await generateContentResilient(
+            ai,
+            {
+              contents: prompt,
+              config: {
+                systemInstruction: groundedSysInstruction,
+                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+                tools: [{ googleSearch: {} }],
+              },
+            },
+            modelProfile.models
+          );
+
+          summaryText = result.text || "";
+          if (Array.isArray(result.groundingMetadata?.groundingChunks)) {
+            for (const chunk of result.groundingMetadata.groundingChunks) {
+              const uri = chunk?.web?.uri;
+              if (uri && !webSources.some((w) => w.url === uri)) {
+                webSources.push({ title: chunk.web?.title || uri, url: uri });
+              }
             }
           }
-
-          summaryText = response?.text || "";
         } catch (apiErr) {
           console.log("Gemini generation in web-search notice, using structured web grounding:", (apiErr as any)?.message || "Using fallback grounding");
         }
       }
 
-      // 3. Collect Wikipedia grounding
-      const wikiData = await wikiPromise;
-      if (wikiData) {
+      // 3. Collect Wikipedia & live DuckDuckGo grounding sources
+      if (wikiData && !webSources.some((w) => w.url === wikiData.url)) {
         webSources.push({
           title: `${wikiData.title} - Wikipedia Reference`,
           url: wikiData.url,
           snippet: wikiData.extract.slice(0, 180) + "...",
         });
+      }
+      if (liveGrounding.groundingSources.length > 0) {
+        for (const s of liveGrounding.groundingSources) {
+          if (s.url && !webSources.some((w) => w.url === s.url)) {
+            webSources.push({ title: s.title, url: s.url, snippet: s.snippet });
+          }
+        }
       }
 
       // Add general search portal source
@@ -3560,9 +3832,18 @@ Explain recent developments, user reception, and best practices.`;
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const { text: raw } = await generateContentResilient(ai, {
-            contents: `You are an expert Presentation Deck Designer. Create a complete, professional ${count}-slide presentation on the topic: "${topic}".\n\nReturn a strict JSON object with keys:\n"title": string (engaging presentation title)\n"slides": array of objects with keys:\n  "slideNumber": number\n  "title": string\n  "subtitle": string\n  "bullets": string[] (3-4 concise points)\n  "keyTakeaway": string\n  "visualNote": string (description of recommended visual/graphic)\n  "layout": "title" | "split" | "bullets" | "stats" | "quote"\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
-          });
+          const modelProfile = getModelExecutionProfile(req.body?.modelId);
+          const { text: raw } = await generateContentResilient(
+            ai,
+            {
+              contents: `You are an expert Presentation Deck Designer. Create a complete, professional ${count}-slide presentation on the topic: "${topic}".\n\nReturn a strict JSON object with keys:\n"title": string (engaging presentation title)\n"slides": array of objects with keys:\n  "slideNumber": number\n  "title": string\n  "subtitle": string\n  "bullets": string[] (3-4 concise points)\n  "keyTakeaway": string\n  "visualNote": string (description of recommended visual/graphic)\n  "layout": "title" | "split" | "bullets" | "stats" | "quote"\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
+              config: {
+                systemInstruction: modelProfile.instruction,
+                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+              },
+            },
+            modelProfile.models
+          );
           const match = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, raw];
           const parsed = JSON.parse(match[1] || raw);
 
@@ -3732,7 +4013,7 @@ ${currentContent}
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const text = await generateGeminiText(ai, prompt);
+          const text = await generateGeminiText(ai, prompt, undefined, req.body?.modelId);
           if (text && text.trim()) {
             return res.json({ content: text });
           }
@@ -3840,85 +4121,59 @@ ${currentContent}
     }
   });
 
-  // ==========================================
-  // 6c. AI AUDIO TRANSCRIPTION ENDPOINT
-  // Uses gemini-3.5-transcribe with resilient multimodal fallback
-  // ==========================================
-  app.post("/api/transcribe", async (req: Request, res: Response) => {
-    try {
-      const { audioBase64, mimeType = "audio/webm" } = req.body;
-      const apiKey = getEffectiveApiKey(req);
-
-      if (!audioBase64 || typeof audioBase64 !== "string") {
-        return res.status(400).json({ error: "audioBase64 string is required" });
-      }
-
-      // Strip data URL scheme if present
-      const pureBase64 = audioBase64.includes(",")
-        ? audioBase64.split(",")[1].trim()
-        : audioBase64.trim();
-
-      if (!pureBase64 || pureBase64.length < 50) {
-        return res.json({ success: true, transcript: "" });
-      }
-
-      const cleanMime = (mimeType || "audio/webm").split(";")[0].trim().toLowerCase();
-
-      if (apiKey) {
-        const ai = getGenAiClient(apiKey);
-        const transcribeModels = ["gemini-3.5-transcribe", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
-
-        for (const model of transcribeModels) {
-          try {
-            const response = await ai.models.generateContent({
-              model,
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: cleanMime,
-                        data: pureBase64,
-                      },
-                    },
-                    {
-                      text: "Transcribe the spoken audio verbatim in the spoken language. Return ONLY the transcribed text. Do not wrap in quotes or add notes.",
-                    },
-                  ],
-                },
-              ],
-            });
-
-            const text = response.text?.trim() || response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-            if (text) {
-              return res.json({ success: true, transcript: text, model });
-            }
-          } catch (modelErr: any) {
-            console.log(`Transcribe attempt with ${model} notice:`, modelErr?.message?.slice(0, 100));
-            continue;
-          }
-        }
-      }
-
-      return res.json({
-        success: false,
-        transcript: "",
-        message: "Transcription unavailable without API key or audio was silent.",
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return res.status(500).json({ error: msg });
+  // Helper to ensure PCM audio has a proper 44-byte RIFF/WAV header for browser playback
+  const ensureWavBase64 = (base64Audio: string, rawMimeType?: string): { base64: string; mimeType: string } => {
+    const rawBuf = Buffer.from(base64Audio, "base64");
+    if (rawBuf.length >= 12 && rawBuf.toString("ascii", 0, 4) === "RIFF") {
+      return { base64: base64Audio, mimeType: "audio/wav" };
     }
-  });
+    const lowerMime = (rawMimeType || "").toLowerCase();
+    if (
+      lowerMime.includes("mp3") ||
+      lowerMime.includes("mpeg") ||
+      lowerMime.includes("ogg") ||
+      lowerMime.includes("webm") ||
+      lowerMime.includes("mp4") ||
+      lowerMime.includes("aac")
+    ) {
+      return { base64: base64Audio, mimeType: rawMimeType || "audio/mpeg" };
+    }
+
+    // Wrap raw 16-bit mono PCM (L16) with a 44-byte WAV header
+    const rateMatch = lowerMime.match(/rate=(\d+)/);
+    const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+    const blockAlign = (numChannels * bitsPerSample) / 8;
+    const dataSize = rawBuf.length;
+
+    const header = Buffer.alloc(44);
+    header.write("RIFF", 0);
+    header.writeUInt32LE(36 + dataSize, 4);
+    header.write("WAVE", 8);
+    header.write("fmt ", 12);
+    header.writeUInt32LE(16, 16); // Subchunk1Size for PCM
+    header.writeUInt16LE(1, 20); // AudioFormat = 1 (PCM)
+    header.writeUInt16LE(numChannels, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(byteRate, 28);
+    header.writeUInt16LE(blockAlign, 32);
+    header.writeUInt16LE(bitsPerSample, 34);
+    header.write("data", 36);
+    header.writeUInt32LE(dataSize, 40);
+
+    const wavBuf = Buffer.concat([header, rawBuf]);
+    return { base64: wavBuf.toString("base64"), mimeType: "audio/wav" };
+  };
 
   // ==========================================
-  // 6d. AI TEXT-TO-SPEECH (TTS) ENDPOINT
+  // 6c. AI TEXT-TO-SPEECH (TTS) ENDPOINT
   // Uses gemini-3.8-flash-lite-tts for high-fidelity natural spoken audio (WAV)
   // ==========================================
   app.post("/api/tts", async (req: Request, res: Response) => {
     try {
-      const { text, voiceName = "Zephyr", style = "Conversational, natural, engaging" } = req.body;
+      const { text, voiceName = "Zephyr" } = req.body;
       const apiKey = getEffectiveApiKey(req);
 
       if (!text || typeof text !== "string" || !text.trim()) {
@@ -3931,14 +4186,14 @@ ${currentContent}
         .replace(/`([^`]+)`/g, "$1")
         .replace(/[*#_~\[\]\(\)\{\}]/g, "")
         .replace(/https?:\/\/\S+/g, "link")
-        .replace(/\n+/g, " ")
+        .replace(/\s+/g, " ")
         .slice(0, 1500)
         .trim();
 
       const validVoices = ["Zephyr", "Aoede", "Kore", "Puck", "Fenrir", "Charon"];
       let chosenVoice = "Zephyr";
       const normalizedVoiceName = (voiceName || "").replace(/^gemini-/i, "").trim();
-      const match = validVoices.find(v => v.toLowerCase() === normalizedVoiceName.toLowerCase());
+      const match = validVoices.find((v) => v.toLowerCase() === normalizedVoiceName.toLowerCase());
       if (match) {
         chosenVoice = match;
       }
@@ -3954,14 +4209,7 @@ ${currentContent}
               contents: [
                 {
                   role: "user",
-                  parts: [
-                    {
-                      text: cleanSpeech,
-                      speechMetadata: {
-                        style: style || "Natural, charismatic, conversational speaking voice",
-                      },
-                    },
-                  ],
+                  parts: [{ text: cleanSpeech }],
                 },
               ],
               config: {
@@ -3975,18 +4223,23 @@ ${currentContent}
               },
             });
 
-            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            const parts = response.candidates?.[0]?.content?.parts || [];
+            const audioPart = parts.find((p: any) => p?.inlineData?.data);
+            const base64Audio = audioPart?.inlineData?.data;
+            const rawMime = audioPart?.inlineData?.mimeType;
+
             if (base64Audio) {
+              const playable = ensureWavBase64(base64Audio, rawMime);
               return res.json({
                 success: true,
-                audioBase64: base64Audio,
-                mimeType: "audio/wav",
+                audioBase64: playable.base64,
+                mimeType: playable.mimeType,
                 voiceName: chosenVoice,
                 engine: model,
               });
             }
           } catch (modelErr: any) {
-            console.log(`TTS generation attempt with ${model} notice:`, modelErr?.message?.slice(0, 100));
+            console.log(`TTS generation attempt with ${model} notice:`, modelErr?.message?.slice(0, 140));
             continue;
           }
         }
@@ -4133,7 +4386,7 @@ Return ONLY valid JSON. No markdown ticks, no commentary.`;
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const raw = await generateGeminiText(ai, prompt);
+          const raw = await generateGeminiText(ai, prompt, undefined, req.body?.modelId);
           if (raw && raw.trim()) {
             // Clean markdown code fence if present
             const cleanJson = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
@@ -4309,9 +4562,18 @@ Return only the clean lyrics with section headers.`;
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const { text: raw } = await generateContentResilient(ai, {
-            contents: `You are an AI Mindmap and Diagram Architect. Create an interconnected ${canvasType} for the topic: "${topic}".\n\nReturn a strict JSON object with:\n"name": string\n"nodes": array of objects with keys:\n  "id": string (e.g. "node-1")\n  "type": "idea" | "mindmap" | "process" | "decision" | "note"\n  "title": string\n  "content": string\n  "x": number (between 50 and 800)\n  "y": number (between 50 and 600)\n  "width": number (around 180-220)\n  "height": number (around 100-140)\n  "color": string (hex color, e.g. "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6")\n"edges": array of objects with keys:\n  "id": string\n  "fromId": string\n  "toId": string\n  "label": string\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
-          });
+          const modelProfile = getModelExecutionProfile(req.body?.modelId);
+          const { text: raw } = await generateContentResilient(
+            ai,
+            {
+              contents: `You are an AI Mindmap and Diagram Architect. Create an interconnected ${canvasType} for the topic: "${topic}".\n\nReturn a strict JSON object with:\n"name": string\n"nodes": array of objects with keys:\n  "id": string (e.g. "node-1")\n  "type": "idea" | "mindmap" | "process" | "decision" | "note"\n  "title": string\n  "content": string\n  "x": number (between 50 and 800)\n  "y": number (between 50 and 600)\n  "width": number (around 180-220)\n  "height": number (around 100-140)\n  "color": string (hex color, e.g. "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6")\n"edges": array of objects with keys:\n  "id": string\n  "fromId": string\n  "toId": string\n  "label": string\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
+              config: {
+                systemInstruction: modelProfile.instruction,
+                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+              },
+            },
+            modelProfile.models
+          );
           const match = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, raw];
           const parsed = JSON.parse(match[1] || raw);
 

@@ -298,8 +298,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={eff.id}
                         type="button"
                         onClick={() => {
-                          updateSetting('themeEffect', eff.id);
-                          updateSetting('enableStarBackground', eff.id !== 'none');
+                          onUpdateSettings({
+                            ...settings,
+                            themeEffect: eff.id,
+                            enableStarBackground: eff.id !== 'none',
+                          });
                         }}
                         className={`p-3.5 rounded-2xl border text-left transition-all relative ${
                           isSelected
@@ -594,8 +597,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       value={settings.themeEffect || 'connected_dots'}
                       onChange={(e) => {
                         const val = e.target.value as ThemeEffectType;
-                        updateSetting('themeEffect', val);
-                        updateSetting('enableStarBackground', val !== 'none');
+                        onUpdateSettings({
+                          ...settings,
+                          themeEffect: val,
+                          enableStarBackground: val !== 'none',
+                        });
                       }}
                       className={`text-xs px-3 py-1.5 rounded-xl border outline-none font-medium ${
                         isDark ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-white border-neutral-300 text-neutral-800'

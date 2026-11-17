@@ -1,29 +1,26 @@
 import React from 'react';
-import { Moon, Sun } from 'lucide-react';
-import { ForgeXTheme, ThemeEffectType } from '../types';
-import { ThemeEffectDropdown } from './ThemeEffectDropdown';
+import { ForgeXTheme, ThemeEffectType, UserProfile } from '../types';
 import { ForgeXLogo } from './ForgeXLogo';
 
 interface LandingNavProps {
   theme: ForgeXTheme;
   themeEffect?: ThemeEffectType;
   onSelectThemeEffect?: (effect: ThemeEffectType) => void;
-  onToggleTheme: () => void;
+  onToggleTheme?: () => void;
   onOpenAbout: () => void;
   onOpenCreator: () => void;
   onOpenSignIn: () => void;
   onOpenGetStarted: () => void;
+  user?: UserProfile | null;
 }
 
 export const LandingNav: React.FC<LandingNavProps> = ({
   theme,
-  themeEffect = 'connected_dots',
-  onSelectThemeEffect,
-  onToggleTheme,
   onOpenAbout,
   onOpenCreator,
   onOpenSignIn,
   onOpenGetStarted,
+  user,
 }) => {
   const isDark = theme === 'dark';
 
@@ -31,14 +28,32 @@ export const LandingNav: React.FC<LandingNavProps> = ({
     <header className="fixed top-0 left-0 right-0 z-40 px-2 sm:px-8 py-3 sm:py-4 transition-all duration-300">
       <div
         id="forgex-landing-navbar"
-        className={`max-w-6xl mx-auto flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl backdrop-blur-md transition-all duration-300 border ${
+        className={`relative max-w-6xl mx-auto flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl md:rounded-3xl backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border ${
           isDark
-            ? 'bg-neutral-950/75 border-neutral-800/80 shadow-2xl shadow-black/40 text-neutral-200'
-            : 'bg-white/80 border-neutral-200/80 shadow-lg shadow-neutral-200/50 text-neutral-800'
+            ? 'bg-neutral-900/55 hover:bg-neutral-900/68 border-white/15 ring-1 ring-inset ring-white/10 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.75)] md:hover:-translate-y-0.5 md:hover:shadow-[0_22px_56px_-12px_rgba(0,0,0,0.85)] text-neutral-100'
+            : 'bg-white/65 hover:bg-white/78 border-white/80 ring-1 ring-inset ring-white/90 shadow-[0_12px_40px_-10px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.06)] md:hover:-translate-y-0.5 md:hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.2)] text-neutral-800'
         }`}
       >
+        {/* Specular Frosted Glass Sheen Layer */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden"
+        >
+          <div
+            className={`absolute inset-0 bg-gradient-to-r ${
+              isDark
+                ? 'from-white/[0.1] via-white/[0.02] to-amber-500/[0.03]'
+                : 'from-white/75 via-white/25 to-amber-500/[0.04]'
+            }`}
+          />
+          <div
+            className={`absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent ${
+              isDark ? 'via-white/30' : 'via-white'
+            } to-transparent`}
+          />
+        </div>
         {/* Left: Brand */}
-        <div className="flex items-center gap-2.5 select-none cursor-pointer group shrink-0">
+        <div className="relative z-10 flex items-center gap-2.5 select-none cursor-pointer group shrink-0">
           <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <ForgeXLogo className="w-6 h-6 text-neutral-900 dark:text-white" />
           </div>
@@ -48,7 +63,7 @@ export const LandingNav: React.FC<LandingNavProps> = ({
         </div>
 
         {/* Right Nav links */}
-        <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
+        <div className="relative z-10 flex items-center gap-1 sm:gap-2.5 shrink-0">
           <button
             id="nav-btn-about"
             onClick={onOpenAbout}
@@ -73,41 +88,19 @@ export const LandingNav: React.FC<LandingNavProps> = ({
             Creator
           </button>
 
-          <button
-            id="nav-btn-signin"
-            onClick={onOpenSignIn}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-              isDark
-                ? 'text-neutral-300 hover:text-white hover:bg-neutral-800/60'
-                : 'text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100'
-            }`}
-          >
-            Sign In
-          </button>
-
-          {onSelectThemeEffect && (
-            <div className="hidden sm:inline-block">
-              <ThemeEffectDropdown
-                currentEffect={themeEffect}
-                onSelectEffect={onSelectThemeEffect}
-                theme={theme}
-                compact={true}
-              />
-            </div>
+          {!user && (
+            <button
+              id="nav-btn-signin"
+              onClick={onOpenSignIn}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                isDark
+                  ? 'text-neutral-300 hover:text-white hover:bg-neutral-800/60'
+                  : 'text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100'
+              }`}
+            >
+              Sign In
+            </button>
           )}
-
-          <button
-            id="nav-btn-theme"
-            onClick={onToggleTheme}
-            aria-label="Toggle theme"
-            className={`p-1.5 sm:p-2 rounded-xl text-sm transition-colors border ${
-              isDark
-                ? 'text-neutral-400 hover:text-amber-300 border-neutral-800 hover:bg-neutral-900'
-                : 'text-neutral-600 hover:text-amber-600 border-neutral-200 hover:bg-neutral-100'
-            }`}
-          >
-            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
 
           <button
             id="nav-btn-getstarted"

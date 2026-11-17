@@ -4,6 +4,8 @@
  * language-specific code generation, and factual answers.
  */
 
+import { retrieveTrainingContext } from './trainingCorpus';
+
 export interface KnowledgeResponse {
   reply: string;
   category?: string;
@@ -381,15 +383,69 @@ function evaluateMathExpression(input: string): string | null {
     return `$$\\sqrt{${val}} = \\boxed{${result}}$$`;
   }
 
+  // Percentage ratio: e.g. "15 is what % of 60", "what percent of 80 is 20"
+  const pctRatioMatch =
+    lower.match(/(\d+(?:\.\d+)?)\s+is\s+what\s+(?:%|percent(?:age)?)\s+of\s+(\d+(?:\.\d+)?)/i) ||
+    lower.match(/what\s+(?:%|percent(?:age)?)\s+of\s+(\d+(?:\.\d+)?)\s+is\s+(\d+(?:\.\d+)?)/i);
+  if (pctRatioMatch) {
+    const isWhatFirst = /is\s+what/i.test(lower);
+    const part = parseFloat(isWhatFirst ? pctRatioMatch[1] : pctRatioMatch[2]);
+    const whole = parseFloat(isWhatFirst ? pctRatioMatch[2] : pctRatioMatch[1]);
+    if (whole !== 0) {
+      const pct = Number(((part / whole) * 100).toFixed(4));
+      return `$$\\frac{${part}}{${whole}} \\times 100\\% = \\boxed{${pct}\\%}$$`;
+    }
+  }
+
+  // Factorials: e.g. "10!", "what is 6!"
+  const factMatch = lower.match(/^(?:what\s+is\s+|calculate\s+)?(\d{1,2})!\s*\??$/i);
+  if (factMatch) {
+    const n = parseInt(factMatch[1], 10);
+    if (n >= 0 && n <= 20) {
+      let acc = 1;
+      for (let i = 2; i <= n; i++) acc *= i;
+      return `$$${n}! = \\boxed{${acc.toLocaleString()}}$$`;
+    }
+  }
+
+  // Linear equation: e.g. "solve 3x + 7 = 22", "2x - 5 = 11"
+  const linearMatch = lower.match(/^(?:solve\s+)?([+-]?\d*(?:\.\d+)?)x\s*([+-]\s*\d+(?:\.\d+)?)?\s*=\s*([+-]?\d+(?:\.\d+)?)$/i);
+  if (linearMatch) {
+    const rawA = linearMatch[1];
+    const a = rawA === '' || rawA === '+' ? 1 : rawA === '-' ? -1 : parseFloat(rawA);
+    const b = linearMatch[2] ? parseFloat(linearMatch[2].replace(/\s+/g, '')) : 0;
+    const c = parseFloat(linearMatch[3]);
+    if (a !== 0 && !Number.isNaN(a) && !Number.isNaN(b) && !Number.isNaN(c)) {
+      const x = Number(((c - b) / a).toFixed(6));
+      return `$$${a}x ${b >= 0 ? '+' : '-'} ${Math.abs(b)} = ${c} \\implies x = \\frac{${c - b}}{${a}} = \\boxed{${x}}$$`;
+    }
+  }
+
   // Fractions: e.g. "3/4 + 2/5"
   const fracMatch = lower.match(/^(?:what is|calculate|compute)?\s*(\d+)\/(\d+)\s*([\+\-\*\/])\s*(\d+)\/(\d+)\s*\??$/i);
   if (fracMatch) {
     const [_, n1, d1, op, n2, d2] = fracMatch;
     const num1 = parseInt(n1, 10), den1 = parseInt(d1, 10), num2 = parseInt(n2, 10), den2 = parseInt(d2, 10);
-    if (op === '+') {
-      const top = num1 * den2 + num2 * den1;
-      const bottom = den1 * den2;
-      return `$$\\frac{${num1}}{${den1}} + \\frac{${num2}}{${den2}} = \\boxed{\\frac{${top}}{${bottom}}}$$`;
+    if (den1 !== 0 && den2 !== 0) {
+      let top = 0;
+      let bottom = den1 * den2;
+      if (op === '+') top = num1 * den2 + num2 * den1;
+      else if (op === '-') top = num1 * den2 - num2 * den1;
+      else if (op === '*') {
+        top = num1 * num2;
+        bottom = den1 * den2;
+      } else if (op === '/' && num2 !== 0) {
+        top = num1 * den2;
+        bottom = den1 * num2;
+      }
+      if (op === '+' || op === '-' || op === '*' || (op === '/' && num2 !== 0)) {
+        const gcd = (x: number, y: number): number => (y === 0 ? Math.abs(x) : gcd(y, x % y));
+        const g = gcd(top, bottom) || 1;
+        const sTop = top / g;
+        const sBot = bottom / g;
+        const opLatex = op === '*' ? '\\times' : op === '/' ? '\\div' : op;
+        return `$$\\frac{${num1}}{${den1}} ${opLatex} \\frac{${num2}}{${den2}} = \\boxed{\\frac{${sTop}}{${sBot}}}$$`;
+      }
     }
   }
 
@@ -1277,7 +1333,13 @@ ForgeX is architected with enterprise-grade privacy and per-user data isolation:
     return jokes[Math.floor(Math.random() * jokes.length)];
   }
 
-  // 15. Intelligent Conversational & Direct Answer Engine
+  // 15. Curated Training Corpus Retrieval before generic fallback
+  const corpusMatch = retrieveTrainingContext(clean, 2800);
+  if (corpusMatch.hasContext) {
+    return `${corpusMatch.contextText}\n\n---\n*Let me know if you want step-by-step derivations, runnable code examples, or deeper analysis on **${corpusMatch.matchedTitles[0]}**.*`;
+  }
+
+  // 16. Intelligent Conversational & Direct Answer Engine
   const subject = clean.replace(/^(how does|what is|explain|why is|why does|tell me about|can you)\s*/i, '').replace(/\?+$/, '').trim();
   const title = subject ? subject.charAt(0).toUpperCase() + subject.slice(1) : 'This Topic';
 

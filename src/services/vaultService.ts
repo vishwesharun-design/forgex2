@@ -1,6 +1,7 @@
 import { VaultDocument } from '../types';
-import { db, auth } from './firebase';
+import { db } from './firebase';
 import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
+import { TRAINING_CORPUS } from './trainingCorpus';
 
 const DEFAULT_DOCS: VaultDocument[] = [
   {
@@ -12,7 +13,7 @@ const DEFAULT_DOCS: VaultDocument[] = [
 ForgeX is an all-in-one AI creation and intelligence platform created by VishweshVarman.
 
 ## Core Capabilities
-- Multi-Model Reasoning: Flagship Forge 2 Ultra (powered by Gemini 3.8 Flash), Forge 1.5, and specialized multimodal vision models.
+- Multi-Model Reasoning: Forge 1 (Gemini 3.1 Flash Lite) plus Forge 1.5, Forge 2, Forge 2 Pro, and Flagship Forge 2 Ultra (powered by Gemini 4 Hydrogen across calibrated reasoning depths).
 - Black Forest Labs FLUX: High-precision latent diffusion image generation supporting 16:9, 1:1, 9:16, 4:3, and 3:4 aspect ratios.
 - AI Song Studio: Web Audio synthesizer with polyphonic chord progressions, arpeggios, and lyrics generation.
 - Deep Research: Autonomous multi-step research reports grounded in real-time Google search verification.
@@ -86,6 +87,18 @@ ForgeX is an all-in-one AI creation and intelligence platform created by Vishwes
     summary: 'Actionable 3-phase go-to-market playbook covering validation, multi-channel launch, and organic viral growth loops.',
     isActive: false,
   },
+  ...TRAINING_CORPUS.slice(0, 6).map((entry, idx) => ({
+    id: `vault-trained-${entry.id}`,
+    title: entry.title,
+    category: entry.category,
+    content: entry.content,
+    tags: entry.tags,
+    createdAt: Date.now() - 1000 * 60 * 60 * (idx + 3),
+    updatedAt: Date.now() - 1000 * 60 * 60 * (idx + 3),
+    charCount: entry.content.length,
+    summary: entry.summary,
+    isActive: idx < 2,
+  })),
 ];
 
 class VaultService {
@@ -116,14 +129,31 @@ class VaultService {
     try {
       const saved = localStorage.getItem(this.getStorageKey());
       if (saved) {
-        this.documents = JSON.parse(saved);
-        return;
+        const parsed: VaultDocument[] = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const migrationKey = `forgex_vault_corpus_v2_${this.currentUserId}`;
+          if (!localStorage.getItem(migrationKey)) {
+            const existingIds = new Set(parsed.map((d) => d.id));
+            const newTrainedDocs = DEFAULT_DOCS.filter(
+              (d) => d.id.startsWith('vault-trained-') && !existingIds.has(d.id)
+            );
+            this.documents = newTrainedDocs.length > 0 ? [...parsed, ...newTrainedDocs] : parsed;
+            localStorage.setItem(migrationKey, '1');
+            if (newTrainedDocs.length > 0) {
+              this.saveToStorage();
+            }
+          } else {
+            this.documents = parsed;
+          }
+          return;
+        }
       }
     } catch (e) {
       console.warn('Failed to parse vault storage:', e);
     }
     // Default seed
     this.documents = [...DEFAULT_DOCS];
+    localStorage.setItem(`forgex_vault_corpus_v2_${this.currentUserId}`, '1');
     this.saveToStorage();
   }
 
@@ -222,11 +252,11 @@ class VaultService {
 
   /**
    * Retrieves relevant context excerpts from active Knowledge Vault documents
-   * based on keyword and semantic relevance scoring.
+   * using keyword, phrase, and section-level relevance scoring.
    */
   public getGroundingContext(
     userPrompt: string = '',
-    maxChars: number = 3600
+    maxChars: number = 5200
   ): {
     hasContext: boolean;
     contextText: string;
@@ -237,13 +267,13 @@ class VaultService {
       return { hasContext: false, contextText: '', sources: [] };
     }
 
-    const queryTokens = userPrompt
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
+    const cleanPrompt = userPrompt.toLowerCase().trim();
+    const queryTokens = cleanPrompt
+      .replace(/[^a-z0-9+.#\s]/g, ' ')
       .split(/\s+/)
       .filter((t) => t.length > 2);
 
-    // Score active documents based on token matches in title, content, and tags
+    // Score active documents based on token & phrase matches in title, content, and tags
     const scoredDocs = activeDocs.map((docItem) => {
       let score = 0;
       const lowerTitle = docItem.title.toLowerCase();
@@ -251,33 +281,58 @@ class VaultService {
       const lowerTags = docItem.tags.map((t) => t.toLowerCase()).join(' ');
 
       if (queryTokens.length === 0) {
-        // If query is generic, weight by recent update time
         score = 1;
       } else {
         for (const token of queryTokens) {
-          if (lowerTitle.includes(token)) score += 8;
-          if (lowerTags.includes(token)) score += 5;
-          const matchCount = (lowerContent.match(new RegExp(`\\b${token}\\b`, 'g')) || []).length;
-          score += Math.min(matchCount * 2, 10);
+          if (lowerTitle.includes(token)) score += 9;
+          if (lowerTags.includes(token)) score += 6;
+          if (lowerContent.includes(token)) {
+            const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const matchCount = (lowerContent.match(new RegExp(`\\b${escaped}\\b`, 'g')) || []).length;
+            score += Math.min(Math.max(matchCount, 1) * 2, 12);
+          }
         }
       }
 
       return { doc: docItem, score };
     });
 
-    // Sort by relevance score
+    // Only inject strongly matched documents (or top active doc if query has no matching tokens)
     scoredDocs.sort((a, b) => b.score - a.score);
+    const matchedDocs = scoredDocs.filter((item) => item.score > 0);
+    const relevantDocs = (matchedDocs.length > 0 ? matchedDocs : scoredDocs).slice(0, 4);
 
-    const relevantDocs = scoredDocs.slice(0, 4);
     let aggregatedContext = '';
     const sources: { id: string; title: string; category: string }[] = [];
+
+    const extractBestSection = (content: string, limit: number): string => {
+      if (content.length <= limit) return content;
+      const sections = content.split(/\n(?=## )/);
+      if (sections.length <= 1 || queryTokens.length === 0) {
+        return `${content.slice(0, limit)}...`;
+      }
+      const scoredSections = sections.map((sec) => {
+        const lowerSec = sec.toLowerCase();
+        let s = 0;
+        for (const t of queryTokens) {
+          if (lowerSec.includes(t)) s += 3;
+        }
+        return { sec, s };
+      });
+      scoredSections.sort((a, b) => b.s - a.s);
+      let picked = '';
+      for (const item of scoredSections) {
+        if (picked.length + item.sec.length + 2 > limit) break;
+        picked += (picked ? '\n\n' : '') + item.sec;
+      }
+      return picked || `${content.slice(0, limit)}...`;
+    };
 
     for (const item of relevantDocs) {
       const d = item.doc;
       sources.push({ id: d.id, title: d.title, category: d.category });
 
-      // Truncate individual documents cleanly so all top sources get represented
-      const docExcerpt = d.content.length > 1200 ? `${d.content.slice(0, 1200)}...` : d.content;
+      const docExcerpt = extractBestSection(d.content, 1600);
       aggregatedContext += `### [Vault Document: ${d.title}] (Category: ${d.category})\n${docExcerpt}\n\n`;
 
       if (aggregatedContext.length >= maxChars) {

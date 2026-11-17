@@ -863,136 +863,46 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </h2>
 
             {/* Centered Input Container */}
-            <div className="w-full mb-4">
+            <div className="w-full mb-5">
               {renderChatInput()}
             </div>
 
-            {/* Quick Capability Chips */}
-            <div className="flex flex-wrap items-center justify-center gap-2 max-w-xl mx-auto mb-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setInputText('Generate an image of a cybernetic dragon soaring through neon clouds');
-                  textareaRef.current?.focus();
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isDark
-                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-amber-500/50 hover:bg-amber-500/10 text-neutral-300 hover:text-amber-400'
-                    : 'border-neutral-200 bg-white hover:border-amber-500/50 hover:bg-amber-50 text-neutral-700 shadow-2xs'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Create Image (FLUX)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setInputText('Write clean TypeScript code for a reactive store with event listeners');
-                  textareaRef.current?.focus();
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isDark
-                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-blue-500/50 hover:bg-blue-500/10 text-neutral-300 hover:text-blue-400'
-                    : 'border-neutral-200 bg-white hover:border-blue-500/50 hover:bg-blue-50 text-neutral-700 shadow-2xs'
-                }`}
-              >
-                <Code2 className="w-3.5 h-3.5 text-blue-500" />
-                <span>Write Code</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setInputText('What are the latest breakthrough space missions and discoveries this week?');
-                  textareaRef.current?.focus();
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isDark
-                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-neutral-300 hover:text-emerald-400'
-                    : 'border-neutral-200 bg-white hover:border-emerald-500/50 hover:bg-emerald-50 text-neutral-700 shadow-2xs'
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Web Search</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setInputText('Write lyrics and chords for an uplifting synthwave track');
-                  textareaRef.current?.focus();
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isDark
-                    ? 'border-neutral-800 bg-neutral-900/60 hover:border-purple-500/50 hover:bg-purple-500/10 text-neutral-300 hover:text-purple-400'
-                    : 'border-neutral-200 bg-white hover:border-purple-500/50 hover:bg-purple-50 text-neutral-700 shadow-2xs'
-                }`}
-              >
-                <Headphones className="w-3.5 h-3.5 text-purple-500" />
-                <span>Make Song</span>
-              </button>
-            </div>
-
-            {/* What can you do? Button */}
-            <div className="flex flex-col items-center gap-3 w-full">
-              <button
-                type="button"
-                id="btn-what-can-you-do"
-                onClick={() => handleSendMessage('What can you do?')}
-                className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium border transition-colors ${
-                  isDark
-                    ? 'border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800 text-neutral-300 hover:text-white'
-                    : 'border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 shadow-sm'
-                }`}
-              >
-                What can you do?
-              </button>
+            {/* Starter Prompts: Left-to-Right Marquee (pauses on mouse hover) */}
+            <div className="starter-marquee w-full overflow-hidden py-1 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+              <div className="starter-marquee-track">
+                {[0, 1].map((dupIndex) => (
+                  <div key={dupIndex} className="flex items-center gap-2.5 pr-2.5 shrink-0" aria-hidden={dupIndex === 1}>
+                    {[
+                      'What can you do?',
+                      'Explain quantum computing simply',
+                      'Help me plan a productive week',
+                      'Brainstorm startup ideas',
+                      'Summarize a complex topic',
+                      'Quiz me on space science',
+                    ].map((promptText, idx) => (
+                      <button
+                        key={`${dupIndex}-${idx}`}
+                        type="button"
+                        id={dupIndex === 0 && idx === 0 ? 'btn-what-can-you-do' : undefined}
+                        tabIndex={dupIndex === 1 ? -1 : undefined}
+                        onClick={() => handleSendMessage(promptText)}
+                        className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                          isDark
+                            ? 'border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800 text-neutral-300 hover:text-white'
+                            : 'border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 shadow-sm'
+                        }`}
+                      >
+                        {promptText}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
           /* Active Chat Messages */
           <div className="max-w-3xl mx-auto space-y-6 pb-4">
-            {/* Chat Control Bar */}
-            <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-neutral-800/80' : 'border-neutral-200'}`}>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className={`font-semibold text-xs sm:text-sm truncate max-w-[200px] sm:max-w-xs ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
-                  {currentSession?.title || 'Current Chat'}
-                </span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold shrink-0 ${
-                  isDark ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'bg-amber-100 text-amber-800 border border-amber-300'
-                }`}>
-                  {displayMessages.length} {displayMessages.length === 1 ? 'msg' : 'msgs'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-clear-chat-msgs"
-                  onClick={handleClearChat}
-                  title="Clear all messages in this conversation"
-                  className={`px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5 transition-colors border ${
-                    isDark
-                      ? 'border-neutral-800 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200'
-                      : 'border-neutral-200 hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
-                  }`}
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span className="hidden sm:inline">Clear Chat</span>
-                </button>
-
-                <button
-                  id="btn-delete-chat-session"
-                  onClick={handleDeleteSession}
-                  title="Delete this entire chat conversation"
-                  className="px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5 transition-colors border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Delete Chat</span>
-                </button>
-              </div>
-            </div>
-
             {displayMessages.map((message: ChatMessage) => {
               const isUser = message.role === 'user';
               return (
@@ -1231,22 +1141,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                             </div>
                           ) : null}
 
-                          {/* Model badge & copy action on assistant reply */}
+                          {/* Reply footer actions */}
                           <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-xs ${
                             isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
                           }`}>
                             <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-mono inline-flex items-center gap-1 text-neutral-400 dark:text-neutral-500">
-                                <Zap className="w-3 h-3 shrink-0 text-neutral-400 dark:text-neutral-500" />
-                                <span>
-                                  {message.isStreaming 
-                                    ? `${currentModel.name} is streaming...`
-                                    : (message.modelUsed && !/gemini/i.test(message.modelUsed)
-                                        ? message.modelUsed
-                                        : currentModel.name || 'ForgeX Neural Engine')}
-                                </span>
-                              </span>
-
                               {message.searchedWeb && (
                                 <span className="text-[10px] text-neutral-500 dark:text-neutral-400 inline-flex items-center gap-1 font-medium bg-neutral-500/10 px-2 py-0.5 rounded-full border border-neutral-500/20">
                                   <Globe className="w-2.5 h-2.5" />

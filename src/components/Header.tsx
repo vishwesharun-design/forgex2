@@ -1,8 +1,7 @@
 import React from 'react';
-import { Menu, Sun, Moon } from 'lucide-react';
-import { ActiveWorkspace, ForgeXModelId, ForgeXTheme, FORGEX_MODELS, ThemeEffectType } from '../types';
+import { Menu, User as UserIcon } from 'lucide-react';
+import { ActiveWorkspace, ForgeXModelId, ForgeXTheme, ThemeEffectType, UserProfile } from '../types';
 import { ModelSelector } from './ModelSelector';
-import { ThemeEffectDropdown } from './ThemeEffectDropdown';
 
 interface HeaderProps {
   activeWorkspace: ActiveWorkspace;
@@ -11,7 +10,7 @@ interface HeaderProps {
   theme: ForgeXTheme;
   themeEffect?: ThemeEffectType;
   onSelectThemeEffect?: (effect: ThemeEffectType) => void;
-  onToggleTheme: () => void;
+  onToggleTheme?: () => void;
   onToggleMobileNav: () => void;
   onOpenSearch?: () => void;
   onOpenNotifications?: () => void;
@@ -20,6 +19,8 @@ interface HeaderProps {
   unreadNotificationsCount?: number;
   isSidebarCollapsed?: boolean;
   onToggleSidebarCollapse?: () => void;
+  user?: UserProfile | null;
+  onOpenAuth?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,13 +28,9 @@ export const Header: React.FC<HeaderProps> = ({
   selectedModelId,
   onSelectModel,
   theme,
-  themeEffect = 'connected_dots',
-  onSelectThemeEffect,
-  onToggleTheme,
   onToggleMobileNav,
-  onOpenSearch,
-  isSidebarCollapsed = false,
-  onToggleSidebarCollapse,
+  user,
+  onOpenAuth,
 }) => {
   const isDark = theme === 'dark';
 
@@ -79,22 +76,41 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="forgex-app-header"
-      className={`sticky top-0 z-30 h-14 px-3 sm:px-5 flex items-center justify-between border-b backdrop-blur-md transition-colors ${
+      className={`sticky top-0 z-30 relative mx-2.5 sm:mx-3 md:ml-1 md:mr-3 mt-2.5 sm:mt-3 h-14 px-3 sm:px-5 flex items-center justify-between rounded-2xl md:rounded-3xl border backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shrink-0 ${
         isDark
-          ? 'bg-neutral-950/85 border-neutral-850 text-white'
-          : 'bg-white/85 border-neutral-200 text-neutral-900'
+          ? 'bg-neutral-900/55 hover:bg-neutral-900/68 border-white/15 ring-1 ring-inset ring-white/10 text-white shadow-[0_12px_36px_-10px_rgba(0,0,0,0.75)] md:hover:-translate-y-0.5 md:hover:shadow-[0_18px_44px_-10px_rgba(0,0,0,0.85)]'
+          : 'bg-white/65 hover:bg-white/78 border-white/80 ring-1 ring-inset ring-white/90 text-neutral-900 shadow-[0_10px_32px_-8px_rgba(15,23,42,0.12),0_4px_12px_-4px_rgba(15,23,42,0.05)] md:hover:-translate-y-0.5 md:hover:shadow-[0_16px_40px_-10px_rgba(15,23,42,0.18)]'
       }`}
     >
-      {/* Left: Mobile menu toggle + Desktop sidebar minimize toggle + Model Switching right near the left */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Specular Frosted Glass Sheen Layer */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden"
+      >
+        <div
+          className={`absolute inset-0 bg-gradient-to-r ${
+            isDark
+              ? 'from-white/[0.1] via-white/[0.02] to-amber-500/[0.03]'
+              : 'from-white/75 via-white/25 to-amber-500/[0.04]'
+          }`}
+        />
+        <div
+          className={`absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent ${
+            isDark ? 'via-white/30' : 'via-white'
+          } to-transparent`}
+        />
+      </div>
+
+      {/* Left: Mobile menu toggle + Model Switching */}
+      <div className="relative z-10 flex items-center gap-2 sm:gap-3">
         {/* Mobile menu button */}
         <button
           id="btn-mobile-nav-toggle"
           onClick={onToggleMobileNav}
           className={`p-2 rounded-xl md:hidden border transition-colors ${
             isDark
-              ? 'border-neutral-800 text-neutral-300 hover:bg-neutral-900'
-              : 'border-neutral-200 text-neutral-700 hover:bg-neutral-100'
+              ? 'border-white/15 text-neutral-200 hover:bg-white/10'
+              : 'border-neutral-900/10 text-neutral-700 hover:bg-white/70'
           }`}
         >
           <Menu className="w-5 h-5" />
@@ -134,8 +150,8 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* Right: Clean & minimal (Favorites and Notifications removed per user request) */}
-      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      {/* Right: Clean & minimal */}
+      <div className="relative z-10 flex items-center gap-1.5 sm:gap-2 shrink-0">
         {/* If in non-chat workspace, show model switch pill on right if helpful */}
         {activeWorkspace !== 'chat' && (
           <div className="hidden sm:flex items-center mr-1">
@@ -150,31 +166,22 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* Theme Effect quick switcher - visible on sm+ screens */}
-        {onSelectThemeEffect && (
-          <div className="hidden sm:flex items-center">
-            <ThemeEffectDropdown
-              currentEffect={themeEffect}
-              onSelectEffect={onSelectThemeEffect}
-              theme={theme}
-              compact={true}
-            />
-          </div>
+        {/* Sign In button shown only if user hasn't signed in yet */}
+        {!user && onOpenAuth && (
+          <button
+            id="btn-header-signin"
+            type="button"
+            onClick={onOpenAuth}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer border ${
+              isDark
+                ? 'bg-black hover:bg-neutral-900 text-white border-white/20'
+                : 'bg-neutral-950 hover:bg-neutral-800 text-white border-neutral-900'
+            }`}
+          >
+            <UserIcon className="w-3.5 h-3.5" />
+            <span>Sign In</span>
+          </button>
         )}
-
-        {/* Theme quick toggle */}
-        <button
-          id="btn-header-theme"
-          onClick={onToggleTheme}
-          title={`Switch to ${isDark ? 'Light' : 'Dark'} mode`}
-          className={`p-2 rounded-xl border transition-colors ${
-            isDark
-              ? 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-amber-400 hover:border-neutral-700'
-              : 'bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-amber-600 hover:border-neutral-300'
-          }`}
-        >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
       </div>
     </header>
   );
