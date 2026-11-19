@@ -166,11 +166,68 @@ export interface CodeSnippet {
 
 export type CodeAlterMode = 'correct' | 'refactor' | 'optimize' | 'types' | 'custom';
 
+export type SourceVerificationStatus =
+  | 'VERIFIED'
+  | 'PARTIALLY_VERIFIED'
+  | 'INACCESSIBLE'
+  | 'INVALID'
+  | 'DUPLICATE';
+
+export type PublicationDiscoveryStatus =
+  | 'VERIFIED_EXISTING'
+  | 'NOT_FOUND_AFTER_SEARCH'
+  | 'INACCESSIBLE'
+  | 'CONFLICTING_EVIDENCE'
+  | 'NOT_YET_INVESTIGATED';
+
+export interface PublicationVerificationRecord {
+  title: string;
+  status: PublicationDiscoveryStatus;
+  officialUrl?: string;
+  publisher?: string;
+  publicationDate?: string;
+  supersededBy?: string;
+  searchesPerformed: string[];
+  sourcesOpened: string[];
+  versionsTracked: string[];
+  notes: string;
+}
+
+export type ResearchPhase =
+  | 'planning'
+  | 'searching'
+  | 'verifying_sources'
+  | 'extracting_evidence'
+  | 'analyzing'
+  | 'fact_checking'
+  | 'generating_report'
+  | 'completed'
+  | 'failed';
+
 export interface ResearchSource {
   title: string;
   url: string;
   snippet: string;
   sourceDomain?: string;
+  canonicalUrl?: string;
+  originalUrl?: string;
+  documentGroupKey?: string;
+  versionTag?: string;
+  publisher?: string;
+  publicationDate?: string;
+  verificationStatus?: SourceVerificationStatus;
+  statusReason?: string;
+  httpStatus?: number;
+  contentAccessed?: boolean;
+  contentType?: 'html' | 'pdf' | 'api' | 'unknown';
+  extractedTitle?: string;
+  wordCount?: number;
+  isOfficial?: boolean;
+  supportsClaim?: boolean;
+  duplicateOfUrl?: string;
+  relevanceScore?: number;
+  evidenceCount?: number;
+  fromInternalDb?: boolean;
 }
 
 export interface ResearchStep {
@@ -178,6 +235,105 @@ export interface ResearchStep {
   title: string;
   status: 'pending' | 'in_progress' | 'completed';
   description?: string;
+}
+
+export interface ResearchSubQuestion {
+  id: string;
+  question: string;
+  targetMetrics?: string[];
+  targetOrganizations?: string[];
+  priority: 'high' | 'medium';
+  resolved?: boolean;
+}
+
+export interface ResearchPlan {
+  originalQuery: string;
+  originalInstructions: string;
+  objective: string;
+  subQuestions: ResearchSubQuestion[];
+  requiredStatistics: string[];
+  targetEntities: string[];
+  targetDates: string[];
+  comparisonsRequired: string[];
+  exactTitlesToVerify: string[];
+  steps: string[];
+}
+
+export interface EvidenceRecord {
+  id: string;
+  claim: string;
+  exactStatistic?: string;
+  unit?: string;
+  geographicScope?: string;
+  industry?: string;
+  referencePeriod?: string;
+  publicationDate?: string;
+  sourceTitle: string;
+  sourceUrl: string;
+  publisher?: string;
+  relevantPassage: string;
+  methodology?: string;
+  evidenceConfidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  verificationStatus: SourceVerificationStatus;
+  subQuestionId?: string;
+  fromInternalDb?: boolean;
+}
+
+export interface ContradictoryFinding {
+  topic: string;
+  sourceA: string;
+  positionA: string;
+  sourceB: string;
+  positionB: string;
+  explanation: string;
+}
+
+export interface FactCheckClaimAudit {
+  claim: string;
+  status:
+    | 'SUPPORTED'
+    | 'PARTIALLY_SUPPORTED'
+    | 'UNSUPPORTED'
+    | 'CONTRADICTED'
+    | 'OUTDATED'
+    | 'FABRICATED_SUSPECT';
+  reason: string;
+  supportingUrl?: string;
+  publicationDate?: string;
+  warning?: string;
+}
+
+export interface FactCheckResult {
+  checkedClaimsCount: number;
+  verifiedClaimsCount: number;
+  rejectedClaimsCount: number;
+  caveatedClaimsCount: number;
+  findings: FactCheckClaimAudit[];
+  overallReliability: 'HIGH' | 'MODERATE' | 'LOW' | 'INSUFFICIENT_EVIDENCE';
+  warnings: string[];
+}
+
+export interface ResearchMetrics {
+  queriesExecuted: number;
+  searchResultsRetrieved: number;
+  uniqueUrlsDiscovered: number;
+  sourcesOpened: number;
+  sourcesVerified: number;
+  sourcesPartiallyVerified: number;
+  sourcesRejected: number;
+  duplicateSources: number;
+  evidenceExtracted: number;
+  questionsCompleted: number;
+  questionsRemaining: number;
+  internalDbHits?: number;
+  externalFallbackTriggered?: boolean;
+  completenessRounds?: number;
+  tokensUsed?: {
+    promptTokens: number;
+    candidateTokens: number;
+    totalTokens: number;
+  };
+  durationMs?: number;
 }
 
 export interface DeepResearchReport {
@@ -190,8 +346,19 @@ export interface DeepResearchReport {
   keyFindings: string[];
   detailedAnalysis?: string;
   sources: ResearchSource[];
+  allDiscoveredSources?: ResearchSource[];
   steps: ResearchStep[];
   modelId: ForgeXModelId;
+  searchQueriesUsed?: string[];
+  plan?: ResearchPlan;
+  evidenceRecords?: EvidenceRecord[];
+  contradictoryFindings?: ContradictoryFinding[];
+  unresolvedQuestions?: string[];
+  publicationVerifications?: PublicationVerificationRecord[];
+  factCheck?: FactCheckResult;
+  metrics?: ResearchMetrics;
+  failureReason?: string;
+  searchProviderErrors?: string[];
 }
 
 export interface UserProfile {
@@ -250,12 +417,21 @@ export interface ChatMessage {
   toolBadge?: Exclude<ComposerToolId, 'none'>;
   deepResearch?: {
     query: string;
-    status: 'planning' | 'running' | 'completed' | 'cancelled';
+    status: 'planning' | 'running' | 'completed' | 'cancelled' | 'failed';
     steps: string[];
     completedStepsCount?: number;
     sourcesFound?: number;
     planDurationSec?: number;
     researchDurationSec?: number;
+    phase?: ResearchPhase;
+    phaseLabel?: string;
+    metrics?: ResearchMetrics;
+    executedQueries?: string[];
+    sources?: ResearchSource[];
+    evidenceRecords?: EvidenceRecord[];
+    factCheck?: FactCheckResult;
+    unresolvedQuestions?: string[];
+    failureReason?: string;
   };
   generatedSong?: GeneratedSong;
   spotifyTracks?: SpotifyTrack[];

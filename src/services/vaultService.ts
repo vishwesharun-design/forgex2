@@ -30,7 +30,7 @@ ForgeX is an all-in-one AI creation and intelligence platform created by Vishwes
     updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 2,
     charCount: 1140,
     summary: 'Overview of ForgeX system architecture, multimodal models, security boundaries, and platform capabilities.',
-    isActive: true,
+    isActive: false,
   },
   {
     id: 'vault-doc-2',
@@ -58,7 +58,7 @@ ForgeX is an all-in-one AI creation and intelligence platform created by Vishwes
     updatedAt: Date.now() - 1000 * 60 * 60 * 24,
     charCount: 890,
     summary: 'Engineering best practices covering strict TypeScript modeling, API error resilience, and performant React lifecycles.',
-    isActive: true,
+    isActive: false,
   },
   {
     id: 'vault-doc-3',
@@ -97,9 +97,20 @@ ForgeX is an all-in-one AI creation and intelligence platform created by Vishwes
     updatedAt: Date.now() - 1000 * 60 * 60 * (idx + 3),
     charCount: entry.content.length,
     summary: entry.summary,
-    isActive: idx < 2,
+    isActive: false,
   })),
 ];
+
+const VAULT_STOPWORDS = new Set([
+  'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an', 'for', 'to', 'in', 'of', 'with',
+  'how', 'what', 'why', 'when', 'where', 'who', 'can', 'you', 'me', 'my', 'your', 'do',
+  'does', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'this', 'that',
+  'these', 'those', 'from', 'by', 'as', 'it', 'its', 'into', 'about', 'explain', 'tell',
+  'give', 'make', 'create', 'write', 'please', 'help', 'need', 'want', 'use', 'using',
+  'all', 'but', 'run', 'runs', 'away', 'many', 'remain', 'one', 'two', 'three', 'four',
+  'five', 'exactly', 'only', 'sentence', 'sentences', 'bullet', 'points', 'answer',
+  'question', 'first', 'previous', 'ignore', 'topic', 'simple', 'year', 'old',
+]);
 
 class VaultService {
   private documents: VaultDocument[] = [];
@@ -262,11 +273,13 @@ class VaultService {
 
   /**
    * Retrieves relevant context excerpts from active Knowledge Vault documents
-   * using keyword, phrase, and section-level relevance scoring.
+   * using word-boundary relevance scoring. Never injects unrelated documents
+   * into ordinary conversation unless explicitly requested via forceInclude.
    */
   public getGroundingContext(
     userPrompt: string = '',
-    maxChars: number = 5200
+    maxChars: number = 5200,
+    forceInclude: boolean = false
   ): {
     hasContext: boolean;
     contextText: string;
@@ -278,39 +291,58 @@ class VaultService {
     }
 
     const cleanPrompt = userPrompt.toLowerCase().trim();
-    const queryTokens = cleanPrompt
-      .replace(/[^a-z0-9+.#\s]/g, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length > 2);
+    const explicitVaultMention =
+      forceInclude ||
+      /\b(?:knowledge\s+vault|my\s+vault|my\s+notes|uploaded\s+(?:file|doc|document)|according\s+to\s+(?:the\s+)?(?:vault|notes|document))\b/i.test(
+        cleanPrompt
+      );
 
-    // Score active documents based on token & phrase matches in title, content, and tags
+    const queryTokens = cleanPrompt
+      .replace(/[^a-z0-9+.#\s-]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !VAULT_STOPWORDS.has(t));
+
+    if (queryTokens.length === 0 && !explicitVaultMention) {
+      return { hasContext: false, contextText: '', sources: [] };
+    }
+
     const scoredDocs = activeDocs.map((docItem) => {
       let score = 0;
+      let anchorHits = 0;
       const lowerTitle = docItem.title.toLowerCase();
       const lowerContent = docItem.content.toLowerCase();
       const lowerTags = docItem.tags.map((t) => t.toLowerCase()).join(' ');
 
-      if (queryTokens.length === 0) {
-        score = 1;
-      } else {
-        for (const token of queryTokens) {
-          if (lowerTitle.includes(token)) score += 9;
-          if (lowerTags.includes(token)) score += 6;
-          if (lowerContent.includes(token)) {
-            const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const matchCount = (lowerContent.match(new RegExp(`\\b${escaped}\\b`, 'g')) || []).length;
-            score += Math.min(Math.max(matchCount, 1) * 2, 12);
-          }
+      for (const token of queryTokens) {
+        const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const wordRe = new RegExp(`\\b${escaped}\\b`, 'i');
+        if (wordRe.test(lowerTitle)) {
+          score += 10;
+          anchorHits += 1;
+        }
+        if (wordRe.test(lowerTags)) {
+          score += 8;
+          anchorHits += 1;
+        }
+        const matches = lowerContent.match(new RegExp(`\\b${escaped}\\b`, 'gi'));
+        if (matches && matches.length > 0) {
+          score += Math.min(matches.length * 2, 10);
         }
       }
 
-      return { doc: docItem, score };
+      return { doc: docItem, score, anchorHits };
     });
 
-    // Only inject strongly matched documents (or top active doc if query has no matching tokens)
     scoredDocs.sort((a, b) => b.score - a.score);
-    const matchedDocs = scoredDocs.filter((item) => item.score > 0);
-    const relevantDocs = (matchedDocs.length > 0 ? matchedDocs : scoredDocs).slice(0, 4);
+    const matchedDocs = explicitVaultMention
+      ? scoredDocs.filter((item) => item.score > 0 || explicitVaultMention)
+      : scoredDocs.filter((item) => item.anchorHits >= 1 && item.score >= 12);
+
+    if (matchedDocs.length === 0) {
+      return { hasContext: false, contextText: '', sources: [] };
+    }
+
+    const relevantDocs = matchedDocs.slice(0, 3);
 
     let aggregatedContext = '';
     const sources: { id: string; title: string; category: string }[] = [];

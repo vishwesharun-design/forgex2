@@ -4,8 +4,6 @@
  * language-specific code generation, and factual answers.
  */
 
-import { retrieveTrainingContext } from './trainingCorpus.ts';
-
 export interface KnowledgeResponse {
   reply: string;
   category?: string;
@@ -101,6 +99,18 @@ print(f"Maximum: {max(numbers)}")
       "explanation": "Since $45^2 = (40 + 5)^2 = 1600 + 400 + 25 = 2025$, $\\sqrt{2025} = \\boxed{45}$."
     }
   ]
+}
+\`\`\`
+
+---
+
+📐 6. Visual Representation
+
+\`\`\`visual
+{
+  "title": "Visual representation",
+  "caption": "Not to scale. The three green sides require fencing.",
+  "svg": "<svg viewBox=\\"0 0 640 340\\" xmlns=\\"http://www.w3.org/2000/svg\\"><text x=\\"320\\" y=\\"48\\" text-anchor=\\"middle\\" fill=\\"#1d8cf8\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">River — no fencing needed</text><line x1=\\"90\\" y1=\\"76\\" x2=\\"550\\" y2=\\"76\\" stroke=\\"#1d8cf8\\" stroke-width=\\"12\\" stroke-linecap=\\"round\\" /><rect x=\\"170\\" y=\\"92\\" width=\\"300\\" height=\\"175\\" fill=\\"#dff0ea\\" /><polyline points=\\"170,92 170,267 470,267 470,92 170,92\\" fill=\\"none\\" stroke=\\"#059669\\" stroke-width=\\"6\\" stroke-linejoin=\\"round\\" /><text x=\\"320\\" y=\\"172\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">Area</text><text x=\\"320\\" y=\\"208\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"28\\" font-weight=\\"700\\" font-family=\\"system-ui, sans-serif\\">1,250 m²</text><text x=\\"115\\" y=\\"186\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"22\\" font-family=\\"system-ui, sans-serif\\">25 m</text><text x=\\"525\\" y=\\"186\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"22\\" font-family=\\"system-ui, sans-serif\\">25 m</text><text x=\\"320\\" y=\\"308\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">50 m of fencing</text></svg>"
 }
 \`\`\``;
 }
@@ -1373,13 +1383,7 @@ ForgeX is architected with enterprise-grade privacy and per-user data isolation:
     return jokes[Math.floor(Math.random() * jokes.length)];
   }
 
-  // 15. Curated Training Corpus Retrieval before generic fallback
-  const corpusMatch = retrieveTrainingContext(clean, 2800);
-  if (corpusMatch.hasContext) {
-    return `${corpusMatch.contextText}\n\n---\n*Let me know if you want step-by-step derivations, runnable code examples, or deeper analysis on **${corpusMatch.matchedTitles[0]}**.*`;
-  }
-
-  // 16. Transparent fallback notice if live AI service could not be reached
+  // 15. Transparent fallback notice if live AI service could not be reached
   const subject = clean.replace(/^(how does|what is|explain|why is|why does|tell me about|can you)\s*/i, '').replace(/\?+$/, '').trim();
   const displayTopic = subject || clean || 'your request';
 

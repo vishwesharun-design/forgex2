@@ -34,15 +34,25 @@ export function detectWebSearchIntent(
 
   // searchMode === 'auto'
   // NEGATIVE FILTERS: Questions that CAN and SHOULD be answered from internal knowledge
-  // 1. Math and pure numeric calculations
+  // 1. Math, word-arithmetic, and logic puzzles
   if (
     /^(?:calculate|compute|solve|what is|evaluate|\d+)\s*[\d\s+\-*/^().=]+$/i.test(clean) ||
-    /^(?:what\s+is\s+)?\d+\s*[\+\-\*\/]\s*\d+/i.test(clean)
+    /^(?:what\s+is\s+)?\d+\s*(?:[\+\-\*\/]|multiplied\s+by|divided\s+by|times|plus|minus)\s*\d+/i.test(clean) ||
+    /\b(?:all\s+but\s+\d+|how\s+many\s+remain)\b/i.test(clean)
   ) {
-    return { shouldSearch: false, searchQuery: '', reason: 'Pure math/calculation.' };
+    return { shouldSearch: false, searchQuery: '', reason: 'Pure math or logic reasoning.' };
   }
 
-  // 2. Standard algorithms, pure coding, regex, logic puzzles
+  // 2. Conversation meta-questions & explicit formatting/context-reset prompts
+  if (
+    /\b(?:first\s+question|previous\s+(?:question|answer|topic|message)|earlier\s+in\s+(?:this|our)\s+chat|ignore\s+(?:the\s+)?previous\s+topic)\b/i.test(
+      clean
+    )
+  ) {
+    return { shouldSearch: false, searchQuery: '', reason: 'Conversational history or context switch query.' };
+  }
+
+  // 3. Standard algorithms, pure coding, regex, logic puzzles
   if (
     /(?:write|create|implement|give me|show me)\s+(?:a|an)?\s*(?:python|javascript|typescript|c\+\+|java|rust|go|html|css|sql)?\s*(?:function|script|class|code|algorithm|component|regex|query|loop|program)\s+(?:to|that|for)\s+(?:reverse|sort|filter|find|binary search|fibonacci|factorial|palindrome|validate email|center a div|traverse)/i.test(
       clean
@@ -54,9 +64,9 @@ export function detectWebSearchIntent(
     return { shouldSearch: false, searchQuery: '', reason: 'Standard programming task.' };
   }
 
-  // 3. Creative writing, poetry, roleplay, jokes, translations
+  // 4. Creative writing, poetry, roleplay, jokes, translations, bullet summaries
   if (
-    /(?:write|compose|generate)\s+(?:a|an)?\s*(?:poem|story|haiku|essay|song|rap|limerick|joke|dialogue|script|letter|email template)/i.test(
+    /(?:write|compose|generate)\s+(?:a|an|exactly\s+\w+|\d+)?\s*(?:poem|story|haiku|essay|song|rap|limerick|joke|dialogue|script|letter|email template|bullet\s*points?)/i.test(
       clean
     ) ||
     /(?:tell\s+me|give\s+me)\s+(?:a\s+joke|a\s+riddle|a\s+story|advice)/i.test(clean) ||
@@ -65,7 +75,7 @@ export function detectWebSearchIntent(
     return { shouldSearch: false, searchQuery: '', reason: 'Creative and linguistic query.' };
   }
 
-  // 4. Platform identity
+  // 5. Platform identity
   if (
     /(?:who\s+(?:created|made|developed|built|designed|founded)\s+(?:you|forgex)|who\s+are\s+you|what\s+is\s+forgex|how\s+do\s+i\s+use\s+forgex)/i.test(
       clean
@@ -74,9 +84,9 @@ export function detectWebSearchIntent(
     return { shouldSearch: false, searchQuery: '', reason: 'Platform identity.' };
   }
 
-  // 5. Timeless classical science/humanities
+  // 6. Timeless classical science/humanities/networking
   if (
-    /(?:what\s+is|explain|describe|define)\s+(?:photosynthesis|gravity|quantum\s+physics|relativity|evolution|mitosis|osmosis|plate\s+tectonics|thermodynamics|the\s+capital\s+of|the\s+speed\s+of\s+light|newton's\s+law|pythagorean\s+theorem|cellular\s+respiration|dna\s+replication|schrodinger|stoicism|existentialism)/i.test(
+    /(?:what\s+is|explain|describe|define)\s+(?:photosynthesis|gravity|quantum\s+physics|relativity|evolution|mitosis|osmosis|plate\s+tectonics|thermodynamics|the\s+capital\s+of|the\s+speed\s+of\s+light|newton's\s+law|pythagorean\s+theorem|cellular\s+respiration|dna\s+replication|schrodinger|stoicism|existentialism|tcp|udp|http|how\s+rain\s+forms|rain\s+formation)/i.test(
       clean
     )
   ) {

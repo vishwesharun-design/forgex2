@@ -257,6 +257,26 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const attachMenuContainerRef = useRef<HTMLDivElement | null>(null);
   const deepResearchAbortMapRef = useRef<Record<string, AbortController>>({});
+  const prevSessionIdRef = useRef<string | null>(currentSession?.id || null);
+
+  useEffect(() => {
+    const nextId = currentSession?.id || null;
+    const prevId = prevSessionIdRef.current;
+    prevSessionIdRef.current = nextId;
+    // Reset transient state when switching from one saved session to another or back to New Chat
+    if (prevId !== null && prevId !== nextId) {
+      setPendingUserTurn(null);
+      setStreamingReply(null);
+      setSearchingQuery(null);
+      setSearchedForQueryDuringTurn(null);
+      setGeneratingImageState(null);
+      setInlineToolStatus(null);
+      setExpandedDomainGroup(null);
+      setActiveProjectInChat(null);
+      setAttachedFiles([]);
+      setIsSubmitting(false);
+    }
+  }, [currentSession?.id]);
 
   const optimizeImageFileToDataUrl = (file: File, maxDim = 1600, quality = 0.88): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -731,7 +751,17 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const targetMsg = targetSession?.messages.find((m) => m.id === messageId);
     const query = targetMsg?.deepResearch?.query || 'requested topic';
 
-    const updateProgress = (completedCount: number, sourcesFound = 0) => {
+    const updateProgress = (
+      completedCount: number,
+      sourcesFound = 0,
+      extra?: {
+        phase?: any;
+        phaseLabel?: string;
+        metrics?: any;
+        executedQueries?: string[];
+        sources?: any[];
+      }
+    ) => {
       const updated = chatService.updateMessageInSession(sessionId, messageId, (msg) => {
         if (msg.deepResearch?.status === 'cancelled') return msg;
         return {
@@ -743,6 +773,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             status: 'running',
             completedStepsCount: completedCount,
             sourcesFound,
+            ...(extra?.phase ? { phase: extra.phase } : {}),
+            ...(extra?.phaseLabel ? { phaseLabel: extra.phaseLabel } : {}),
+            ...(extra?.metrics ? { metrics: extra.metrics } : {}),
+            ...(extra?.executedQueries ? { executedQueries: extra.executedQueries } : {}),
+            ...(extra?.sources ? { sources: extra.sources } : {}),
           },
         };
       });
@@ -758,6 +793,13 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     let visualCompleted = 0;
     let latestSourcesFound = 0;
+    let latestExtra: {
+      phase?: any;
+      phaseLabel?: string;
+      metrics?: any;
+      executedQueries?: string[];
+      sources?: any[];
+    } = {};
 
     const sleep = (ms: number) =>
       new Promise<void>((resolve, reject) => {
@@ -776,14 +818,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         abortController.signal.addEventListener('abort', onAbort, { once: true });
       });
 
-    const advanceVisualStepsTo = async (targetCount: number, stepDelayMs = 340) => {
+    const advanceVisualStepsTo = async (targetCount: number, stepDelayMs = 150) => {
       const clampedTarget = Math.min(steps.length, Math.max(visualCompleted, targetCount));
+      if (clampedTarget === visualCompleted) {
+        updateProgress(visualCompleted, latestSourcesFound, latestExtra);
+        return;
+      }
       while (visualCompleted < clampedTarget) {
         if (abortController.signal.aborted) {
           throw new DOMException('Aborted', 'AbortError');
         }
         visualCompleted += 1;
-        updateProgress(visualCompleted, latestSourcesFound);
+        updateProgress(visualCompleted, latestSourcesFound, latestExtra);
         if (visualCompleted < clampedTarget) {
           await sleep(stepDelayMs);
         }
@@ -805,12 +851,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
       const handleSsePayload = async (jsonText: string) => {
         const evt = JSON.parse(jsonText);
-        if (evt.type === 'step') {
+        if (evt.type === 'step' || evt.type === 'phase' || evt.type === 'metrics') {
           if (typeof evt.sourcesFound === 'number') {
             latestSourcesFound = Math.max(latestSourcesFound, evt.sourcesFound);
           }
-          const target = Math.min(steps.length, Math.max(1, Number(evt.completedCount || 1)));
-          await advanceVisualStepsTo(target, 220);
+          latestExtra = {
+            phase: evt.phase || latestExtra.phase,
+            phaseLabel: evt.phaseLabel || evt.label || latestExtra.phaseLabel,
+            metrics: evt.metrics || latestExtra.metrics,
+            executedQueries: evt.executedQueries || latestExtra.executedQueries,
+            sources: evt.recentSources || latestExtra.sources,
+          };
+          const target = Math.min(steps.length, Math.max(0, Number(evt.completedCount ?? visualCompleted)));
+          await advanceVisualStepsTo(target, 120);
         } else if (evt.type === 'complete') {
           finalReport = evt.report;
         } else if (evt.type === 'error') {
@@ -907,6 +960,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
       const sources = Array.isArray(finalReport.sources)
         ? finalReport.sources.map((s: any) => ({
+            ...s,
             title: s.title || s.sourceDomain || 'Source',
             url: s.url || '#',
             snippet: s.snippet || '',
@@ -915,9 +969,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         : [];
       latestSourcesFound = Math.max(latestSourcesFound, sources.length);
 
-      // Ensure all steps show checked and pause briefly so the user sees 100% completion before report opens
-      await advanceVisualStepsTo(steps.length, 240);
-      await sleep(320);
+      await advanceVisualStepsTo(steps.length, 150);
 
       if (abortController.signal.aborted) return;
 
@@ -938,8 +990,16 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             steps,
             completedStepsCount: steps.length,
             sourcesFound: latestSourcesFound,
-            status: 'completed',
+            status: finalReport.failureReason && sources.length === 0 ? 'failed' : 'completed',
             researchDurationSec: durationSec,
+            phase: finalReport.failureReason && sources.length === 0 ? 'failed' : 'completed',
+            metrics: finalReport.metrics,
+            executedQueries: finalReport.searchQueriesUsed,
+            sources: finalReport.allDiscoveredSources || sources,
+            evidenceRecords: finalReport.evidenceRecords,
+            factCheck: finalReport.factCheck,
+            unresolvedQuestions: finalReport.unresolvedQuestions,
+            failureReason: finalReport.failureReason,
           },
         };
       });
@@ -972,7 +1032,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           query,
           steps,
           completedStepsCount: visualCompleted,
-          status: 'completed',
+          status: 'failed',
+          phase: 'failed',
+          failureReason: rawErrMsg,
           researchDurationSec: Math.max(1, Math.round((Date.now() - startTs) / 1000)),
         },
       }));

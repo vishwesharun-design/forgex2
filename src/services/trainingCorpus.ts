@@ -439,11 +439,30 @@ Note: WHERE cannot reference SELECT aliases or aggregate functions (use HAVING o
 
 const STOPWORDS = new Set([
   'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an', 'for', 'to', 'in', 'of', 'with',
-  'how', 'what', 'why', 'when', 'where', 'who', 'can', 'you', 'me', 'my', 'do', 'does',
-  'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'this', 'that', 'these',
-  'those', 'from', 'by', 'as', 'it', 'its', 'into', 'about', 'explain', 'tell', 'give',
-  'make', 'create', 'write', 'please', 'help', 'need', 'want', 'use', 'using',
+  'how', 'what', 'why', 'when', 'where', 'who', 'can', 'you', 'me', 'my', 'your', 'do',
+  'does', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'this', 'that',
+  'these', 'those', 'from', 'by', 'as', 'it', 'its', 'into', 'about', 'explain', 'tell',
+  'give', 'make', 'create', 'write', 'please', 'help', 'need', 'want', 'use', 'using',
+  'all', 'but', 'run', 'runs', 'running', 'away', 'many', 'remain', 'remains', 'remaining',
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'exactly', 'only', 'sentence', 'sentences', 'bullet', 'bullets', 'point', 'points',
+  'answer', 'answers', 'question', 'questions', 'first', 'second', 'last', 'previous',
+  'ignore', 'forget', 'topic', 'simple', 'accurate', 'explanation', 'year', 'years', 'old',
+  'multiplied', 'divided', 'plus', 'minus', 'times', 'farmer', 'sheep', 'rain', 'forms',
 ]);
+
+function matchesWholeTerm(textLower: string, termLower: string): boolean {
+  if (!termLower) return false;
+  const escaped = termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Use strict word boundaries when term starts/ends with alphanumeric characters
+  const prefix = /^[a-z0-9]/i.test(termLower) ? '\\b' : '';
+  const suffix = /[a-z0-9]$/i.test(termLower) ? '\\b' : '';
+  try {
+    return new RegExp(`${prefix}${escaped}${suffix}`, 'i').test(textLower);
+  } catch {
+    return textLower.includes(termLower);
+  }
+}
 
 /**
  * Retrieves the most relevant verified domain reference chunks from the ForgeX
@@ -469,33 +488,39 @@ export function retrieveTrainingContext(
 
   const scored = TRAINING_CORPUS.map((entry) => {
     let score = 0;
+    let domainAnchorHits = 0;
     const titleLower = entry.title.toLowerCase();
     const contentLower = entry.content.toLowerCase();
     const tagsLower = entry.tags.map((t) => t.toLowerCase());
 
-    // Exact multi-word keyword / phrase matching (word-boundary safe for short keywords)
+    // Exact keyword/phrase matching using word boundaries so e.g. "go" or "all" never false-matches
     for (const kw of entry.keywords) {
-      let matched = false;
-      if (kw.length <= 3 && /^[a-z0-9]+$/i.test(kw)) {
-        matched = new RegExp(`\\b${kw}\\b`, 'i').test(clean);
-      } else {
-        matched = clean.includes(kw);
-      }
-      if (matched) {
-        score += kw.includes(' ') ? 14 : 9;
+      const kwClean = kw.trim().toLowerCase();
+      if (!kwClean) continue;
+      if (matchesWholeTerm(clean, kwClean)) {
+        score += kwClean.includes(' ') ? 14 : 10;
+        domainAnchorHits += 1;
       }
     }
 
-    // Individual query token matching
+    // Individual query token matching using word boundaries (never raw substring body matches)
     for (const tok of tokens) {
-      if (titleLower.includes(tok)) score += 6;
-      if (tagsLower.some((t) => t.includes(tok))) score += 5;
-      if (contentLower.includes(tok)) score += 2;
+      if (matchesWholeTerm(titleLower, tok)) {
+        score += 7;
+        domainAnchorHits += 1;
+      }
+      if (tagsLower.some((t) => matchesWholeTerm(t, tok))) {
+        score += 6;
+        domainAnchorHits += 1;
+      }
+      if (matchesWholeTerm(contentLower, tok)) {
+        score += 2;
+      }
     }
 
-    return { entry, score };
+    return { entry, score, domainAnchorHits };
   })
-    .filter((item) => item.score >= 8)
+    .filter((item) => item.domainAnchorHits >= 1 && item.score >= 12)
     .sort((a, b) => b.score - a.score);
 
   if (scored.length === 0) {

@@ -29,8 +29,14 @@ export function detectImageGenerationIntent(
   const clean = text.trim();
   if (!clean) return { isImage: false, prompt: '' };
 
-  // Negative filter: Quizzes, coding, feedback/complaints, trivia, tests should NEVER trigger image creation!
+  // Negative filter: Quizzes, coding, feedback/complaints, trivia, tests, and structured diagrams/visual representations should NEVER trigger raster Imagen/Flux!
+  const isDiagramOrSchemaRequest =
+    /\b(?:visual\s+representation|diagram|schematic|flowchart|free[\s-]*body\s+diagram|venn\s+diagram|architecture\s+diagram|mind\s*map|org\s*chart|sequence\s+diagram|circuit\s+diagram|block\s+diagram|ray\s+diagram)\b/i.test(
+      clean
+    ) && !/\b(?:photorealistic|realistic\s+photo|photograph|claymation|watercolor|oil\s+painting|3d\s+render|anime)\b/i.test(clean);
+
   const isExcludedIntent =
+    isDiagramOrSchemaRequest ||
     /not\s+working|keeps?\s+generating\s+this|why\s+is\s+it|broken|error|fix\s+this|issue\s+with/i.test(clean) ||
     /^(?:quiz|quizzes|trivia|question|questions|test|practice\s+questions|function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm)\b/i.test(
       clean.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:create|make|give\s+me|generate)\s+(?:a\s+|an\s+|some\s+)?/i, '').trim()

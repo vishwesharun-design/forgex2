@@ -20,6 +20,7 @@ import { FormattedMathText, MathView } from './MathView';
 import { InteractiveChart, ChartConfig } from './InteractiveChart';
 import { InteractiveTable, TableCellRenderer } from './InteractiveTable';
 import { InteractiveQuiz, QuizConfig } from './InteractiveQuiz';
+import { InlineVisualDiagram, parseVisualDiagramConfig } from './InlineVisualDiagram';
 
 interface MarkdownRendererProps {
   content: string;
@@ -279,6 +280,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 }
               } catch {
                 // Fall back to CodeBlock
+              }
+            }
+
+            // Detect inline visual representation / diagram / svg blocks
+            if (lang === 'visual' || lang === 'diagram' || lang === 'svg' || lang === 'json') {
+              const visualConfig = parseVisualDiagramConfig(codeString, lang);
+              if (visualConfig) {
+                return (
+                  <InlineVisualDiagram
+                    config={visualConfig}
+                    rawSource={codeString}
+                    theme={theme}
+                  />
+                );
               }
             }
 
