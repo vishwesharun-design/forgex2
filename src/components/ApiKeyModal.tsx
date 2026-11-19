@@ -35,7 +35,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     { id: 'replicate', name: 'Replicate (AnimateDiff / SVD)' },
     { id: 'stability', name: 'Stability AI' },
     { id: 'kling', name: 'Kling AI' },
-    { id: 'google', name: 'Google Veo / Gemini' },
+    { id: 'google', name: 'ForgeX Veo / Neural Cloud' },
     { id: 'custom', name: 'Custom / Other Video API' },
   ];
 
@@ -157,7 +157,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <Key className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-display font-bold text-base">Gemini & Veo API Key</h3>
+              <h3 className="font-display font-bold text-base">Neural & Video API Key</h3>
               <p className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                 Powers real-time Video & Image synthesis
               </p>
@@ -203,7 +203,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
         {/* Description */}
         <p className={`text-xs leading-relaxed mb-4 ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
-          ForgeX supports video generation with <strong>JSON2Video</strong>, <strong>Luma Dream Machine</strong>, <strong>Runway</strong>, <strong>Fal.ai</strong>, <strong>Replicate</strong>, <strong>Stability AI</strong>, <strong>Kling AI</strong>, and <strong>Google Veo</strong>. Select your provider or paste your API key below.
+          ForgeX supports video generation with <strong>JSON2Video</strong>, <strong>Luma Dream Machine</strong>, <strong>Runway</strong>, <strong>Fal.ai</strong>, <strong>Replicate</strong>, <strong>Stability AI</strong>, <strong>Kling AI</strong>, and <strong>ForgeX Veo</strong>. Select your provider or paste your API key below.
         </p>
 
         {/* Provider Selector */}
@@ -279,15 +279,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         <div className={`flex items-center justify-between pt-2 border-t ${
           isDark ? 'border-neutral-800/40' : 'border-neutral-200'
         }`}>
-          <a
-            href="https://aistudio.google.com/app/apikey"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors"
-          >
-            <span>Get Free Key</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
+          <span className="text-xs text-neutral-500">
+            Keys remain local to your browser
+          </span>
 
           <div className="flex items-center gap-2">
             {apiKey && (

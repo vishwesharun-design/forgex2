@@ -1,12 +1,12 @@
 import { VoiceOption } from '../types';
 
 export const GEMINI_AI_VOICES: VoiceOption[] = [
-  { id: 'gemini-Zephyr', name: 'Zephyr (Gemini AI · Warm & Natural)', lang: 'en-US' },
-  { id: 'gemini-Aoede', name: 'Aoede (Gemini AI · Lively & Expressive)', lang: 'en-US' },
-  { id: 'gemini-Kore', name: 'Kore (Gemini AI · Soothing & Clear)', lang: 'en-US' },
-  { id: 'gemini-Puck', name: 'Puck (Gemini AI · Charismatic & Upbeat)', lang: 'en-US' },
-  { id: 'gemini-Fenrir', name: 'Fenrir (Gemini AI · Deep & Authoritative)', lang: 'en-US' },
-  { id: 'gemini-Charon', name: 'Charon (Gemini AI · Calm & Resonant)', lang: 'en-US' },
+  { id: 'gemini-Zephyr', name: 'Zephyr (ForgeX Neural · Warm & Natural)', lang: 'en-US' },
+  { id: 'gemini-Aoede', name: 'Aoede (ForgeX Neural · Lively & Expressive)', lang: 'en-US' },
+  { id: 'gemini-Kore', name: 'Kore (ForgeX Neural · Soothing & Clear)', lang: 'en-US' },
+  { id: 'gemini-Puck', name: 'Puck (ForgeX Neural · Charismatic & Upbeat)', lang: 'en-US' },
+  { id: 'gemini-Fenrir', name: 'Fenrir (ForgeX Neural · Deep & Authoritative)', lang: 'en-US' },
+  { id: 'gemini-Charon', name: 'Charon (ForgeX Neural · Calm & Resonant)', lang: 'en-US' },
 ];
 
 export class VoiceController {

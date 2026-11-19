@@ -25,6 +25,7 @@
         "userId": { "type": "string" },
         "title": { "type": "string" },
         "modelId": { "type": "string" },
+        "scheduledTaskId": { "type": "string" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" },
         "messages": { "type": "array" }
@@ -191,6 +192,30 @@
         "isActive": { "type": "boolean" }
       },
       "required": ["id", "userId", "title", "content"]
+    },
+    "ScheduledTask": {
+      "title": "ScheduledTask",
+      "description": "Recurring or one-time scheduled AI briefing or task linked to an optional dedicated chat session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "prompt": { "type": "string" },
+        "frequency": { "type": "string" },
+        "timeOfDay": { "type": "string" },
+        "dayOfWeek": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "nextRunAt": { "type": "number" },
+        "lastRunAt": { "type": "number" },
+        "lastResult": { "type": "string" },
+        "lastError": { "type": "string" },
+        "runCount": { "type": "number" },
+        "chatSessionId": { "type": "string" }
+      },
+      "required": ["id", "title", "prompt", "frequency", "status"]
     }
   },
   "firestore": {
@@ -241,6 +266,10 @@
     "/users/{userId}/settings/{settingId}": {
       "schema": "UserSettings",
       "description": "Isolated settings preferences for this user"
+    },
+    "/users/{userId}/scheduledTasks/{taskId}": {
+      "schema": "ScheduledTask",
+      "description": "Isolated scheduled briefings and automated tasks for this user"
     }
   }
 }

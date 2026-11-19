@@ -475,17 +475,31 @@ export const codeStudioService = {
         'Content-Type': 'application/json',
         ...(apiKey ? { 'x-api-key': apiKey } : {}),
       },
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({
         ...params,
         apiKey: apiKey || undefined,
       }),
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to process code in Code Studio');
+    const rawText = await res.text();
+    let parsed: any = null;
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      parsed = null;
     }
 
-    return await res.json();
+    if (!res.ok || !parsed || typeof parsed !== 'object') {
+      const serverMsg =
+        parsed?.error ||
+        (rawText.trim().startsWith('<')
+          ? `Server returned an unexpected HTML response (HTTP ${res.status}). Please try again.`
+          : rawText.slice(0, 160)) ||
+        `Failed to process code in Code Studio (HTTP ${res.status})`;
+      throw new Error(serverMsg);
+    }
+
+    return parsed as CodeStudioResponse;
   },
 };

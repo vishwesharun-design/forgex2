@@ -1,17 +1,20 @@
-import React from 'react';
-import { Menu, User as UserIcon } from 'lucide-react';
-import { ActiveWorkspace, ForgeXModelId, ForgeXTheme, ThemeEffectType, UserProfile } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, ChevronDown, Menu, User as UserIcon } from 'lucide-react';
+import { ActiveWorkspace, CHAT_ROLES, ChatRoleId, ForgeXModelId, ForgeXTheme, ThemeEffectType, UserProfile } from '../types';
 import { ModelSelector } from './ModelSelector';
 
 interface HeaderProps {
   activeWorkspace: ActiveWorkspace;
   selectedModelId: ForgeXModelId;
   onSelectModel: (modelId: ForgeXModelId) => void;
+  selectedRoleId?: ChatRoleId;
+  onSelectRole?: (roleId: ChatRoleId) => void;
   theme: ForgeXTheme;
   themeEffect?: ThemeEffectType;
   onSelectThemeEffect?: (effect: ThemeEffectType) => void;
   onToggleTheme?: () => void;
   onToggleMobileNav: () => void;
+  onNavigateToChat?: () => void;
   onOpenSearch?: () => void;
   onOpenNotifications?: () => void;
   onOpenFavorites?: () => void;
@@ -27,29 +30,49 @@ export const Header: React.FC<HeaderProps> = ({
   activeWorkspace,
   selectedModelId,
   onSelectModel,
+  selectedRoleId = 'general',
+  onSelectRole,
   theme,
   onToggleMobileNav,
+  onNavigateToChat,
   user,
   onOpenAuth,
 }) => {
   const isDark = theme === 'dark';
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const roleMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!roleMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(e.target as Node)) {
+        setRoleMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [roleMenuOpen]);
+
+  const activeRole = CHAT_ROLES.find((r) => r.id === selectedRoleId) || CHAT_ROLES[0];
 
   const getWorkspaceInfo = () => {
     switch (activeWorkspace) {
       case 'chat':
-        return { title: 'ForgeX', category: 'Studio' };
+        return { title: 'ForgeX', category: 'Chat' };
+      case 'scheduled':
+        return { title: 'Scheduled', category: 'Automation' };
       case 'library':
         return { title: 'Library', category: 'Media' };
       case 'image':
-        return { title: 'Image Studio', category: 'Creative' };
+        return { title: 'Image Generator', category: 'Creative' };
       case 'music':
-        return { title: 'AI Song Studio', category: 'Creative' };
+        return { title: 'Make Song', category: 'Creative' };
       case 'spotify':
         return { title: 'Music Player', category: 'Creative' };
       case 'research':
         return { title: 'Deep Research', category: 'Intelligence' };
       case 'code':
-        return { title: 'Code Studio', category: 'Productivity' };
+        return { title: 'Code Workspace', category: 'Productivity' };
       case 'files':
         return { title: 'Document AI', category: 'Productivity' };
       case 'agents':
@@ -57,9 +80,9 @@ export const Header: React.FC<HeaderProps> = ({
       case 'search':
         return { title: 'Live Web Search', category: 'Intelligence' };
       case 'writing':
-        return { title: 'Writing Studio', category: 'Productivity' };
+        return { title: 'Writing Assistant', category: 'Productivity' };
       case 'data_analysis':
-        return { title: 'Data Analysis Studio', category: 'Intelligence' };
+        return { title: 'Data Analysis', category: 'Intelligence' };
       case 'vault':
         return { title: 'Knowledge Vault', category: 'Intelligence' };
       case 'presentation':
@@ -69,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'projects':
         return { title: 'Projects Manager', category: 'Productivity' };
       default:
-        return { title: 'ForgeX Studio', category: 'Studio' };
+        return { title: 'ForgeX', category: 'Workspace' };
     }
   };
 
@@ -103,8 +126,8 @@ export const Header: React.FC<HeaderProps> = ({
         />
       </div>
 
-      {/* Left: Mobile menu toggle + Model Switching */}
-      <div className="relative z-10 flex items-center gap-2 sm:gap-3">
+      {/* Left: Mobile menu toggle + Model & Role Switching */}
+      <div className="relative z-10 flex items-center gap-1.5 sm:gap-2.5">
         {/* Mobile menu button */}
         <button
           id="btn-mobile-nav-toggle"
@@ -118,9 +141,9 @@ export const Header: React.FC<HeaderProps> = ({
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Model Switching: Placed on the left */}
+        {/* Model Switching + Role Selector: Placed on the left */}
         {activeWorkspace === 'chat' ? (
-          <div className="flex items-center">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <ModelSelector
               selectedModelId={selectedModelId}
               onSelectModel={onSelectModel}
@@ -128,9 +151,99 @@ export const Header: React.FC<HeaderProps> = ({
               variant="chatgpt"
               align="left"
             />
+
+            {onSelectRole && (
+              <div ref={roleMenuRef} className="relative inline-block text-left">
+                <button
+                  id="btn-chat-role-selector"
+                  type="button"
+                  onClick={() => setRoleMenuOpen((prev) => !prev)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-display font-semibold text-base sm:text-lg transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                    isDark
+                      ? 'text-neutral-200 hover:text-white hover:bg-neutral-900/90'
+                      : 'text-neutral-800 hover:text-neutral-950 hover:bg-neutral-100'
+                  }`}
+                  title={`Chatbot role: ${activeRole.name} — ${activeRole.description}`}
+                >
+                  <span className="truncate max-w-[140px] sm:max-w-none">{activeRole.shortLabel}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${
+                      roleMenuOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {roleMenuOpen && (
+                  <div
+                    className={`absolute left-0 mt-2 w-56 sm:w-60 max-w-[calc(100vw-24px)] rounded-2xl border p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
+                      isDark
+                        ? 'bg-neutral-950/95 backdrop-blur-md border-neutral-800 text-white shadow-black/80'
+                        : 'bg-white/95 backdrop-blur-md border-neutral-200 text-neutral-900 shadow-neutral-300'
+                    }`}
+                  >
+                    <div
+                      className={`px-3 py-2 border-b flex items-center justify-between ${
+                        isDark ? 'border-neutral-800/60' : 'border-neutral-200'
+                      }`}
+                    >
+                      <span
+                        className={`text-[11px] font-semibold uppercase tracking-wider ${
+                          isDark ? 'text-neutral-400' : 'text-neutral-600'
+                        }`}
+                      >
+                        Roles
+                      </span>
+                    </div>
+
+                    <div className="py-1 space-y-1">
+                      {CHAT_ROLES.map((role) => {
+                        const isSelected = role.id === activeRole.id;
+                        return (
+                          <button
+                            key={role.id}
+                            type="button"
+                            onClick={() => {
+                              onSelectRole(role.id);
+                              setRoleMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center px-3 py-2.5 rounded-xl text-left text-sm font-display transition-colors cursor-pointer ${
+                              isSelected
+                                ? isDark
+                                  ? 'bg-neutral-800 text-white font-semibold'
+                                  : 'bg-neutral-200 text-neutral-950 font-semibold'
+                                : isDark
+                                  ? 'text-neutral-300 hover:bg-neutral-900 hover:text-white font-medium'
+                                  : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 font-medium'
+                            }`}
+                          >
+                            <span className="truncate">{role.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {onNavigateToChat && (
+              <button
+                id="btn-header-back-to-chat"
+                type="button"
+                onClick={onNavigateToChat}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium inline-flex items-center gap-1.5 border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  isDark
+                    ? 'border-white/15 text-neutral-200 hover:bg-white/10 hover:text-white'
+                    : 'border-neutral-900/10 text-neutral-700 hover:bg-white hover:text-neutral-950'
+                }`}
+                title="Return to ForgeX Chat"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Chat</span>
+              </button>
+            )}
             <h1 id="header-workspace-title" className="font-display font-semibold text-base sm:text-lg tracking-tight truncate max-w-[140px] sm:max-w-none flex items-center gap-1.5">
               {workspaceInfo.title}
               {activeWorkspace === 'agents' && (
@@ -142,10 +255,10 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </h1>
             {activeWorkspace !== 'agents' && (
-              <span className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
-                isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-100 text-amber-800 border-amber-300'
+              <span className={`hidden sm:inline-block text-xs font-normal ${
+                isDark ? 'text-neutral-400' : 'text-neutral-500'
               }`}>
-                {workspaceInfo.category}
+                · {workspaceInfo.category}
               </span>
             )}
           </div>

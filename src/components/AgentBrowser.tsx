@@ -45,7 +45,7 @@ interface WebPageContent {
 }
 
 const PRESET_DESTINATIONS = [
-  { label: 'Google Search', url: 'https://www.google.com', query: 'Artificial Intelligence 2026' },
+  { label: 'Web Search', url: 'https://www.google.com', query: 'Artificial Intelligence 2026' },
   { label: 'Wikipedia', url: 'https://en.wikipedia.org', query: 'Neural Network Deep Learning' },
   { label: 'GitHub', url: 'https://github.com', query: 'Trending Open Source Repositories' },
   { label: 'DuckDuckGo', url: 'https://duckduckgo.com', query: 'Generative AI Architecture' },
@@ -670,7 +670,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({
             <div className="space-y-1">
               {[
                 { title: 'Type Wikipedia Article', query: 'https://en.wikipedia.org/wiki/Artificial_intelligence' },
-                { title: 'Type Google Query', query: 'Gemini 2.5 Flash architecture' },
+                { title: 'Type Web Query', query: 'ForgeX Neural Engine architecture' },
                 { title: 'Type GitHub Search', query: 'https://github.com/trending' },
               ].map((act, i) => (
                 <button

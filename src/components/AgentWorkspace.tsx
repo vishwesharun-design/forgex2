@@ -215,7 +215,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       case 'Browser Agent':
         return [
           'Open browser on my laptop and search for latest AI news.',
-          'Open Google on my laptop to find high-performance laptops.',
+          'Search the web on my laptop to find high-performance laptops.',
           'Open browser to https://en.wikipedia.org/wiki/SpaceX_Starship on my laptop.',
         ];
       case 'Coding Agent':

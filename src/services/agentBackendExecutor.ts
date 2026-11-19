@@ -192,7 +192,7 @@ export async function executeAgentTool(
 
         if (sources.length === 0) {
           sources.push({
-            title: `Google Live Index: "${query}"`,
+            title: `Live Web Index: "${query}"`,
             url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
             snippet: `Live search query results for ${query}`,
           });
@@ -286,7 +286,7 @@ export async function executeAgentTool(
         return {
           success: true,
           result: {
-            engine: 'DuckDuckGo / Google Web Index',
+            engine: 'DuckDuckGo / Live Web Index',
             query,
             searchUrl,
             status: 'Search executed with active DOM result list',

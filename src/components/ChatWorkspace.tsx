@@ -31,15 +31,39 @@ import {
   Folder,
   Telescope,
   Lightbulb,
-  LayoutTemplate,
   Search,
-  Brain
+  Brain,
+  Music,
+  Bot,
+  BarChart3,
+  Database,
+  PenTool,
+  Presentation,
+  LayoutDashboard,
+  BellRing,
+  Volume2,
+  Loader2,
+  Clock,
 } from 'lucide-react';
-import { ChatMessage, ChatSession, ForgeXModelId, ForgeXProject, ForgeXTheme, FORGEX_MODELS } from '../types';
+import { ActiveReminderAlert, CHAT_ROLES, ChatMessage, ChatRoleId, ChatSession, ComposerToolId, ForgeXModelId, ForgeXProject, ForgeXTheme, FORGEX_MODELS, ScheduledTask } from '../types';
 import { chatService } from '../services/chatService';
 import { imageService } from '../services/imageService';
 import { libraryService } from '../services/libraryService';
 import { projectService } from '../services/projectService';
+import { documentService } from '../services/documentService';
+import { vaultService } from '../services/vaultService';
+import { voiceController } from '../services/voiceService';
+import {
+  executeInlineAgentTool,
+  executeInlineCanvasTool,
+  executeInlineCodeTool,
+  executeInlineDataAnalysisTool,
+  executeInlineDocumentTool,
+  executeInlineMusicTool,
+  executeInlinePresentationTool,
+  executeInlineSpotifySearch,
+  executeInlineWritingTool,
+} from '../services/inlineChatToolExecutor';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { detectWebSearchIntent } from '../utils/searchIntent';
@@ -47,7 +71,18 @@ import { detectImageGenerationIntent } from '../utils/imageIntent';
 import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
 import { FullscreenImageModal } from './FullscreenImageModal';
 import { InlineDeepResearchCard } from './InlineDeepResearchCard';
+import {
+  InlineAgentCard,
+  InlineCanvasCard,
+  InlineDataAnalysisCard,
+  InlinePresentationCard,
+  InlineSongCard,
+  InlineSpotifyCard,
+  InlineWritingCard,
+} from './InlineToolCards';
+import { InteractiveQuiz } from './InteractiveQuiz';
 import { SketchModal } from './SketchModal';
+import { isDirectScheduleChatIntent } from '../services/scheduledTaskService';
 
 const MenuLibraryIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -70,17 +105,102 @@ interface ChatWorkspaceProps {
   onNewChat?: () => void;
   selectedModelId: ForgeXModelId;
   onSelectModel?: (modelId: ForgeXModelId) => void;
+  selectedRoleId?: ChatRoleId;
   theme: ForgeXTheme;
-  onNavigateToImage: () => void;
-  onNavigateToVideo?: () => void;
-  onNavigateToMusic?: () => void;
-  onNavigateToCode?: (initialCode?: string, initialLang?: any) => void;
+  initialComposerTool?: ComposerToolId;
+  onConsumeInitialTool?: () => void;
   onNavigateToLibrary?: () => void;
-  onNavigateToProjects?: () => void;
-  onNavigateToResearch?: () => void;
-  onOpenStudioStore?: () => void;
   onOpenVoiceMode?: () => void;
+  activeReminder?: ActiveReminderAlert | null;
+  isReminderSpeaking?: boolean;
+  onReplayReminder?: () => void;
+  onDismissReminder?: () => void;
+  linkedScheduledTask?: ScheduledTask | null;
+  isLinkedTaskRunning?: boolean;
+  onCreateScheduleInChat?: (rawPrompt: string) => void;
+  onOpenVaultSettings?: () => void;
 }
+
+const TOOL_CHIP_META: Record<
+  Exclude<ComposerToolId, 'none'>,
+  { label: string; placeholder: string; badgeClass: string; iconColor?: string }
+> = {
+  deep_research: {
+    label: 'Deep research',
+    placeholder: 'Research a topic...',
+    badgeClass: 'bg-rose-500/8 hover:bg-rose-500/15 text-[#C84B82] dark:text-rose-400',
+  },
+  image: {
+    label: 'Image',
+    placeholder: 'Describe an image...',
+    badgeClass: 'bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400',
+  },
+  search: {
+    label: 'Web search',
+    placeholder: 'Search the web...',
+    badgeClass: 'bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400',
+  },
+  thinking: {
+    label: 'Thinking',
+    placeholder: 'Ask anything...',
+    badgeClass: 'bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200',
+  },
+  code: {
+    label: 'Code',
+    placeholder: 'Describe code or app...',
+    badgeClass: 'bg-emerald-500/12 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+  },
+  music: {
+    label: 'Make song',
+    placeholder: 'Describe a song...',
+    badgeClass: 'bg-amber-500/12 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400',
+  },
+  spotify: {
+    label: 'Music player',
+    placeholder: 'Search music...',
+    badgeClass: 'bg-emerald-500/12 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+  },
+  agents: {
+    label: 'AI Agent',
+    placeholder: 'Assign a task...',
+    badgeClass: 'bg-amber-500/12 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400',
+  },
+  data_analysis: {
+    label: 'Data analysis',
+    placeholder: 'Analyze data...',
+    badgeClass: 'bg-amber-500/12 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400',
+  },
+  vault: {
+    label: 'Knowledge Vault',
+    placeholder: 'Ask Vault...',
+    badgeClass: 'bg-amber-500/12 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400',
+  },
+  files: {
+    label: 'Document AI',
+    placeholder: 'Ask about files...',
+    badgeClass: 'bg-emerald-500/12 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+  },
+  writing: {
+    label: 'Writing',
+    placeholder: 'What to draft?',
+    badgeClass: 'bg-violet-500/12 hover:bg-violet-500/20 text-violet-700 dark:text-violet-400',
+  },
+  presentation: {
+    label: 'Presentations',
+    placeholder: 'Slide topic...',
+    badgeClass: 'bg-orange-500/12 hover:bg-orange-500/20 text-orange-700 dark:text-orange-400',
+  },
+  canvas: {
+    label: 'AI Canvas',
+    placeholder: 'Board topic...',
+    badgeClass: 'bg-rose-500/12 hover:bg-rose-500/20 text-rose-700 dark:text-rose-400',
+  },
+  schedule: {
+    label: 'Schedule',
+    placeholder: 'e.g. Remind me at 3:30 PM or Daily news at 8:30 AM...',
+    badgeClass: 'bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400',
+  },
+};
 
 export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   currentSession,
@@ -89,30 +209,36 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   onNewChat,
   selectedModelId,
   onSelectModel,
+  selectedRoleId = 'general',
   theme,
-  onNavigateToImage,
-  onNavigateToVideo,
-  onNavigateToMusic,
-  onNavigateToCode,
+  initialComposerTool,
+  onConsumeInitialTool,
   onNavigateToLibrary,
-  onNavigateToProjects,
-  onNavigateToResearch,
-  onOpenStudioStore,
   onOpenVoiceMode,
+  activeReminder,
+  isReminderSpeaking = false,
+  onReplayReminder,
+  onDismissReminder,
+  linkedScheduledTask,
+  isLinkedTaskRunning = false,
+  onCreateScheduleInChat,
+  onOpenVaultSettings,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inlineToolStatus, setInlineToolStatus] = useState<string | null>(null);
   const [searchingQuery, setSearchingQuery] = useState<string | null>(null);
   const [searchedForQueryDuringTurn, setSearchedForQueryDuringTurn] = useState<string | null>(null);
   const [expandedDomainGroup, setExpandedDomainGroup] = useState<string | null>(null);
-  const [attachedFiles, setAttachedFiles] = useState<{ type: 'file' | 'image'; name: string; url?: string }[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<{ type: 'file' | 'image'; name: string; url?: string; rawText?: string }[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  const [activeComposerTool, setActiveComposerTool] = useState<'none' | 'image' | 'search' | 'thinking' | 'deep_research'>('none');
+  const [activeComposerTool, setActiveComposerTool] = useState<ComposerToolId>('none');
   const [activeProjectInChat, setActiveProjectInChat] = useState<ForgeXProject | null>(null);
   const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
+  const [activeVaultDocsCount, setActiveVaultDocsCount] = useState<number>(() => vaultService.getActiveDocuments().length);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [pendingUserTurn, setPendingUserTurn] = useState<{
@@ -199,10 +325,24 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           console.warn('Could not attach image file:', err);
         }
       } else {
-        setAttachedFiles((prev) => [...prev, { type: resolvedType, name: fallbackName }]);
+        try {
+          const parsedDoc = await documentService.parseUploadedFile(file);
+          setAttachedFiles((prev) => [
+            ...prev,
+            { type: resolvedType, name: fallbackName, rawText: parsedDoc.textContent },
+          ]);
+        } catch {
+          setAttachedFiles((prev) => [...prev, { type: resolvedType, name: fallbackName }]);
+        }
       }
     }
   };
+
+  useEffect(() => {
+    const syncCount = () => setActiveVaultDocsCount(vaultService.getActiveDocuments().length);
+    window.addEventListener('forgex:vault_updated', syncCount);
+    return () => window.removeEventListener('forgex:vault_updated', syncCount);
+  }, []);
 
   useEffect(() => {
     if (!attachMenuOpen) return;
@@ -258,6 +398,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const imageProgressTimerRef = useRef<any>(null);
 
+  useEffect(() => {
+    if (initialComposerTool && initialComposerTool !== 'none') {
+      setActiveComposerTool(initialComposerTool);
+      onConsumeInitialTool?.();
+      setTimeout(() => textareaRef.current?.focus(), 60);
+    }
+  }, [initialComposerTool, onConsumeInitialTool]);
+
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
 
@@ -305,7 +453,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               >
                 {/* Circular Favicon */}
                 <img
-                  src={`https://www.google.com/s2/favicons?domain=${group.domain}&sz=32`}
+                  src={`https://icons.duckduckgo.com/ip3/${group.domain}.ico`}
                   alt=""
                   className="w-3.5 h-3.5 rounded-full object-contain shrink-0"
                   onError={(e) => {
@@ -421,6 +569,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   ];
 
   const hasMessages = displayMessages.length > 0;
+  const showActiveLayout = hasMessages || isLinkedTaskRunning;
   const baseTextRef = useRef<string>('');
   const [voiceModeState, setVoiceModeState] = useState<'idle' | 'listening' | 'transcribing' | 'typing'>('idle');
   const typingTimerRef = useRef<any>(null);
@@ -936,37 +1085,118 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend !== undefined ? textToSend : inputText).trim();
-    if ((!text && attachedFiles.length === 0) || isSubmitting) return;
+  const handleConfirmAgentAction = async (
+    sessionId: string,
+    messageId: string,
+    taskPrompt: string,
+    req: NonNullable<ChatMessage['agentRun']>['requiresConfirmation'],
+    approved: boolean
+  ) => {
+    if (!req) return;
+    const runningSession = chatService.updateMessageInSession(sessionId, messageId, (m) =>
+      m.agentRun
+        ? {
+            ...m,
+            agentRun: {
+              ...m.agentRun,
+              status: 'running',
+              logs: [...m.agentRun.logs, `${approved ? 'Approved' : 'Denied'}: ${req.title}`],
+            },
+          }
+        : m
+    );
+    if (runningSession) onUpdateSession(runningSession);
 
-    const filesToAttach = [...attachedFiles];
+    try {
+      const res = await executeInlineAgentTool(taskPrompt, selectedModelId, {
+        actionId: req.actionId,
+        toolName: req.toolName,
+        parameters: req.parameters,
+        confirmed: approved,
+      });
+      const doneSession = chatService.updateMessageInSession(sessionId, messageId, (m) => ({
+        ...m,
+        content: res.reply || (approved ? 'Action executed.' : 'Action cancelled by user.'),
+        agentRun: {
+          task: taskPrompt,
+          status: res.requiresConfirmation ? 'awaiting_confirmation' : 'completed',
+          steps: res.steps,
+          logs: [...(m.agentRun?.logs || []), ...(res.logs || [])],
+          requiresConfirmation: res.requiresConfirmation,
+          openBrowser: res.openBrowser,
+          browserUrl: res.browserUrl,
+        },
+      }));
+      if (doneSession) onUpdateSession(doneSession);
+    } catch (err: any) {
+      const errSession = chatService.updateMessageInSession(sessionId, messageId, (m) => ({
+        ...m,
+        content: `Agent action error: ${err?.message || 'Execution failed.'}`,
+        agentRun: {
+          ...(m.agentRun || { task: taskPrompt, steps: [], logs: [] }),
+          status: 'error',
+        },
+      }));
+      if (errSession) onUpdateSession(errSession);
+    }
+  };
+
+  const handleSendMessage = async (textToSend?: string) => {
+    voiceController.unlockAudio();
+    const rawTyped = (textToSend !== undefined ? textToSend : inputText).trim();
+    const activeToolSnapshot = activeComposerTool;
+    const canSubmitEmptyPrompt =
+      activeToolSnapshot === 'spotify' || activeToolSnapshot === 'data_analysis';
+
+    if ((!rawTyped && attachedFiles.length === 0 && !canSubmitEmptyPrompt) || isSubmitting) {
+      return;
+    }
+
+    const defaultPromptForTool =
+      activeToolSnapshot === 'spotify'
+        ? 'Featured hits'
+        : activeToolSnapshot === 'data_analysis'
+        ? attachedFiles.length > 0
+          ? `Analyze ${attachedFiles[0].name}`
+          : 'Analyze sample performance metrics'
+        : activeToolSnapshot === 'files'
+        ? 'Summarize attached document'
+        : '';
+    const text = rawTyped || defaultPromptForTool;
+
+    const rawAttachmentsSnapshot = [...attachedFiles];
+    const filesToAttach: ChatMessage['attachments'] = rawAttachmentsSnapshot.map((a) => ({
+      type: a.type,
+      name: a.name,
+      ...(a.url ? { url: a.url } : {}),
+    }));
     setAttachedFiles([]);
     setInputText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    const activeToolSnapshot = activeComposerTool;
     setActiveComposerTool('none');
 
     const activeToolBadge: ChatMessage['toolBadge'] | undefined =
-      activeToolSnapshot === 'deep_research'
-        ? 'deep_research'
-        : activeToolSnapshot === 'image'
-        ? 'image'
-        : activeToolSnapshot === 'search'
-        ? 'search'
-        : activeToolSnapshot === 'thinking'
-        ? 'thinking'
-        : undefined;
+      activeToolSnapshot !== 'none' ? activeToolSnapshot : undefined;
 
     const effectiveModelForTurn: ForgeXModelId =
       activeToolSnapshot === 'thinking' || activeToolSnapshot === 'deep_research'
         ? 'forge-2-ultra'
         : selectedModelId;
 
-    // Inline ChatGPT-style Deep Research Plan -> Countdown -> Report workflow
+    // 0. Schedule or Reminder creation directly inside Chat
+    if (
+      onCreateScheduleInChat &&
+      (activeToolSnapshot === 'schedule' ||
+        (activeToolSnapshot === 'none' && !linkedScheduledTask && isDirectScheduleChatIntent(text)))
+    ) {
+      onCreateScheduleInChat(text);
+      return;
+    }
+
+    // 1. Inline Deep Research Plan -> Countdown -> Report workflow
     if (activeToolSnapshot === 'deep_research') {
       await handleStartDeepResearchPlan(
         text || 'Analyze the attached content deeply',
@@ -976,18 +1206,178 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       return;
     }
 
+    // 2. Specialized Inline Studio Tools (stay 100% inside Chat just like Deep Research)
+    const inlineSpecialTools: ComposerToolId[] = [
+      'music',
+      'spotify',
+      'presentation',
+      'canvas',
+      'data_analysis',
+      'writing',
+      'files',
+      'code',
+      'agents',
+    ];
+
+    if (inlineSpecialTools.includes(activeToolSnapshot)) {
+      const targetSessionId = currentSession?.id || 'chat_' + Date.now();
+      const userMsg: ChatMessage = {
+        id: 'usr_msg_' + Date.now(),
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+        attachments: filesToAttach.length > 0 ? filesToAttach : undefined,
+        toolBadge: activeToolBadge,
+      };
+
+      const statusLabels: Record<string, string> = {
+        music: 'Composing song, vocals & arrangement...',
+        spotify: 'Searching tracks for inline playback...',
+        presentation: 'Designing presentation slides...',
+        canvas: 'Generating visual node canvas...',
+        data_analysis: 'Computing statistics & charts...',
+        writing: 'Drafting structured prose...',
+        files: 'Analyzing documents...',
+        code: 'Synthesizing & verifying code...',
+        agents: 'Running autonomous AI Agent...',
+      };
+
+      setPendingUserTurn({ text, attachments: filesToAttach, toolBadge: activeToolBadge });
+      setInlineToolStatus(statusLabels[activeToolSnapshot] || 'Running tool...');
+      setIsSubmitting(true);
+
+      try {
+        let assistantMsg: ChatMessage = {
+          id: 'asst_msg_' + (Date.now() + 1),
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now() + 1,
+          toolBadge: activeToolBadge,
+          modelUsed: currentModel.name,
+        };
+
+        if (activeToolSnapshot === 'music') {
+          const song = await executeInlineMusicTool(text, effectiveModelForTurn);
+          assistantMsg.modelUsed = 'ForgeX Song Synthesizer';
+          assistantMsg.content = `Created **${song.title}** (${song.genre} · ${song.mood} · ${song.tempoBpm} BPM).`;
+          assistantMsg.generatedSong = song;
+        } else if (activeToolSnapshot === 'spotify') {
+          const res = executeInlineSpotifySearch(rawTyped);
+          assistantMsg.modelUsed = 'ForgeX Music Player';
+          assistantMsg.content = res.summary;
+          assistantMsg.spotifyTracks = res.tracks;
+        } else if (activeToolSnapshot === 'presentation') {
+          const deck = await executeInlinePresentationTool(text, isDark);
+          assistantMsg.modelUsed = 'ForgeX Presentations';
+          assistantMsg.content = `Generated **${deck.title}** (${deck.slides.length} slides).`;
+          assistantMsg.presentationDeck = deck;
+        } else if (activeToolSnapshot === 'canvas') {
+          const board = await executeInlineCanvasTool(text);
+          assistantMsg.modelUsed = 'ForgeX AI Canvas';
+          assistantMsg.content = `Built interactive board **${board.name}** (${board.nodes.length} nodes).`;
+          assistantMsg.canvasBoard = board;
+        } else if (activeToolSnapshot === 'data_analysis') {
+          const { report, datasetSummary } = await executeInlineDataAnalysisTool(
+            text,
+            rawAttachmentsSnapshot
+          );
+          assistantMsg.modelUsed = 'ForgeX Data Analysis';
+          assistantMsg.content = report.executiveSummary || report.summary;
+          assistantMsg.dataReport = report;
+          assistantMsg.dataDataset = datasetSummary;
+        } else if (activeToolSnapshot === 'writing') {
+          const res = await executeInlineWritingTool(text);
+          assistantMsg.modelUsed = 'ForgeX Writing Assistant';
+          assistantMsg.content = res.content;
+          assistantMsg.writingMeta = { category: res.category, tone: res.tone };
+        } else if (activeToolSnapshot === 'files') {
+          const res = await executeInlineDocumentTool(text, rawAttachmentsSnapshot);
+          assistantMsg.modelUsed = 'ForgeX Document AI';
+          assistantMsg.content = res.result || 'Document analysis complete.';
+          if (Array.isArray(res.quiz) && res.quiz.length > 0) {
+            assistantMsg.documentQuiz = res.quiz;
+          }
+        } else if (activeToolSnapshot === 'code') {
+          const codeMarkdown = await executeInlineCodeTool(
+            text,
+            rawAttachmentsSnapshot,
+            effectiveModelForTurn
+          );
+          assistantMsg.modelUsed = 'ForgeX Code Engine';
+          assistantMsg.content = codeMarkdown;
+        } else if (activeToolSnapshot === 'agents') {
+          const res = await executeInlineAgentTool(
+            text,
+            effectiveModelForTurn,
+            undefined,
+            (stepText) => setInlineToolStatus(stepText)
+          );
+          assistantMsg.modelUsed = 'ForgeX AI Agent';
+          assistantMsg.content = res.reply;
+          assistantMsg.agentRun = {
+            task: text,
+            status: res.requiresConfirmation ? 'awaiting_confirmation' : 'completed',
+            steps: res.steps,
+            logs: res.logs,
+            requiresConfirmation: res.requiresConfirmation,
+            openBrowser: res.openBrowser,
+            browserUrl: res.browserUrl,
+          };
+        }
+
+        const updatedSession = chatService.appendMessagesToSession(
+          targetSessionId,
+          [userMsg, assistantMsg],
+          effectiveModelForTurn,
+          text
+        );
+        setPendingUserTurn(null);
+        setInlineToolStatus(null);
+        onUpdateSession(updatedSession);
+      } catch (err: any) {
+        const errMsg: ChatMessage = {
+          id: 'asst_err_' + (Date.now() + 1),
+          role: 'assistant',
+          content: `Could not complete ${TOOL_CHIP_META[activeToolSnapshot as Exclude<ComposerToolId, 'none'>]?.label || 'tool'} request: ${err?.message || 'Unexpected error'}.`,
+          timestamp: Date.now() + 1,
+          toolBadge: activeToolBadge,
+        };
+        const updatedSession = chatService.appendMessagesToSession(
+          targetSessionId,
+          [userMsg, errMsg],
+          effectiveModelForTurn,
+          text
+        );
+        setPendingUserTurn(null);
+        setInlineToolStatus(null);
+        onUpdateSession(updatedSession);
+      } finally {
+        setIsSubmitting(false);
+        setInlineToolStatus(null);
+        setPendingUserTurn(null);
+      }
+      return;
+    }
+
+    // 3. Standard Chat, Image, Web Search, Thinking, and Knowledge Vault Grounded Q&A
     // Set optimistic message so user never sees input vanish without response
     setPendingUserTurn({ text, attachments: filesToAttach, toolBadge: activeToolBadge });
     setStreamingReply(null);
 
     // Check for image generation intent vs web search vs general chat
     const hasAttachedImage = filesToAttach.some((f) => f.type === 'image');
+    const attachedTextSnippets = rawAttachmentsSnapshot
+      .filter((a) => a.type === 'file' && a.rawText)
+      .map((a) => `\n\n[Attached File: ${a.name}]\n${a.rawText!.slice(0, 6000)}`)
+      .join('');
+    const enrichedUserText = attachedTextSnippets ? `${text}${attachedTextSnippets}` : text;
+
     const rawTextForService =
       activeToolSnapshot === 'image' && !/^\/image\b/i.test(text) && !detectImageGenerationIntent(text, hasAttachedImage).isImage
         ? `/image ${text}`
         : activeProjectInChat && !detectImageGenerationIntent(text, hasAttachedImage).isImage
-        ? `${text}\n\n[Project Context — ${activeProjectInChat.name}: ${activeProjectInChat.description || ''}${activeProjectInChat.contextNotes ? ` | Notes: ${activeProjectInChat.contextNotes}` : ''}]`
-        : text;
+        ? `${enrichedUserText}\n\n[Project Context — ${activeProjectInChat.name}: ${activeProjectInChat.description || ''}${activeProjectInChat.contextNotes ? ` | Notes: ${activeProjectInChat.contextNotes}` : ''}]`
+        : enrichedUserText;
     const imgIntent = detectImageGenerationIntent(rawTextForService, hasAttachedImage);
     const effectiveSearchMode: 'auto' | 'on' | 'off' = activeToolSnapshot === 'search' ? 'on' : 'auto';
     const localSearchIntent =
@@ -1014,6 +1404,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     try {
       const sessionId = currentSession?.id || 'new';
+      const activeRolePreset =
+        CHAT_ROLES.find((r) => r.id === (selectedRoleId || currentSession?.roleId || 'general')) ||
+        CHAT_ROLES[0];
       const { updatedSession } = await chatService.sendMessage(
         sessionId,
         rawTextForService,
@@ -1046,7 +1439,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             progress: Math.min(100, Math.max(1, Math.round(realProgress))),
           });
         },
-        activeToolBadge
+        activeToolBadge,
+        activeRolePreset.systemInstruction,
+        activeRolePreset.id
       );
 
       // Ensure progress reaches exactly 100% before showing the image
@@ -1175,7 +1570,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
 
   const renderChatInput = () => {
-    const hasContent = Boolean(inputText.trim() || attachedFiles.length > 0);
+    const hasContent = Boolean(
+      inputText.trim() ||
+        attachedFiles.length > 0 ||
+        activeComposerTool === 'spotify' ||
+        activeComposerTool === 'data_analysis'
+    );
 
     return (
       <div className="w-full relative" onPaste={handlePaste}>
@@ -1260,24 +1660,29 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <Plus className="w-4 h-4" />
             </button>
 
-            {/* Plus Popover Menu matching ChatGPT reference */}
+            {/* Plus Popover Menu with attachments, chat modes, and all ForgeX tools */}
             {attachMenuOpen && (
               <div
+                id="chat-plus-popover"
                 className={`absolute ${
-                  hasMessages ? 'bottom-full mb-2.5' : 'top-full mt-2.5'
-                } left-0 w-[308px] sm:w-[336px] max-h-[340px] overflow-y-auto custom-scrollbar rounded-2xl border p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.14)] z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                  showActiveLayout ? 'bottom-full mb-2.5' : 'top-full mt-2.5'
+                } left-0 w-[312px] sm:w-[348px] max-h-[min(420px,54vh)] overflow-y-auto custom-scrollbar rounded-2xl border p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.16)] z-50 animate-in fade-in zoom-in-95 duration-100 ${
                   isDark
                     ? 'bg-neutral-900 border-neutral-800 text-white shadow-black/60'
                     : 'bg-white border-neutral-200/90 text-neutral-900'
                 }`}
               >
+                <div className={`px-3 pt-1.5 pb-1 text-[11px] font-semibold tracking-wide ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                  Attach & Context
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
                     fileInputRef.current?.click();
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
                     isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
                   }`}
                 >
@@ -1297,7 +1702,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     setLibrarySearchQuery('');
                     setIsLibraryPickerOpen(true);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
                     isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
                   }`}
                 >
@@ -1305,7 +1710,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <div className="min-w-0 flex items-baseline gap-2 truncate">
                     <span className="text-[13px] font-medium shrink-0">Add from library</span>
                     <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Browse and search your files
+                      Browse saved files
                     </span>
                   </div>
                 </button>
@@ -1314,50 +1719,17 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
-                    setActiveComposerTool('image');
-                    textareaRef.current?.focus();
+                    setIsSketchOpen(true);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                    activeComposerTool === 'image'
-                      ? isDark
-                        ? 'bg-neutral-800'
-                        : 'bg-neutral-100'
-                      : isDark
-                      ? 'hover:bg-neutral-800'
-                      : 'hover:bg-neutral-100'
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
                   }`}
                 >
-                  <ImageIcon className="w-4 h-4 shrink-0 text-sky-500" />
+                  <MenuSketchIcon className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   <div className="min-w-0 flex items-baseline gap-2 truncate">
-                    <span className="text-[13px] font-medium shrink-0">Create image</span>
+                    <span className="text-[13px] font-medium shrink-0">Sketch</span>
                     <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Visualize anything
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachMenuOpen(false);
-                    setActiveComposerTool('search');
-                    textareaRef.current?.focus();
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                    activeComposerTool === 'search'
-                      ? isDark
-                        ? 'bg-neutral-800'
-                        : 'bg-neutral-100'
-                      : isDark
-                      ? 'hover:bg-neutral-800'
-                      : 'hover:bg-neutral-100'
-                  }`}
-                >
-                  <Globe className="w-4 h-4 shrink-0 text-sky-500" />
-                  <div className="min-w-0 flex items-baseline gap-2 truncate">
-                    <span className="text-[13px] font-medium shrink-0">Web search</span>
-                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Find real-time news and info
+                      Draw and attach
                     </span>
                   </div>
                 </button>
@@ -1368,7 +1740,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     setAttachMenuOpen(false);
                     setIsProjectPickerOpen(true);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
                     activeProjectInChat
                       ? isDark
                         ? 'bg-neutral-800'
@@ -1382,7 +1754,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <div className="min-w-0 flex items-baseline gap-2 truncate">
                     <span className="text-[13px] font-medium shrink-0">Work in a project</span>
                     <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Start a chat in a project
+                      Ground chat context
                     </span>
                   </div>
                 </button>
@@ -1391,97 +1763,169 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   type="button"
                   onClick={() => {
                     setAttachMenuOpen(false);
-                    setActiveComposerTool('deep_research');
-                    textareaRef.current?.focus();
+                    onOpenVaultSettings?.();
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                    activeComposerTool === 'deep_research'
-                      ? isDark
-                        ? 'bg-neutral-800'
-                        : 'bg-neutral-100'
-                      : isDark
-                      ? 'hover:bg-neutral-800'
-                      : 'hover:bg-neutral-100'
-                  }`}
-                >
-                  <Telescope className="w-4 h-4 shrink-0 text-sky-500" />
-                  <div className="min-w-0 flex items-baseline gap-2 truncate">
-                    <span className="text-[13px] font-medium shrink-0">Deep research</span>
-                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Get a detailed report
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachMenuOpen(false);
-                    setIsSketchOpen(true);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
                     isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
                   }`}
                 >
-                  <MenuSketchIcon className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <Database className="w-4 h-4 shrink-0 text-amber-500" />
                   <div className="min-w-0 flex items-baseline gap-2 truncate">
-                    <span className="text-[13px] font-medium shrink-0">Sketch</span>
+                    <span className="text-[13px] font-medium shrink-0">Knowledge Vault</span>
                     <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Draw and attach an image
+                      {activeVaultDocsCount} active docs
                     </span>
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachMenuOpen(false);
-                    setActiveComposerTool('thinking');
-                    if (onSelectModel) onSelectModel('forge-2-ultra');
-                    textareaRef.current?.focus();
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                    activeComposerTool === 'thinking'
-                      ? isDark
-                        ? 'bg-neutral-800'
-                        : 'bg-neutral-100'
-                      : isDark
-                      ? 'hover:bg-neutral-800'
-                      : 'hover:bg-neutral-100'
-                  }`}
-                >
-                  <Lightbulb className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
-                  <div className="min-w-0 flex items-baseline gap-2 truncate">
-                    <span className="text-[13px] font-medium shrink-0">Thinking</span>
-                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      For detailed answers
-                    </span>
-                  </div>
-                </button>
+                <div className={`my-1.5 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200/80'}`} />
+                <div className={`px-3 pt-1 pb-1 text-[11px] font-semibold tracking-wide ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                  Inline Chat Tools
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachMenuOpen(false);
-                    if (onOpenStudioStore) {
-                      onOpenStudioStore();
-                    } else {
-                      setInputText('Create a reusable prompt template for: ');
-                      textareaRef.current?.focus();
-                    }
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                    isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
-                  }`}
-                >
-                  <LayoutTemplate className={`w-4 h-4 shrink-0 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`} />
-                  <div className="min-w-0 flex items-baseline gap-2 truncate">
-                    <span className="text-[13px] font-medium shrink-0">Template Creator</span>
-                    <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                      Create reusable templates saved as skills
-                    </span>
-                  </div>
-                </button>
+                {(
+                  [
+                    {
+                      id: 'image' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Create image',
+                      desc: 'Generate visuals inline',
+                      icon: ImageIcon,
+                      color: 'text-sky-500',
+                    },
+                    {
+                      id: 'search' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Web search',
+                      desc: 'Real-time cited answers',
+                      icon: Globe,
+                      color: 'text-sky-500',
+                    },
+                    {
+                      id: 'deep_research' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Deep research',
+                      desc: 'Multi-step report in chat',
+                      icon: Telescope,
+                      color: 'text-sky-500',
+                    },
+                    {
+                      id: 'thinking' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Thinking',
+                      desc: 'Deep step-by-step logic',
+                      icon: Lightbulb,
+                      color: isDark ? 'text-amber-400' : 'text-amber-600',
+                      onExtra: () => onSelectModel?.('forge-2-ultra'),
+                    },
+                    {
+                      id: 'code' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Code workspace',
+                      desc: 'Generate, fix & preview inline',
+                      icon: Code2,
+                      color: 'text-emerald-500',
+                    },
+                    {
+                      id: 'music' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Make song',
+                      desc: 'Audio track & lyrics in chat',
+                      icon: Music,
+                      color: 'text-amber-500',
+                    },
+                    {
+                      id: 'spotify' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Music player',
+                      desc: 'Stream tracks inline',
+                      icon: Headphones,
+                      color: 'text-emerald-500',
+                    },
+                    {
+                      id: 'agents' as Exclude<ComposerToolId, 'none'>,
+                      label: 'AI Agents',
+                      desc: 'Autonomous tasks in chat',
+                      icon: Bot,
+                      color: 'text-amber-500',
+                    },
+                    {
+                      id: 'data_analysis' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Data analysis',
+                      desc: 'CSV/JSON stats & charts',
+                      icon: BarChart3,
+                      color: 'text-amber-500',
+                    },
+                    {
+                      id: 'files' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Document AI',
+                      desc: 'Summaries, tables & quizzes',
+                      icon: FileText,
+                      color: 'text-emerald-500',
+                    },
+                    {
+                      id: 'writing' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Writing assistant',
+                      desc: 'Draft & refine prose inline',
+                      icon: PenTool,
+                      color: 'text-violet-500',
+                    },
+                    {
+                      id: 'presentation' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Presentations',
+                      desc: 'Interactive slide decks',
+                      icon: Presentation,
+                      color: 'text-orange-500',
+                    },
+                    {
+                      id: 'canvas' as Exclude<ComposerToolId, 'none'>,
+                      label: 'AI Canvas',
+                      desc: 'Mindmap & flow diagrams',
+                      icon: LayoutDashboard,
+                      color: 'text-rose-500',
+                    },
+                    {
+                      id: 'vault' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Knowledge Vault',
+                      desc: `${activeVaultDocsCount} docs · Q&A in chat`,
+                      icon: Database,
+                      color: 'text-amber-500',
+                    },
+                    {
+                      id: 'schedule' as Exclude<ComposerToolId, 'none'>,
+                      label: 'Schedule & Reminder',
+                      desc: 'Daily updates & timed alerts',
+                      icon: Clock,
+                      color: 'text-sky-500',
+                    },
+                  ] as const
+                ).map((tool) => {
+                  const ToolIcon = tool.icon;
+                  const isActive = activeComposerTool === tool.id;
+                  return (
+                    <button
+                      key={tool.id}
+                      id={`btn-chat-plus-tool-${tool.id}`}
+                      type="button"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        setActiveComposerTool(tool.id);
+                        if ('onExtra' in tool && tool.onExtra) tool.onExtra();
+                        textareaRef.current?.focus();
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                        isActive
+                          ? isDark
+                            ? 'bg-neutral-800'
+                            : 'bg-neutral-100'
+                          : isDark
+                          ? 'hover:bg-neutral-800'
+                          : 'hover:bg-neutral-100'
+                      }`}
+                    >
+                      <ToolIcon className={`w-4 h-4 shrink-0 ${tool.color}`} />
+                      <div className="min-w-0 flex items-baseline gap-2 truncate">
+                        <span className="text-[13px] font-medium shrink-0">{tool.label}</span>
+                        <span className={`text-[12px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                          {tool.desc}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1504,33 +1948,33 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </button>
           )}
 
-          {/* Active Composer Tool Chip when selected from + menu (matches Screenshot 1) */}
+          {/* Active Composer Tool Chip when selected from + menu */}
           {activeComposerTool !== 'none' && (
             <button
               type="button"
               onClick={() => setActiveComposerTool('none')}
               title="Clear selected tool"
-              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors cursor-pointer ${
-                activeComposerTool === 'deep_research'
-                  ? 'bg-rose-500/8 hover:bg-rose-500/15 text-[#C84B82] dark:text-rose-400'
-                  : activeComposerTool === 'image' || activeComposerTool === 'search'
-                  ? 'bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400'
-                  : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200'
+              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                TOOL_CHIP_META[activeComposerTool]?.badgeClass ||
+                'bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200'
               }`}
             >
               {activeComposerTool === 'deep_research' && <Telescope className="w-3.5 h-3.5 text-sky-500" />}
               {activeComposerTool === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
               {activeComposerTool === 'search' && <Globe className="w-3.5 h-3.5" />}
               {activeComposerTool === 'thinking' && <Brain className="w-3.5 h-3.5" />}
-              <span>
-                {activeComposerTool === 'deep_research'
-                  ? 'Deep research'
-                  : activeComposerTool === 'image'
-                  ? 'Image'
-                  : activeComposerTool === 'search'
-                  ? 'Search'
-                  : 'Thinking'}
-              </span>
+              {activeComposerTool === 'code' && <Code2 className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'music' && <Music className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'spotify' && <Headphones className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'agents' && <Bot className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'data_analysis' && <BarChart3 className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'vault' && <Database className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'files' && <FileText className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'writing' && <PenTool className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'presentation' && <Presentation className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'canvas' && <LayoutDashboard className="w-3.5 h-3.5" />}
+              {activeComposerTool === 'schedule' && <Clock className="w-3.5 h-3.5" />}
+              <span>{TOOL_CHIP_META[activeComposerTool]?.label || activeComposerTool}</span>
               <X className="w-3 h-3 opacity-70" />
             </button>
           )}
@@ -1542,6 +1986,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               id="chat-textarea"
               rows={1}
               value={inputText}
+              onFocus={() => voiceController.unlockAudio()}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
@@ -1550,14 +1995,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   ? 'Listening...'
                   : voiceModeState === 'transcribing' || isProcessing
                   ? 'Transcribing...'
-                  : activeComposerTool === 'deep_research'
-                  ? 'Research a topic...'
-                  : activeComposerTool === 'image'
-                  ? 'Describe an image...'
-                  : activeComposerTool === 'search'
-                  ? 'Search the web...'
-                  : activeComposerTool === 'thinking'
-                  ? 'Ask a complex question...'
+                  : activeComposerTool !== 'none'
+                  ? TOOL_CHIP_META[activeComposerTool]?.placeholder || 'Ask ForgeX'
                   : 'Ask ForgeX'
               }
               className={`w-full bg-transparent px-2 py-1 text-sm sm:text-base resize-none outline-none max-h-36 leading-normal transition-colors ${
@@ -1609,7 +2048,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             <button
               id="btn-voice-input"
               type="button"
-              onClick={toggleListening}
+              onClick={() => {
+                voiceController.unlockAudio();
+                toggleListening();
+              }}
               title={
                 voiceModeState === 'listening' || isListening
                   ? 'Stop recording & transcribe'
@@ -1684,6 +2126,67 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </button>
           </div>
         )}
+
+        {/* Scheduled reminder announcement below while user is talking/chatting */}
+        {activeReminder && (
+          <div
+            id="chat-reminder-below-bar"
+            role="status"
+            aria-live="polite"
+            className={`mt-2 flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+              isDark
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-100'
+                : 'bg-amber-50/90 border-amber-300/70 text-neutral-900'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <BellRing
+                className={`w-4 h-4 shrink-0 ${
+                  isReminderSpeaking ? 'text-amber-500 animate-bounce' : 'text-amber-500'
+                }`}
+              />
+              <div className="min-w-0">
+                <p className="text-xs sm:text-[13px] font-medium truncate">
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">Reminder: </span>
+                  {activeReminder.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {onReplayReminder && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    voiceController.unlockAudio();
+                    onReplayReminder();
+                  }}
+                  title="Say reminder aloud"
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                    isDark
+                      ? 'hover:bg-amber-500/20 text-amber-300'
+                      : 'hover:bg-amber-200/60 text-amber-800'
+                  }`}
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>{isReminderSpeaking ? 'Speaking...' : 'Say'}</span>
+                </button>
+              )}
+              {onDismissReminder && (
+                <button
+                  type="button"
+                  onClick={onDismissReminder}
+                  title="Dismiss reminder"
+                  className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-white/10 text-neutral-400 hover:text-white' : 'hover:bg-black/5 text-neutral-500 hover:text-neutral-900'
+                  }`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1739,7 +2242,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-8 py-4 sm:py-6">
-        {!hasMessages ? (
+        {!showActiveLayout ? (
           /* Empty Initial State: Centered ChatGPT Style */
           <div className="flex-1 flex flex-col items-center justify-center text-center max-w-2xl mx-auto w-full px-2 py-8 select-none animate-in fade-in duration-300">
             <h2 id="chat-empty-title" className="font-display font-medium text-3xl sm:text-4xl tracking-tight mb-8 text-neutral-900 dark:text-white">
@@ -1787,6 +2290,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         ) : (
           /* Active Chat Messages */
           <div className="max-w-3xl mx-auto space-y-6 pb-4">
+
             {displayMessages.map((message: ChatMessage) => {
               const isUser = message.role === 'user';
               return (
@@ -1837,28 +2341,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       >
                         {message.toolBadge && (
                           <span className="inline-flex items-center gap-1.5 mr-2 align-middle">
-                            {message.toolBadge === 'deep_research' && (
+                            {message.toolBadge === 'deep_research' ? (
                               <>
                                 <Telescope className="w-3.5 h-3.5 text-sky-500 shrink-0" />
                                 <span className="text-[#C84B82] dark:text-rose-400 font-medium">Deep research</span>
                               </>
-                            )}
-                            {message.toolBadge === 'image' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/12 text-sky-600 dark:text-sky-400">
-                                <ImageIcon className="w-3 h-3" />
-                                <span>Image</span>
-                              </span>
-                            )}
-                            {message.toolBadge === 'search' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/12 text-sky-600 dark:text-sky-400">
-                                <Globe className="w-3 h-3" />
-                                <span>Web search</span>
-                              </span>
-                            )}
-                            {message.toolBadge === 'thinking' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-neutral-500/15 text-neutral-700 dark:text-neutral-300">
-                                <Brain className="w-3 h-3" />
-                                <span>Think</span>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                                  TOOL_CHIP_META[message.toolBadge]?.badgeClass ||
+                                  'bg-neutral-500/15 text-neutral-700 dark:text-neutral-300'
+                                }`}
+                              >
+                                <span>{TOOL_CHIP_META[message.toolBadge]?.label || message.toolBadge}</span>
                               </span>
                             )}
                           </span>
@@ -1909,8 +2404,15 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                             onCopy={copyToClipboard}
                             copiedMessageId={copiedMessageId}
                             renderSourcePills={renderSourcePills}
-                            onOpenInCodeStudio={(code, lang) => onNavigateToCode?.(code, lang)}
-                            onOpenInImageStudio={onNavigateToImage}
+                            onOpenInCodeStudio={(code) => {
+                              setActiveComposerTool('code');
+                              setInputText(`Refactor or modify this code:\n\`\`\`\n${code.slice(0, 2000)}\n\`\`\`\n`);
+                              textareaRef.current?.focus();
+                            }}
+                            onOpenInImageStudio={() => {
+                              setActiveComposerTool('image');
+                              textareaRef.current?.focus();
+                            }}
                             onViewImageFullscreen={(url, prompt) =>
                               setFullscreenImage({ url, prompt })
                             }
@@ -1995,12 +2497,99 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         );
                       }
 
+                      // Specialized Inline Tool Cards (stay inside Chat just like Deep Research)
+                      if (message.generatedSong) {
+                        const targetSessionId = currentSession?.id || '';
+                        return (
+                          <InlineSongCard
+                            song={message.generatedSong}
+                            theme={theme}
+                            onSongUpdated={(updatedSong) => {
+                              const next = chatService.updateMessageInSession(
+                                targetSessionId,
+                                message.id,
+                                (m) => ({ ...m, generatedSong: updatedSong })
+                              );
+                              if (next) onUpdateSession(next);
+                            }}
+                            onDeleteMessage={() => {
+                              const next = chatService.deleteMessage(targetSessionId, message.id);
+                              if (next) onUpdateSession(next);
+                            }}
+                          />
+                        );
+                      }
+
+                      if (message.spotifyTracks && message.spotifyTracks.length > 0) {
+                        return (
+                          <InlineSpotifyCard
+                            tracks={message.spotifyTracks}
+                            theme={theme}
+                          />
+                        );
+                      }
+
+                      if (message.presentationDeck) {
+                        return (
+                          <InlinePresentationCard
+                            deck={message.presentationDeck}
+                            theme={theme}
+                          />
+                        );
+                      }
+
+                      if (message.canvasBoard) {
+                        return (
+                          <InlineCanvasCard
+                            board={message.canvasBoard}
+                            theme={theme}
+                          />
+                        );
+                      }
+
+                      if (message.dataReport) {
+                        return (
+                          <InlineDataAnalysisCard
+                            report={message.dataReport}
+                            dataset={message.dataDataset}
+                            theme={theme}
+                          />
+                        );
+                      }
+
+                      if (message.agentRun) {
+                        const targetSessionId = currentSession?.id || '';
+                        return (
+                          <InlineAgentCard
+                            task={message.agentRun.task}
+                            status={message.agentRun.status}
+                            steps={message.agentRun.steps}
+                            logs={message.agentRun.logs}
+                            content={message.content}
+                            requiresConfirmation={message.agentRun.requiresConfirmation}
+                            openBrowser={message.agentRun.openBrowser}
+                            browserUrl={message.agentRun.browserUrl}
+                            theme={theme}
+                            onConfirmAction={
+                              message.agentRun.requiresConfirmation
+                                ? (approved) =>
+                                    void handleConfirmAgentAction(
+                                      targetSessionId,
+                                      message.id,
+                                      message.agentRun!.task,
+                                      message.agentRun!.requiresConfirmation,
+                                      approved
+                                    )
+                                : undefined
+                            }
+                          />
+                        );
+                      }
+
                       return (
                         <div
-                          className={`relative w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all text-xs sm:text-sm leading-relaxed ${
-                            isDark
-                              ? 'bg-neutral-900/90 border border-neutral-800 text-neutral-100 rounded-tl-sm shadow-md shadow-black/40'
-                              : 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm shadow-sm'
+                          className={`relative w-full max-w-3xl py-1 transition-colors text-sm sm:text-[15px] leading-[1.75] ${
+                            isDark ? 'text-neutral-100' : 'text-neutral-900'
                           }`}
                         >
                           {/* Attachments if any */}
@@ -2028,23 +2617,55 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                             </div>
                           )}
 
-                          {/* Message Body with rich Markdown rendering */}
+                          {/* Message Body with rich Markdown rendering, Writing controls, or Document Quiz */}
                           <div className="relative">
-                            <MarkdownRenderer
-                              content={message.content}
-                              theme={theme}
-                              onOpenInCodeStudio={(code, lang) => {
-                                if (onNavigateToCode) {
-                                  onNavigateToCode(code, lang);
-                                }
-                              }}
-                              onOpenInImageStudio={() => {
-                                onNavigateToImage();
-                              }}
-                              onViewImageFullscreen={(url, prompt) => {
-                                setFullscreenImage({ url, prompt });
-                              }}
-                            />
+                            {message.writingMeta ? (
+                              <InlineWritingCard
+                                content={message.content}
+                                meta={message.writingMeta}
+                                theme={theme}
+                                onUpdateContent={(nextContent) => {
+                                  const next = chatService.updateMessageInSession(
+                                    currentSession?.id || '',
+                                    message.id,
+                                    (m) => ({ ...m, content: nextContent })
+                                  );
+                                  if (next) onUpdateSession(next);
+                                }}
+                              />
+                            ) : message.documentQuiz && message.documentQuiz.length > 0 ? (
+                              <InteractiveQuiz
+                                quiz={{
+                                  title: 'Document Comprehension Quiz',
+                                  questions: message.documentQuiz.map((q, idx) => ({
+                                    id: q.id || idx + 1,
+                                    question: q.question,
+                                    options: q.options,
+                                    correctIndex: q.correctAnswerIndex,
+                                    explanation: q.explanation,
+                                  })),
+                                }}
+                                theme={theme}
+                              />
+                            ) : (
+                              <MarkdownRenderer
+                                content={message.content}
+                                theme={theme}
+                                onOpenInCodeStudio={(code) => {
+                                  setActiveComposerTool('code');
+                                  setInputText(`Refactor or modify this code:\n\`\`\`\n${code.slice(0, 2000)}\n\`\`\`\n`);
+                                  textareaRef.current?.focus();
+                                }}
+                                onOpenInImageStudio={(_url, prompt) => {
+                                  setActiveComposerTool('image');
+                                  if (prompt) setInputText(prompt);
+                                  textareaRef.current?.focus();
+                                }}
+                                onViewImageFullscreen={(url, prompt) => {
+                                  setFullscreenImage({ url, prompt });
+                                }}
+                              />
+                            )}
                             {message.isStreaming && (
                               <span className="inline-block w-1.5 h-4 ml-1 bg-neutral-400 dark:bg-neutral-500 animate-pulse rounded-xs align-middle" />
                             )}
@@ -2076,30 +2697,27 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                           {message.groundingSources && message.groundingSources.length > 0 ? (
                             renderSourcePills(message.groundingSources, message.id)
                           ) : message.searchedWeb ? (
-                            <div className="flex items-center gap-1.5 pt-2 pb-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                            <div className="flex items-center gap-1.5 pt-2.5 pb-0.5 text-xs text-neutral-500 dark:text-neutral-400">
                               <Globe className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 shrink-0" />
                               <span>Searched the web{message.searchQueries?.[0] ? ` for "${message.searchQueries[0]}"` : ''}</span>
                             </div>
                           ) : null}
 
-                          {/* Reply footer actions */}
-                          <div className={`mt-2.5 pt-2 border-t flex items-center justify-between text-xs ${
-                            isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              {message.searchedWeb && (
-                                <span className="text-[10px] text-neutral-500 dark:text-neutral-400 inline-flex items-center gap-1 font-medium bg-neutral-500/10 px-2 py-0.5 rounded-full border border-neutral-500/20">
-                                  <Globe className="w-2.5 h-2.5" />
-                                  <span>Web Search</span>
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
+                          {/* Minimal borderless action row matching clean chat prose layout */}
+                          {!message.isStreaming && (
+                            <div
+                              className={`mt-2.5 flex items-center gap-2 text-xs ${
+                                isDark ? 'text-neutral-400' : 'text-neutral-500'
+                              }`}
+                            >
                               <button
+                                type="button"
                                 onClick={() => copyToClipboard(message.content, message.id)}
-                                className={`flex items-center gap-1 transition-colors ${
-                                  isDark ? 'hover:text-white text-neutral-400' : 'hover:text-neutral-950 text-neutral-600'
+                                title="Copy response"
+                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors cursor-pointer ${
+                                  isDark
+                                    ? 'hover:bg-neutral-800/70 hover:text-neutral-100 text-neutral-400'
+                                    : 'hover:bg-neutral-200/70 hover:text-neutral-900 text-neutral-500'
                                 }`}
                               >
                                 {copiedMessageId === message.id ? (
@@ -2108,14 +2726,22 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                                     <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">Copied</span>
                                   </>
                                 ) : (
-                                  <>
-                                    <Copy className="w-3.5 h-3.5" />
-                                    <span className="text-[11px]">Copy</span>
-                                  </>
+                                  <Copy className="w-3.5 h-3.5" />
                                 )}
                               </button>
+
+                              {message.searchedWeb && (
+                                <span
+                                  className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+                                    isDark ? 'text-sky-400/90' : 'text-sky-600'
+                                  }`}
+                                >
+                                  <Globe className="w-3 h-3" />
+                                  <span>Web Search</span>
+                                </span>
+                              )}
                             </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })()
@@ -2136,14 +2762,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
             {isSubmitting && !streamingReply && !generatingImageState && (
               <div className="py-2 px-1 select-none animate-in fade-in duration-150">
-                {searchingQuery ? (
-                  /* Searching the Web — Minimal, clean inline style matching Screenshot 1 */
+                {inlineToolStatus ? (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
+                    <Cpu className="w-4 h-4 text-amber-500 animate-spin shrink-0" />
+                    <span>{inlineToolStatus}</span>
+                  </div>
+                ) : searchingQuery ? (
+                  /* Searching the Web — Minimal, clean inline style */
                   <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
                     <Globe className="w-4 h-4 text-neutral-400 dark:text-neutral-500 animate-spin-slow shrink-0" />
                     <span>Searching {searchingQuery ? searchingQuery : 'the web...'}</span>
                   </div>
                 ) : (
-                  /* Thinking State — Mature, clean greyish ChatGPT style (No colourful childish UI) */
+                  /* Thinking State — Mature, clean greyish ChatGPT style */
                   <div className="flex items-center gap-2.5 text-xs sm:text-sm font-normal text-neutral-500 dark:text-neutral-400 py-2 px-1 select-none animate-in fade-in duration-150">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neutral-400 opacity-60"></span>
@@ -2155,13 +2786,25 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </div>
             )}
 
+            {isLinkedTaskRunning && (
+              <div
+                id="chat-scheduled-running-indicator"
+                className="flex items-center gap-2.5 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 py-2 px-1 select-none animate-in fade-in duration-150"
+              >
+                <Loader2 className="w-4 h-4 text-amber-500 animate-spin shrink-0" />
+                <span>
+                  Running <strong className="font-medium text-neutral-800 dark:text-neutral-200">{linkedScheduledTask?.title || 'schedule'}</strong> — fetching live update directly into this chat...
+                </span>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         )}
       </div>
 
-      {/* When messages exist: Bottom pinned input container */}
-      {hasMessages && (
+      {/* When messages or active scheduled chat exist: Bottom pinned input container */}
+      {showActiveLayout && (
         <div className="px-3 sm:px-6 pt-0 pb-2 max-w-2xl w-full mx-auto shrink-0">
           {renderChatInput()}
         </div>
@@ -2195,9 +2838,11 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             initialEdit: false,
           });
         }}
-        onOpenInImageStudio={(promptText, url) => {
+        onOpenInImageStudio={(promptText) => {
           setFullscreenImage(null);
-          onNavigateToImage();
+          setActiveComposerTool('image');
+          if (promptText) setInputText(promptText);
+          textareaRef.current?.focus();
         }}
         onEditPromptAndRegenerate={(newPrompt) => {
           setFullscreenImage(null);
@@ -2346,20 +2991,6 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 <h3 className="text-sm font-semibold">Work in a project</h3>
               </div>
               <div className="flex items-center gap-2">
-                {onNavigateToProjects && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsProjectPickerOpen(false);
-                      onNavigateToProjects();
-                    }}
-                    className={`text-xs px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                      isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
-                    }`}
-                  >
-                    Open Projects Studio
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setIsProjectPickerOpen(false)}

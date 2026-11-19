@@ -423,16 +423,16 @@ Note: WHERE cannot reference SELECT aliases or aggregate functions (use HAVING o
     summary: 'Accurate specification of ForgeX active AI model tiers, specialized creation studios, and private cloud storage.',
     content: `# ForgeX Platform Reference
 ## Active ForgeX Model Tiers
-- Forge 1: Ultra-fast lightweight tier powered by Gemini 3.1 Flash Lite with minimal thinking overhead for instant replies.
-- Forge 1.5: Fast balanced reasoning tier powered by Gemini 4 Hydrogen (Low thinking depth).
-- Forge 2: Advanced logic and structured problem-solving tier powered by Gemini 4 Hydrogen (Medium thinking depth).
-- Forge 2 Pro: Advanced creative precision tier powered by Gemini 4 Hydrogen (High thinking depth).
-- Forge 2 Ultra: Flagship maximum-capability reasoning tier powered by Gemini 4 Hydrogen (Maximum reasoning depth).
+- Forge 1: Ultra-fast lightweight tier powered by the ForgeX Neural Engine with minimal thinking overhead for instant replies.
+- Forge 1.5: Fast balanced reasoning tier powered by the ForgeX Neural Engine (Low thinking depth).
+- Forge 2: Advanced logic and structured problem-solving tier powered by the ForgeX Neural Engine (Medium thinking depth).
+- Forge 2 Pro: Advanced creative precision tier powered by the ForgeX Neural Engine (High thinking depth).
+- Forge 2 Ultra: Flagship maximum-capability reasoning tier powered by the ForgeX Neural Engine (Maximum reasoning depth).
 
 ## Studios & Privacy
 - Creator: Built by VishweshVarman (only mention creator attribution when directly asked who created ForgeX).
 - Knowledge Vault: Users can upload files (.txt, .md, .json, .csv), ingest web URLs, or write custom notes and toggle them active to train and ground AI replies in Chat & Studios.
-- Voice Assistant: Real-time speech capture + Gemini neural TTS voice output + animated orb interface with quick actions and live conversation log.
+- Voice Assistant: Real-time speech capture + ForgeX neural TTS voice output + animated orb interface with quick actions and live conversation log.
 - Data Isolation: Firebase Auth + per-user Firestore isolation under /users/{uid}/*.`,
   },
 ];

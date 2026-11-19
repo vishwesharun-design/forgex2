@@ -541,7 +541,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 }}
                 className="w-full sm:w-auto px-6 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 shadow-lg shadow-amber-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
-                <span>Enter ForgeX Studio</span>
+                <span>Enter ForgeX Workspace</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}

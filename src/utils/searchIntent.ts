@@ -139,14 +139,14 @@ export function detectWebSearchIntent(
     triggerReason = 'Live event, score, or tournament results lookup.';
   }
 
-  // G. Breaking news, live developments, real-world status
+  // G. Breaking news, live developments, real-world status, prices, comparisons & factual lookups
   if (
-    /\b(?:breaking\s+news|what\s+happened\s+(?:to|in|with)|latest\s+news|current\s+status\s+of|is\s+.*?still\s+alive|who\s+is\s+currently|who\s+is\s+the\s+current\s+(?:president|prime\s+minister|ceo|governor|chancellor|leader|mayor)|who\s+is\s+the\s+ceo\s+of|patch\s+notes|changelog|release\s+date\s+of|is\s+.*?released\s+yet|new\s+features\s+in)\b/i.test(
+    /\b(?:breaking\s+news|what\s+happened\s+(?:to|in|with)|latest\s+news|current\s+status\s+of|is\s+.*?still\s+alive|who\s+is\s+currently|who\s+(?:is|was|were)\s+|who\s+(?:invented|discovered|founded|wrote|directed|painted|composed)\s+|when\s+(?:did|was|were|is)\s+|where\s+is\s+|capital\s+of\s+|population\s+of\s+|ceo\s+of\s+|founder\s+of\s+|price\s+of\s+|cost\s+of\s+|how\s+much\s+(?:is|does|are|cost)|compare\s+.+\s+(?:vs|and|or)\s+|best\s+(?:\w+\s+){0,3}(?:in|for|of|2024|2025|2026)|top\s+\d+|tell\s+me\s+about\s+|history\s+of\s+|biography\s+of\s+|meaning\s+of\s+|define\s+|patch\s+notes|changelog|release\s+date\s+of|is\s+.*?released\s+yet|new\s+features\s+in)\b/i.test(
       clean
     )
   ) {
     shouldSearch = true;
-    triggerReason = 'Current news or real-world status lookup.';
+    triggerReason = 'Real-world factual, encyclopedic, or current status lookup.';
   }
 
   // H. Quizzes & Trivia requiring current, real-world, or verified factual data

@@ -22,8 +22,9 @@ import {
   ClipboardCheck,
   Languages,
   Download,
+  BellRing,
 } from 'lucide-react';
-import { VoiceOption, ForgeXModelId, ForgeXTheme, ImageStyle } from '../types';
+import { ActiveReminderAlert, VoiceOption, ForgeXModelId, ForgeXTheme, ImageStyle } from '../types';
 import { voiceController } from '../services/voiceService';
 import { imageService } from '../services/imageService';
 import { detectImageGenerationIntent } from '../utils/imageIntent';
@@ -36,6 +37,8 @@ interface VoiceModeModalProps {
   selectedModelId: ForgeXModelId;
   userName?: string;
   onSendToChat?: (text: string) => void;
+  activeReminder?: ActiveReminderAlert | null;
+  onDismissReminder?: () => void;
 }
 
 interface ConversationTurn {
@@ -244,6 +247,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
   selectedModelId,
   userName,
   onSendToChat,
+  activeReminder,
+  onDismissReminder,
 }) => {
   const [status, setStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking' | 'unsupported'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -492,6 +497,37 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
       }
     };
   }, [isOpen]);
+
+  // Announce scheduled reminders aloud right while the user is talking in Voice Mode
+  const lastSpokenReminderIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen || !activeReminder || activeReminder.id === lastSpokenReminderIdRef.current) return;
+    lastSpokenReminderIdRef.current = activeReminder.id;
+
+    voiceController.unlockAudio();
+    voiceController.abortListeningWithoutTranscribe();
+    setLiveAudioLevel(0);
+    setAiSpeechResponse(activeReminder.spokenText);
+    setTurns((prev) => [
+      ...prev,
+      {
+        role: 'assistant',
+        content: `⏰ ${activeReminder.spokenText}`,
+        timestamp: activeReminder.triggeredAt,
+      },
+    ]);
+    setStatus('speaking');
+    voiceController.playSynthesizedResponse(
+      activeReminder.spokenText,
+      undefined,
+      undefined,
+      resumeListeningAfterSpeech,
+      () => {
+        setHasBlockedPlayback(true);
+        setStatus('idle');
+      }
+    );
+  }, [isOpen, activeReminder]);
 
   const handleVoiceChange = (uri: string) => {
     voiceController.unlockAudio();
@@ -1093,13 +1129,13 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                     <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-950/55 px-2 pb-1.5">
                       <Headphones className="w-3 h-3" />
                       <span className="truncate">
-                        Voice: {activeVoiceName.replace(/ \(Gemini AI.*?\)/, '')}
+                        Voice: {activeVoiceName.replace(/ \((?:Gemini AI|ForgeX Neural).*?\)/, '')}
                       </span>
                     </div>
                     <div className="max-h-40 overflow-y-auto space-y-0.5 custom-scrollbar">
                       {availableVoices.map((v) => {
                         const isGeminiVoice = v.id.startsWith('gemini-');
-                        const displayName = v.name.replace(/ \(Gemini AI.*?\)/, '');
+                        const displayName = v.name.replace(/ \((?:Gemini AI|ForgeX Neural).*?\)/, '');
                         return (
                           <button
                             key={v.id}
@@ -1356,8 +1392,33 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
             </div>
           )}
 
-          {/* Anchored Bottom Section: 2x2 Quick Prompt Cards (Stage only) + Input Pill + Mic */}
+          {/* Anchored Bottom Section: Live Reminder Strip + 2x2 Quick Prompt Cards + Input Pill + Mic */}
           <div className="w-full shrink-0 flex flex-col gap-3">
+            {activeReminder && (
+              <div
+                id="voice-reminder-below-bar"
+                className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-50/95 border border-amber-300/80 text-[#39328E] shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-200"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <BellRing className="w-4 h-4 text-amber-600 shrink-0 animate-bounce" />
+                  <span className="text-[12px] font-medium truncate">
+                    <strong className="text-amber-700">Reminder: </strong>
+                    {activeReminder.message}
+                  </span>
+                </div>
+                {onDismissReminder && (
+                  <button
+                    type="button"
+                    onClick={onDismissReminder}
+                    title="Dismiss reminder"
+                    className="p-1 rounded-full hover:bg-amber-200/60 text-amber-800 shrink-0 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             {activeTab === 'stage' && (
               <div className="grid grid-cols-2 gap-2.5">
                 {QUICK_PROMPTS.map((item) => {

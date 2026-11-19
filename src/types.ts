@@ -60,6 +60,7 @@ export const FORGEX_MODELS: ForgeXModel[] = [
 
 export type ActiveWorkspace = 
   | 'chat' 
+  | 'scheduled'
   | 'library'
   | 'image' 
   | 'video' 
@@ -211,6 +212,24 @@ export interface GroundingSource {
   sourceDomain?: string;
 }
 
+export type ComposerToolId =
+  | 'none'
+  | 'image'
+  | 'search'
+  | 'thinking'
+  | 'deep_research'
+  | 'code'
+  | 'music'
+  | 'spotify'
+  | 'agents'
+  | 'data_analysis'
+  | 'vault'
+  | 'files'
+  | 'writing'
+  | 'presentation'
+  | 'canvas'
+  | 'schedule';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -228,7 +247,7 @@ export interface ChatMessage {
   }[];
   generatedImages?: GeneratedImage[];
   isGeneratingImage?: boolean;
-  toolBadge?: 'deep_research' | 'image' | 'search' | 'thinking';
+  toolBadge?: Exclude<ComposerToolId, 'none'>;
   deepResearch?: {
     query: string;
     status: 'planning' | 'running' | 'completed' | 'cancelled';
@@ -238,7 +257,86 @@ export interface ChatMessage {
     planDurationSec?: number;
     researchDurationSec?: number;
   };
+  generatedSong?: GeneratedSong;
+  spotifyTracks?: SpotifyTrack[];
+  presentationDeck?: PresentationDeck;
+  canvasBoard?: CanvasBoard;
+  dataReport?: DataAnalysisReport;
+  dataDataset?: {
+    name: string;
+    rowCount: number;
+    columnCount: number;
+    headers: string[];
+    sampleRows: Record<string, string | number>[];
+  };
+  agentRun?: {
+    task: string;
+    status: 'running' | 'awaiting_confirmation' | 'completed' | 'error';
+    steps: AgentStep[];
+    logs: string[];
+    requiresConfirmation?: ActionConfirmationRequest;
+    openBrowser?: boolean;
+    browserUrl?: string;
+  };
+  writingMeta?: {
+    category: WritingCategory;
+    tone: WritingTone;
+  };
+  documentQuiz?: QuizQuestion[];
 }
+
+export type ChatRoleId = 'general' | 'engineer' | 'researcher' | 'tutor' | 'creative';
+
+export interface ChatRolePreset {
+  id: ChatRoleId;
+  name: string;
+  shortLabel: string;
+  description: string;
+  systemInstruction: string;
+}
+
+export const CHAT_ROLES: ChatRolePreset[] = [
+  {
+    id: 'general',
+    name: 'General Assistant',
+    shortLabel: 'General',
+    description: 'Universal intelligence across every subject',
+    systemInstruction:
+      'Active Chatbot Role: Universal AI Assistant. Provide clear, direct, accurate, and comprehensive answers across science, coding, math, writing, and everyday questions.',
+  },
+  {
+    id: 'engineer',
+    name: 'Software Architect',
+    shortLabel: 'Engineer',
+    description: 'Clean production code, HTML apps & debugging',
+    systemInstruction:
+      'Active Chatbot Role: Senior Software Engineer & Architect. Prioritize clean, runnable, bug-free code, modular design, strong typing, edge-case handling, and complete self-contained HTML/CSS/JS examples when building interactive apps or games.',
+  },
+  {
+    id: 'researcher',
+    name: 'Research Analyst',
+    shortLabel: 'Analyst',
+    description: 'Structured synthesis, comparisons & verified facts',
+    systemInstruction:
+      'Active Chatbot Role: Senior Research Analyst. Deliver rigorous, well-structured analysis with clear headings, evidence-backed claims, balanced trade-offs, and concise executive takeaways.',
+  },
+  {
+    id: 'tutor',
+    name: 'Study Tutor',
+    shortLabel: 'Tutor',
+    description: 'Step-by-step teaching, intuition & examples',
+    systemInstruction:
+      'Active Chatbot Role: Expert Study Tutor. Break complex concepts down step-by-step from first principles, use clear intuition and worked mathematical/code examples, and check understanding constructively.',
+  },
+  {
+    id: 'creative',
+    name: 'Creative Partner',
+    shortLabel: 'Creative',
+    description: 'Storytelling, ideation, naming & copywriting',
+    systemInstruction:
+      'Active Chatbot Role: Creative Strategist & Writer. Bring vivid originality, sharp editorial voice, compelling structure, and memorable ideas tailored to the user’s creative goal.',
+  },
+];
 
 export interface ChatSession {
   id: string;
@@ -247,6 +345,8 @@ export interface ChatSession {
   updatedAt: number;
   messages: ChatMessage[];
   modelId: ForgeXModelId;
+  roleId?: ChatRoleId;
+  scheduledTaskId?: string;
 }
 
 export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '4:3';
@@ -354,6 +454,67 @@ export type ThemeEffectType =
   | 'geometric_grid' 
   | 'none';
 
+export type PersonalizationBaseTone =
+  | 'Default'
+  | 'Professional'
+  | 'Friendly'
+  | 'Candid'
+  | 'Efficient'
+  | 'Quirky'
+  | 'Concise';
+
+export type PersonalizationLevel = 'Default' | 'More' | 'Less';
+
+export interface PersonalizationSettings {
+  baseTone: PersonalizationBaseTone;
+  warmth: PersonalizationLevel;
+  enthusiasm: PersonalizationLevel;
+  emojiLevel: PersonalizationLevel;
+  visualAnswers: PersonalizationLevel;
+  headersAndLists: PersonalizationLevel;
+  customInstructions: string;
+}
+
+export const DEFAULT_PERSONALIZATION: PersonalizationSettings = {
+  baseTone: 'Default',
+  warmth: 'Default',
+  enthusiasm: 'Default',
+  emojiLevel: 'More',
+  visualAnswers: 'Default',
+  headersAndLists: 'More',
+  customInstructions: '',
+};
+
+export type ScheduledFrequency = 'once' | 'hourly' | 'daily' | 'weekly';
+export type ScheduledTaskStatus = 'active' | 'paused';
+
+export interface ScheduledTask {
+  id: string;
+  title: string;
+  prompt: string;
+  frequency: ScheduledFrequency;
+  timeOfDay: string; // HH:mm 24h format, e.g. '09:00'
+  dayOfWeek?: number; // 0 (Sun) - 6 (Sat) for weekly schedules
+  status: ScheduledTaskStatus;
+  createdAt: number;
+  updatedAt: number;
+  nextRunAt: number;
+  lastRunAt?: number;
+  lastResult?: string;
+  lastError?: string;
+  runCount: number;
+  chatSessionId?: string;
+}
+
+export interface ActiveReminderAlert {
+  id: string;
+  taskId: string;
+  title: string;
+  message: string;
+  spokenText: string;
+  triggeredAt: number;
+}
+
 export interface UserSettings {
   theme: ForgeXTheme;
   defaultModel: ForgeXModelId;
@@ -365,6 +526,8 @@ export interface UserSettings {
   enableStarBackground: boolean;
   themeEffect: ThemeEffectType;
   reduceMotion: boolean;
+  preferredVoiceId?: string;
+  personalization?: PersonalizationSettings;
 }
 
 export interface NotificationItem {
@@ -387,6 +550,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   enableStarBackground: false,
   themeEffect: 'none',
   reduceMotion: false,
+  preferredVoiceId: 'gemini-Zephyr',
+  personalization: DEFAULT_PERSONALIZATION,
 };
 
 // ==========================================

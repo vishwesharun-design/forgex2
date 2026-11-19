@@ -13,12 +13,12 @@ const DEFAULT_DOCS: VaultDocument[] = [
 ForgeX is an all-in-one AI creation and intelligence platform created by VishweshVarman.
 
 ## Core Capabilities
-- Multi-Model Reasoning: Forge 1 (Gemini 3.1 Flash Lite) plus Forge 1.5, Forge 2, Forge 2 Pro, and Flagship Forge 2 Ultra (powered by Gemini 4 Hydrogen across calibrated reasoning depths).
+- Multi-Model Reasoning: Forge 1 (Ultra-Fast) plus Forge 1.5, Forge 2, Forge 2 Pro, and Flagship Forge 2 Ultra across calibrated reasoning depths.
 - Black Forest Labs FLUX: High-precision latent diffusion image generation supporting 16:9, 1:1, 9:16, 4:3, and 3:4 aspect ratios.
 - AI Song Studio: Web Audio synthesizer with polyphonic chord progressions, arpeggios, and lyrics generation.
-- Deep Research: Autonomous multi-step research reports grounded in real-time Google search verification.
+- Deep Research: Autonomous multi-step research reports grounded in real-time web search verification.
 - Code Studio: Full-stack code editing, real-time debugging, and syntax auto-correction across 15+ programming languages.
-- Live Voice Mode: High-fidelity speech synthesis (gemini-3.8-flash-lite-tts), acoustic VAD, and real-time conversation.
+- Live Voice Mode: High-fidelity neural speech synthesis, acoustic VAD, and real-time conversation.
 - Knowledge Vault: Private retrieval-augmented generation (RAG) system with granular document grounding toggles.
 
 ## Security & Data Privacy
@@ -166,6 +166,11 @@ class VaultService {
     }
   }
 
+  private notifyUpdated(): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('forgex:vault_updated'));
+  }
+
   public getDocuments(): VaultDocument[] {
     return [...this.documents];
   }
@@ -193,6 +198,7 @@ class VaultService {
 
     this.documents = [newDoc, ...this.documents];
     this.saveToStorage();
+    this.notifyUpdated();
     this.saveDocToFirestore(newDoc).catch(() => {});
     return newDoc;
   }
@@ -213,6 +219,7 @@ class VaultService {
 
     this.documents[idx] = updated;
     this.saveToStorage();
+    this.notifyUpdated();
     this.saveDocToFirestore(updated).catch(() => {});
     return updated;
   }
@@ -223,6 +230,7 @@ class VaultService {
     docItem.isActive = !docItem.isActive;
     docItem.updatedAt = Date.now();
     this.saveToStorage();
+    this.notifyUpdated();
     this.saveDocToFirestore(docItem).catch(() => {});
     return docItem.isActive;
   }
@@ -234,6 +242,7 @@ class VaultService {
       updatedAt: Date.now(),
     }));
     this.saveToStorage();
+    this.notifyUpdated();
     if (this.currentUserId !== 'guest') {
       this.documents.forEach((d) => this.saveDocToFirestore(d).catch(() => {}));
     }
@@ -244,6 +253,7 @@ class VaultService {
     this.documents = this.documents.filter((d) => d.id !== id);
     if (this.documents.length !== initialLen) {
       this.saveToStorage();
+      this.notifyUpdated();
       this.deleteDocFromFirestore(id).catch(() => {});
       return true;
     }
@@ -413,6 +423,7 @@ class VaultService {
           firestoreDocs.sort((a, b) => b.updatedAt - a.updatedAt);
           this.documents = firestoreDocs;
           this.saveToStorage();
+          this.notifyUpdated();
         }
       }
     } catch (e) {

@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ActiveWorkspace, 
+  CHAT_ROLES,
+  ChatRoleId,
   ChatSession, 
+  ComposerToolId,
   GeneratedImage, 
   GeneratedVideo, 
   ForgeXModelId, 
@@ -9,7 +12,9 @@ import {
   UserSettings, 
   DEFAULT_SETTINGS, 
   NotificationItem,
+  ScheduledTask,
   ThemeEffectType,
+  ActiveReminderAlert,
 } from './types';
 import { authService } from './services/authService';
 import { chatService } from './services/chatService';
@@ -17,6 +22,14 @@ import { imageService } from './services/imageService';
 import { libraryService } from './services/libraryService';
 import { videoService } from './services/videoService';
 import { musicService } from './services/musicService';
+import {
+  formatCleanReminderText,
+  formatFrequencyLabel,
+  isDailyBriefingTask,
+  isReminderTask,
+  scheduledTaskService,
+} from './services/scheduledTaskService';
+import { deviceNotificationService } from './services/deviceNotificationService';
 
 import { StarField } from './components/StarField';
 import { LandingNav } from './components/LandingNav';
@@ -43,19 +56,18 @@ import { CanvasWorkspace } from './components/CanvasWorkspace';
 import { ProjectWorkspace } from './components/ProjectWorkspace';
 import { VaultWorkspace } from './components/VaultWorkspace';
 import { LibraryWorkspace } from './components/LibraryWorkspace';
+import { ScheduledWorkspace } from './components/ScheduledWorkspace';
+import { StartupBriefingItem, StartupBriefingView } from './components/StartupBriefingView';
 import { VoiceModeModal } from './components/VoiceModeModal';
 import { voiceController } from './services/voiceService';
 
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, SettingsTabId } from './components/SettingsModal';
 import { HistoryModal } from './components/HistoryModal';
 import { FavoritesModal } from './components/FavoritesModal';
 import { SearchModal } from './components/SearchModal';
 import { NotificationsPopover } from './components/NotificationsPopover';
 import { MediaViewerModal } from './components/MediaViewerModal';
-import { StudioStoreModal } from './components/StudioStoreModal';
-import { CustomStudioWorkspace } from './components/CustomStudioWorkspace';
-import { studioService } from './services/studioService';
-import { Lock } from 'lucide-react';
+import { BellRing, Lock, Volume2, X } from 'lucide-react';
 
 export default function App() {
   // State: View Mode (Landing Page vs In-Workspace)
@@ -71,7 +83,8 @@ export default function App() {
   // Workspace View State
   const [activeWorkspace, setActiveWorkspace] = useState<ActiveWorkspace>('chat');
   const [selectedModelId, setSelectedModelId] = useState<ForgeXModelId>('forge-2-ultra');
-  const [pendingCodeSnippet, setPendingCodeSnippet] = useState<{ code: string; language?: string } | null>(null);
+  const [selectedRoleId, setSelectedRoleId] = useState<ChatRoleId>('general');
+  const [pendingComposerTool, setPendingComposerTool] = useState<ComposerToolId>('none');
 
   // App Settings & Theme (default background effect is none)
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -132,6 +145,17 @@ export default function App() {
   });
   const [images, setImages] = useState<GeneratedImage[]>(() => imageService.getImages());
   const [videos, setVideos] = useState<GeneratedVideo[]>(() => videoService.getVideos());
+  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>(() => scheduledTaskService.getTasks());
+  const [runningScheduledTaskIds, setRunningScheduledTaskIds] = useState<string[]>([]);
+  const [startupBriefing, setStartupBriefing] = useState<{
+    status: 'loading' | 'ready';
+    items: StartupBriefingItem[];
+    activeTaskTitle?: string;
+  } | null>(null);
+  const isRunningDueTasksRef = useRef(false);
+  const hasTriggeredStartupBriefingRef = useRef(false);
+  const startupBriefingCancelledRef = useRef(false);
+  const initialMountTimeRef = useRef(Date.now());
 
   // UI Drawer & Sidebar
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -153,12 +177,17 @@ export default function App() {
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId>('personalization');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
-  const [isStudioStoreOpen, setIsStudioStoreOpen] = useState(false);
+  const [activeReminder, setActiveReminder] = useState<ActiveReminderAlert | null>(null);
+  const [isReminderSpeaking, setIsReminderSpeaking] = useState(false);
+  const activeWorkspaceRef = useRef<ActiveWorkspace>(activeWorkspace);
+  const isVoiceModeOpenRef = useRef<boolean>(isVoiceModeOpen);
+  const pendingReminderRef = useRef<ActiveReminderAlert | null>(null);
 
   // Fullscreen Media Viewer Modal
   const [viewingMedia, setViewingMedia] = useState<{
@@ -203,6 +232,27 @@ export default function App() {
     const userVideos = videoService.getVideos();
     setVideos(userVideos);
 
+    const ensureAllScheduledChatsLinked = (tasks: ScheduledTask[]): ScheduledTask[] => {
+      let linkedAny = false;
+      for (const t of tasks) {
+        const existing = t.chatSessionId
+          ? chatService.getSessions().find((s) => s.id === t.chatSessionId)
+          : undefined;
+        if (!existing) {
+          scheduledTaskService.ensureDedicatedChatForTask(t.id, selectedModelId);
+          linkedAny = true;
+        }
+      }
+      if (linkedAny) {
+        setChatSessions(chatService.getSessions());
+        return scheduledTaskService.getTasks();
+      }
+      return tasks;
+    };
+
+    const localTasks = ensureAllScheduledChatsLinked(scheduledTaskService.getTasks());
+    setScheduledTasks(localTasks);
+
     if (user && user.id && user.id !== 'guest') {
       chatService.syncWithFirestore().then((syncedChats) => {
         if (syncedChats && syncedChats.length > 0) {
@@ -225,12 +275,88 @@ export default function App() {
         }
       }).catch(() => {});
 
+      scheduledTaskService.syncWithFirestore().then((syncedTasks) => {
+        if (syncedTasks && syncedTasks.length > 0) {
+          const linkedTasks = ensureAllScheduledChatsLinked(syncedTasks);
+          setScheduledTasks(linkedTasks);
+          if (
+            isInWorkspace &&
+            !hasTriggeredStartupBriefingRef.current &&
+            Date.now() - initialMountTimeRef.current < 15000
+          ) {
+            void runStartupDailyBriefing(linkedTasks);
+          }
+        }
+      }).catch(() => {});
+
       musicService.syncWithFirestore().catch(() => {});
-      studioService.syncWithFirestore(user.id, user.email || '').catch(() => {});
     }
   }, [user?.id, user?.email]);
 
-  // Listen to auth changes dynamically
+  const isDailyOrNewsTask = (task: ScheduledTask): boolean => {
+    return task.status === 'active' && isDailyBriefingTask(task);
+  };
+
+  const runStartupDailyBriefing = async (sourceTasks: ScheduledTask[]) => {
+    if (hasTriggeredStartupBriefingRef.current) return;
+    const dailyTasks = sourceTasks
+      .filter(isDailyOrNewsTask)
+      .sort((a, b) => {
+        const aNews = /\b(?:news|briefing|headlines|roundup)\b/i.test(`${a.title} ${a.prompt}`) ? 1 : 0;
+        const bNews = /\b(?:news|briefing|headlines|roundup)\b/i.test(`${b.title} ${b.prompt}`) ? 1 : 0;
+        return bNews - aNews;
+      })
+      .slice(0, 3);
+
+    if (dailyTasks.length === 0) return;
+
+    hasTriggeredStartupBriefingRef.current = true;
+    startupBriefingCancelledRef.current = false;
+    setStartupBriefing({
+      status: 'loading',
+      items: [],
+      activeTaskTitle: dailyTasks[0].title,
+    });
+
+    const items: StartupBriefingItem[] = [];
+    for (const task of dailyTasks) {
+      if (startupBriefingCancelledRef.current) return;
+      const result = await scheduledTaskService.runTaskNow(task.id, selectedModelId);
+      setScheduledTasks(result.tasks);
+      setChatSessions(chatService.getSessions());
+      if (result.task && result.output) {
+        void deviceNotificationService.sendNotification({
+          title: `Daily Briefing: ${result.task.title}`,
+          body: result.output,
+          tag: `sched_startup_${task.id}`,
+          onClick: () => handleOpenScheduledTaskInChat(result.task || task),
+        });
+      }
+      items.push({
+        task: result.task || task,
+        output: result.output,
+        error: result.error,
+      });
+    }
+
+    if (startupBriefingCancelledRef.current) return;
+    setStartupBriefing({
+      status: 'ready',
+      items,
+      activeTaskTitle: dailyTasks[0].title,
+    });
+  };
+
+  // Run active daily/news scheduled briefing when user starts the app
+  useEffect(() => {
+    if (!isInWorkspace || hasTriggeredStartupBriefingRef.current) return;
+    const tasks = scheduledTaskService.getTasks();
+    if (tasks.some(isDailyOrNewsTask)) {
+      void runStartupDailyBriefing(tasks);
+    }
+  }, [isInWorkspace]);
+
+  // Listen to auth changes and dedicated scheduled chat updates dynamically
   useEffect(() => {
     const handleAuthEvent = (e: Event) => {
       const customEvent = e as CustomEvent<UserProfile | null>;
@@ -238,9 +364,16 @@ export default function App() {
       setUser(newUser);
     };
 
+    const handleChatsUpdated = () => {
+      setChatSessions(chatService.getSessions());
+      setScheduledTasks(scheduledTaskService.getTasks());
+    };
+
     window.addEventListener('forgex:auth_changed', handleAuthEvent);
+    window.addEventListener('forgex:chats_updated', handleChatsUpdated);
     return () => {
       window.removeEventListener('forgex:auth_changed', handleAuthEvent);
+      window.removeEventListener('forgex:chats_updated', handleChatsUpdated);
     };
   }, []);
 
@@ -249,7 +382,7 @@ export default function App() {
     localStorage.setItem('forgex_in_workspace', String(isInWorkspace));
   }, [isInWorkspace]);
 
-  // Persist Settings
+  // Persist Settings & sync preferred voice
   useEffect(() => {
     localStorage.setItem('forgex_settings', JSON.stringify(settings));
     if (settings.theme === 'dark') {
@@ -259,7 +392,103 @@ export default function App() {
       document.documentElement.classList.remove('dark');
       document.body.classList.remove('dark');
     }
+    if (settings.preferredVoiceId) {
+      voiceController.setVoiceByUri(settings.preferredVoiceId);
+    }
   }, [settings]);
+
+  const triggerReminderAnnouncement = (alert: ActiveReminderAlert) => {
+    if (activeWorkspaceRef.current === 'scheduled' && !isVoiceModeOpenRef.current) {
+      pendingReminderRef.current = alert;
+      return;
+    }
+    setActiveReminder(alert);
+    if (!isVoiceModeOpenRef.current) {
+      setIsReminderSpeaking(true);
+      void voiceController.playSynthesizedResponse(
+        alert.spokenText,
+        undefined,
+        undefined,
+        () => setIsReminderSpeaking(false),
+        () => setIsReminderSpeaking(false)
+      );
+    }
+  };
+
+  useEffect(() => {
+    activeWorkspaceRef.current = activeWorkspace;
+    if (activeWorkspace !== 'scheduled' && pendingReminderRef.current) {
+      const queued = pendingReminderRef.current;
+      pendingReminderRef.current = null;
+      if (Date.now() - queued.triggeredAt < 5 * 60 * 1000) {
+        triggerReminderAnnouncement(queued);
+      }
+    }
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    isVoiceModeOpenRef.current = isVoiceModeOpen;
+    if (isVoiceModeOpen && pendingReminderRef.current) {
+      const queued = pendingReminderRef.current;
+      pendingReminderRef.current = null;
+      if (Date.now() - queued.triggeredAt < 5 * 60 * 1000) {
+        setActiveReminder(queued);
+      }
+    }
+  }, [isVoiceModeOpen]);
+
+  // Background Scheduled Task Ticker: checks every 3s so reminders fire right at the user-set time
+  useEffect(() => {
+    const checkAndRunDue = async () => {
+      if (isRunningDueTasksRef.current) return;
+      const due = scheduledTaskService.getDueTasks(Date.now());
+      if (due.length === 0) return;
+
+      isRunningDueTasksRef.current = true;
+      try {
+        for (const task of due) {
+          const result = await scheduledTaskService.runTaskNow(task.id, selectedModelId);
+          setScheduledTasks(result.tasks);
+          setChatSessions(chatService.getSessions());
+          if (result.task && result.output) {
+            const reminderTask = result.isReminder || isReminderTask(result.task);
+            void deviceNotificationService.sendNotification({
+              title: reminderTask ? `Reminder: ${result.task.title}` : `Scheduled: ${result.task.title}`,
+              body: result.output,
+              tag: `sched_${task.id}`,
+              onClick: () => handleOpenScheduledTaskInChat(result.task || task),
+            });
+
+            if (reminderTask) {
+              const { message, spokenText } = formatCleanReminderText(result.task);
+              const alert: ActiveReminderAlert = {
+                id: `rem_${task.id}_${Date.now()}`,
+                taskId: result.task.id,
+                title: result.task.title,
+                message,
+                spokenText,
+                triggeredAt: Date.now(),
+              };
+              triggerReminderAnnouncement(alert);
+            }
+          }
+        }
+      } finally {
+        isRunningDueTasksRef.current = false;
+      }
+    };
+
+    const initialTimer = setTimeout(() => {
+      void checkAndRunDue();
+    }, 1000);
+    const intervalId = setInterval(() => {
+      void checkAndRunDue();
+    }, 3000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalId);
+    };
+  }, [selectedModelId]);
 
   // Keyboard shortcut: Cmd/Ctrl + K for search
   useEffect(() => {
@@ -273,15 +502,33 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Handlers for Navigation
+  const WORKSPACE_TO_COMPOSER_TOOL: Partial<Record<ActiveWorkspace, ComposerToolId>> = {
+    image: 'image',
+    code: 'code',
+    music: 'music',
+    spotify: 'spotify',
+    research: 'deep_research',
+    files: 'files',
+    agents: 'agents',
+    search: 'search',
+    writing: 'writing',
+    data_analysis: 'data_analysis',
+    vault: 'vault',
+    presentation: 'presentation',
+    canvas: 'canvas',
+  };
+
+  // Handlers for Navigation: all studios open inline inside Chat like Deep Research
   const handleLaunchStudio = (initialWorkspace?: ActiveWorkspace) => {
-    if (initialWorkspace && initialWorkspace !== 'chat' && !user) {
-      setIsAuthOpen(true);
+    if (initialWorkspace === 'library') {
+      setActiveWorkspace('library');
+      setPendingComposerTool('none');
+      setIsInWorkspace(true);
       return;
     }
-    if (initialWorkspace) {
-      setActiveWorkspace(initialWorkspace);
-    }
+    const mappedTool = initialWorkspace ? WORKSPACE_TO_COMPOSER_TOOL[initialWorkspace] : undefined;
+    setActiveWorkspace('chat');
+    setPendingComposerTool(mappedTool || 'none');
     setIsInWorkspace(true);
   };
 
@@ -305,8 +552,34 @@ export default function App() {
   };
 
   // Chat Actions
+  const handleSelectRole = (roleId: ChatRoleId) => {
+    setSelectedRoleId(roleId);
+    if (activeChatId) {
+      const updated = chatSessions.map((s) => (s.id === activeChatId ? { ...s, roleId } : s));
+      chatService.saveSessions(updated);
+      setChatSessions(updated);
+    }
+  };
+
   const handleNewChat = () => {
-    const newSession = chatService.createNewSession(selectedModelId);
+    const latestSessions = chatService.getSessions();
+    if (latestSessions.length === 0) {
+      setActiveChatId(null);
+      setActiveWorkspace('chat');
+      setIsMobileNavOpen(false);
+      return;
+    }
+    const existingEmpty = latestSessions.find(
+      (s) => (!s.messages || s.messages.length === 0) && !s.scheduledTaskId
+    );
+    if (existingEmpty) {
+      setChatSessions(latestSessions);
+      setActiveChatId(existingEmpty.id);
+      setActiveWorkspace('chat');
+      setIsMobileNavOpen(false);
+      return;
+    }
+    const newSession = chatService.createNewSession(selectedModelId, selectedRoleId);
     setChatSessions(chatService.getSessions());
     setActiveChatId(newSession.id);
     setActiveWorkspace('chat');
@@ -315,11 +588,19 @@ export default function App() {
 
   const handleSelectChat = (sessionId: string) => {
     setActiveChatId(sessionId);
+    const chosen = chatSessions.find((s) => s.id === sessionId);
+    if (chosen?.roleId) {
+      setSelectedRoleId(chosen.roleId);
+    }
     setActiveWorkspace('chat');
     setIsMobileNavOpen(false);
   };
 
   const handleDeleteChat = (sessionId: string) => {
+    const linkedTask = scheduledTasks.find((t) => t.chatSessionId === sessionId);
+    if (linkedTask) {
+      setScheduledTasks(scheduledTaskService.deleteTask(linkedTask.id));
+    }
     chatService.deleteSession(sessionId);
     const updated = chatService.getSessions();
     setChatSessions(updated);
@@ -352,11 +633,24 @@ export default function App() {
     setActiveWorkspace('chat');
     let session = currentChatSession;
     if (!session) {
-      session = chatService.createNewSession(selectedModelId);
+      session = chatService.createNewSession(selectedModelId, selectedRoleId);
       setChatSessions(chatService.getSessions());
       setActiveChatId(session.id);
     }
-    await chatService.sendMessage(session.id, text, selectedModelId);
+    const activeRole = CHAT_ROLES.find((r) => r.id === (session?.roleId || selectedRoleId)) || CHAT_ROLES[0];
+    await chatService.sendMessage(
+      session.id,
+      text,
+      selectedModelId,
+      undefined,
+      undefined,
+      'auto',
+      undefined,
+      undefined,
+      undefined,
+      activeRole.systemInstruction,
+      activeRole.id
+    );
     setChatSessions(chatService.getSessions());
   };
 
@@ -376,7 +670,119 @@ export default function App() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  const handleOpenScheduledTaskInChat = (task: ScheduledTask) => {
+    const session = scheduledTaskService.ensureDedicatedChatForTask(task.id, selectedModelId);
+    setScheduledTasks(scheduledTaskService.getTasks());
+    setChatSessions(chatService.getSessions());
+    if (session) {
+      setActiveChatId(session.id);
+    }
+    setActiveWorkspace('chat');
+    setIsInWorkspace(true);
+    setIsMobileNavOpen(false);
+  };
+
+  const handleRunScheduledTaskById = async (taskId: string) => {
+    const task = scheduledTaskService.getTasks().find((t) => t.id === taskId);
+    if (!task) return;
+    handleOpenScheduledTaskInChat(task);
+    if (runningScheduledTaskIds.includes(taskId)) return;
+
+    setRunningScheduledTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+    try {
+      const result = await scheduledTaskService.runTaskNow(taskId, selectedModelId);
+      setScheduledTasks(result.tasks);
+      setChatSessions(chatService.getSessions());
+      if (result.chatSessionId) {
+        setActiveChatId(result.chatSessionId);
+      }
+      if (result.task && result.output) {
+        const reminderTask = result.isReminder || isReminderTask(result.task);
+        void deviceNotificationService.sendNotification({
+          title: reminderTask ? `Reminder: ${result.task.title}` : `Scheduled: ${result.task.title}`,
+          body: result.output,
+          tag: `sched_manual_${taskId}`,
+          onClick: () => {
+            if (result.task) handleOpenScheduledTaskInChat(result.task);
+          },
+        });
+      }
+    } finally {
+      setRunningScheduledTaskIds((prev) => prev.filter((id) => id !== taskId));
+    }
+  };
+
+  const handleRunScheduledTaskInChat = (task: ScheduledTask) => {
+    void handleRunScheduledTaskById(task.id);
+  };
+
+  const handleCreateScheduleInChat = (rawPrompt: string) => {
+    const clean = rawPrompt.trim();
+    if (!clean) return;
+    if (deviceNotificationService.getPermission() === 'default') {
+      void deviceNotificationService.requestPermission();
+    }
+    const previousEmptySessionId =
+      currentChatSession &&
+      currentChatSession.messages.length === 0 &&
+      !currentChatSession.scheduledTaskId
+        ? currentChatSession.id
+        : null;
+    const created = scheduledTaskService.createTask({ prompt: clean });
+    if (previousEmptySessionId && previousEmptySessionId !== created.chatSessionId) {
+      chatService.deleteSession(previousEmptySessionId);
+    }
+    const reminder = isReminderTask(created);
+    const needsLiveFetch = /\b(?:news|weather|headlines|briefing|roundup|stock|price|score)\b/i.test(
+      `${created.title} ${created.prompt}`
+    );
+
+    if (reminder && !needsLiveFetch) {
+      const { message } = formatCleanReminderText(created);
+      const nextTime = new Date(created.nextRunAt).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      if (created.chatSessionId) {
+        chatService.appendMessagesToSession(
+          created.chatSessionId,
+          [
+            {
+              id: `usr_sched_${Date.now()}`,
+              role: 'user',
+              content: clean,
+              timestamp: Date.now(),
+              toolBadge: 'schedule',
+            },
+            {
+              id: `asst_sched_confirm_${Date.now() + 1}`,
+              role: 'assistant',
+              content: `Scheduled reminder for **${formatFrequencyLabel(created)}** (next at **${nextTime}**): **${message}**.\n\nI'll announce it aloud and show it below while you're chatting when it's time.`,
+              timestamp: Date.now() + 1,
+              modelUsed: 'ForgeX Reminder',
+            },
+          ],
+          selectedModelId,
+          created.title
+        );
+      }
+      setScheduledTasks(scheduledTaskService.getTasks());
+      setChatSessions(chatService.getSessions());
+      handleOpenScheduledTaskInChat(created);
+      return;
+    }
+
+    setScheduledTasks(scheduledTaskService.getTasks());
+    setChatSessions(chatService.getSessions());
+    handleRunScheduledTaskInChat(created);
+  };
+
   const currentChatSession = chatSessions.find((s) => s.id === activeChatId) || null;
+  const linkedScheduledTask = currentChatSession?.scheduledTaskId
+    ? scheduledTasks.find((t) => t.id === currentChatSession.scheduledTaskId) || null
+    : null;
   const unreadNotifCount = notifications.filter((n) => !n.read).length;
   const isDark = settings.theme === 'dark';
 
@@ -414,7 +820,7 @@ export default function App() {
             user={user}
           />
 
-          <main className="flex-1 flex flex-col justify-center">
+          <main className="flex-1 flex flex-col">
             <LandingHero
               theme={settings.theme}
               onGetStarted={() => setIsAboutOpen(true)}
@@ -423,6 +829,7 @@ export default function App() {
               selectedModelId={selectedModelId}
               onSelectModel={setSelectedModelId}
               isAuthenticated={Boolean(user)}
+              reduceMotion={settings.reduceMotion}
             />
           </main>
 
@@ -437,7 +844,13 @@ export default function App() {
               <button onClick={() => setIsCreatorOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                 Created by VishweshVarman
               </button>
-              <button onClick={() => setIsSettingsOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+              <button
+                onClick={() => {
+                  setSettingsInitialTab('personalization');
+                  setIsSettingsOpen(true);
+                }}
+                className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+              >
                 Settings
               </button>
             </div>
@@ -454,12 +867,19 @@ export default function App() {
               setIsMobileNavOpen(false);
             }}
             recentChats={chatSessions}
+            scheduledTasks={scheduledTasks}
             activeChatId={activeChatId}
             onSelectChat={handleSelectChat}
             onNewChat={handleNewChat}
             onDeleteChat={handleDeleteChat}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onOpenAccount={() => setIsSettingsOpen(true)}
+            onOpenSettings={() => {
+              setSettingsInitialTab('personalization');
+              setIsSettingsOpen(true);
+            }}
+            onOpenAccount={() => {
+              setSettingsInitialTab('account');
+              setIsSettingsOpen(true);
+            }}
             onSignOut={handleSignOut}
             user={user}
             theme={settings.theme}
@@ -473,7 +893,6 @@ export default function App() {
               voiceController.unlockAudio();
               setIsVoiceModeOpen(true);
             }}
-            onOpenStudioStore={() => setIsStudioStoreOpen(true)}
           />
 
           {/* Main Workspace Column */}
@@ -483,11 +902,14 @@ export default function App() {
               activeWorkspace={activeWorkspace}
               selectedModelId={selectedModelId}
               onSelectModel={setSelectedModelId}
+              selectedRoleId={currentChatSession?.roleId || selectedRoleId}
+              onSelectRole={handleSelectRole}
               theme={settings.theme}
               themeEffect={settings.themeEffect || 'connected_dots'}
               onSelectThemeEffect={handleSelectThemeEffect}
               onToggleTheme={handleToggleTheme}
               onToggleMobileNav={() => setIsMobileNavOpen((prev) => !prev)}
+              onNavigateToChat={() => setActiveWorkspace('chat')}
               onOpenSearch={() => setIsSearchOpen(true)}
               isSidebarCollapsed={isSidebarCollapsed}
               onToggleSidebarCollapse={handleToggleSidebarCollapse}
@@ -497,7 +919,7 @@ export default function App() {
 
             {/* Workspace Core Views */}
             <main key={user?.id || 'guest_space'} className="flex-1 relative flex flex-col min-h-0 overflow-hidden">
-              {activeWorkspace !== 'chat' && activeWorkspace !== 'library' && !user ? (
+              {activeWorkspace !== 'chat' && activeWorkspace !== 'library' && activeWorkspace !== 'scheduled' && !user ? (
                 <div className={`flex-1 flex flex-col items-center justify-center p-6 text-center ${
                   isDark ? 'bg-neutral-950 text-white' : 'bg-neutral-50 text-neutral-900'
                 }`}>
@@ -508,7 +930,7 @@ export default function App() {
                     Sign In Required
                   </h2>
                   <p className={`text-sm max-w-md mb-6 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                    Access to specialized ForgeX Studios and Studio Making requires an authenticated account. Sign in with your Google or email account to continue and store your generation history separately in Firebase.
+                    Access to specialized ForgeX creation tools requires an authenticated account. Sign in to continue and store your generation history separately.
                   </p>
                   <div className="flex items-center gap-3">
                     <button
@@ -537,23 +959,48 @@ export default function App() {
                   onNewChat={handleNewChat}
                   selectedModelId={selectedModelId}
                   onSelectModel={setSelectedModelId}
+                  selectedRoleId={currentChatSession?.roleId || selectedRoleId}
                   theme={settings.theme}
-                  onNavigateToImage={() => setActiveWorkspace('image')}
-                  onNavigateToMusic={() => setActiveWorkspace('music')}
-                  onNavigateToCode={(code, lang) => {
-                    if (code) {
-                      setPendingCodeSnippet({ code, language: lang });
-                    }
-                    setActiveWorkspace('code');
-                  }}
+                  initialComposerTool={pendingComposerTool}
+                  onConsumeInitialTool={() => setPendingComposerTool('none')}
                   onNavigateToLibrary={() => setActiveWorkspace('library')}
-                  onNavigateToProjects={() => setActiveWorkspace('projects')}
-                  onNavigateToResearch={() => setActiveWorkspace('research')}
-                  onOpenStudioStore={() => setIsStudioStoreOpen(true)}
                   onOpenVoiceMode={() => {
                     voiceController.unlockAudio();
                     setIsVoiceModeOpen(true);
                   }}
+                  activeReminder={activeReminder}
+                  isReminderSpeaking={isReminderSpeaking}
+                  onReplayReminder={() => {
+                    if (!activeReminder) return;
+                    setIsReminderSpeaking(true);
+                    void voiceController.playSynthesizedResponse(
+                      activeReminder.spokenText,
+                      undefined,
+                      undefined,
+                      () => setIsReminderSpeaking(false),
+                      () => setIsReminderSpeaking(false)
+                    );
+                  }}
+                  onDismissReminder={() => setActiveReminder(null)}
+                  linkedScheduledTask={linkedScheduledTask}
+                  isLinkedTaskRunning={Boolean(
+                    linkedScheduledTask && runningScheduledTaskIds.includes(linkedScheduledTask.id)
+                  )}
+                  onCreateScheduleInChat={handleCreateScheduleInChat}
+                  onOpenVaultSettings={() => {
+                    setSettingsInitialTab('vault');
+                    setIsSettingsOpen(true);
+                  }}
+                />
+              )}
+
+              {activeWorkspace === 'scheduled' && (
+                <ScheduledWorkspace
+                  theme={settings.theme}
+                  tasks={scheduledTasks}
+                  onTasksChange={setScheduledTasks}
+                  onOpenTaskInChat={handleOpenScheduledTaskInChat}
+                  onRunTaskInChat={handleRunScheduledTaskInChat}
                 />
               )}
 
@@ -567,7 +1014,10 @@ export default function App() {
                   onUpdateChatSessions={setChatSessions}
                   onSelectChat={handleSelectChat}
                   onNewChat={handleNewChat}
-                  onNavigateToImage={() => setActiveWorkspace('image')}
+                  onNavigateToImage={() => {
+                    setActiveWorkspace('chat');
+                    setPendingComposerTool('image');
+                  }}
                   onViewFullscreen={(type, item) => setViewingMedia({ type, item })}
                   userId={user?.id}
                 />
@@ -610,8 +1060,6 @@ export default function App() {
                   isDark={isDark}
                   selectedModel={selectedModelId}
                   onSelectModel={setSelectedModelId}
-                  initialCode={pendingCodeSnippet?.code}
-                  initialLanguage={pendingCodeSnippet?.language as any}
                 />
               )}
 
@@ -715,29 +1163,71 @@ export default function App() {
                 />
               )}
 
-              {/* Custom Created Studio Workspace */}
-              {activeWorkspace.startsWith('custom_') && (() => {
-                const customStudio = studioService.getStudioById(activeWorkspace);
-                if (!customStudio) return null;
-                return (
-                  <CustomStudioWorkspace
-                    key={customStudio.id}
-                    studio={customStudio}
-                    theme={settings.theme}
-                    selectedModelId={selectedModelId}
-                    onSelectModel={setSelectedModelId}
-                    onOpenStore={() => setIsStudioStoreOpen(true)}
-                    user={user}
-                    onDeleteStudio={() => setActiveWorkspace('chat')}
-                    onRemoveFromSidebar={(id) => {
-                      studioService.removeStudioFromSidebar(id);
-                      setActiveWorkspace('chat');
-                    }}
-                  />
-                );
-              })()}
                 </>
               )}
+
+              {activeReminder &&
+                activeWorkspace !== 'chat' &&
+                activeWorkspace !== 'scheduled' &&
+                !isVoiceModeOpen && (
+                  <div
+                    id="workspace-reminder-below-bar"
+                    role="status"
+                    aria-live="polite"
+                    className="px-4 pb-3 pt-1 shrink-0"
+                  >
+                    <div
+                      className={`max-w-3xl mx-auto flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border shadow-sm ${
+                        isDark
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-100'
+                          : 'bg-amber-50/95 border-amber-300/70 text-neutral-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <BellRing
+                          className={`w-4 h-4 shrink-0 ${
+                            isReminderSpeaking ? 'text-amber-500 animate-bounce' : 'text-amber-500'
+                          }`}
+                        />
+                        <p className="text-xs sm:text-[13px] font-medium truncate">
+                          <span className="font-semibold text-amber-600 dark:text-amber-400">Reminder: </span>
+                          {activeReminder.message}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            voiceController.unlockAudio();
+                            setIsReminderSpeaking(true);
+                            void voiceController.playSynthesizedResponse(
+                              activeReminder.spokenText,
+                              undefined,
+                              undefined,
+                              () => setIsReminderSpeaking(false),
+                              () => setIsReminderSpeaking(false)
+                            );
+                          }}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium cursor-pointer ${
+                            isDark ? 'hover:bg-amber-500/20 text-amber-300' : 'hover:bg-amber-200/60 text-amber-800'
+                          }`}
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>{isReminderSpeaking ? 'Speaking...' : 'Say'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveReminder(null)}
+                          className={`p-1 rounded-lg cursor-pointer ${
+                            isDark ? 'hover:bg-white/10 text-neutral-400 hover:text-white' : 'hover:bg-black/5 text-neutral-500 hover:text-neutral-900'
+                          }`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
             </main>
           </div>
         </div>
@@ -786,6 +1276,15 @@ export default function App() {
           setIsSettingsOpen(false);
           setIsAuthOpen(true);
         }}
+        initialTab={settingsInitialTab}
+        notifications={notifications}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+        onClearNotifications={() => setNotifications([])}
+        onAskVaultInChat={() => {
+          setIsSettingsOpen(false);
+          setActiveWorkspace('chat');
+          setPendingComposerTool('vault');
+        }}
       />
 
       <HistoryModal
@@ -802,7 +1301,8 @@ export default function App() {
         onViewVideo={(vid) => setViewingMedia({ type: 'video', item: vid })}
         onSelectSong={(_song) => {
           setIsInWorkspace(true);
-          setActiveWorkspace('music');
+          setActiveWorkspace('chat');
+          setPendingComposerTool('music');
         }}
         onDeleteItem={(id, type) => {
           if (type === 'song') {
@@ -824,7 +1324,8 @@ export default function App() {
         onViewVideo={(vid) => setViewingMedia({ type: 'video', item: vid })}
         onSelectSong={(_song) => {
           setIsInWorkspace(true);
-          setActiveWorkspace('music');
+          setActiveWorkspace('chat');
+          setPendingComposerTool('music');
         }}
       />
 
@@ -891,6 +1392,8 @@ export default function App() {
         theme={settings.theme}
         selectedModelId={selectedModelId}
         userName={user?.name}
+        activeReminder={activeReminder}
+        onDismissReminder={() => setActiveReminder(null)}
         onSendToChat={(text) => {
           setActiveWorkspace('chat');
           setIsInWorkspace(true);
@@ -917,20 +1420,50 @@ export default function App() {
         }}
       />
 
-      {/* Explore & Add Studios Modal */}
-      <StudioStoreModal
-        isOpen={isStudioStoreOpen}
-        onClose={() => setIsStudioStoreOpen(false)}
-        onSelectStudio={(studioId) => {
-          setActiveWorkspace(studioId as ActiveWorkspace);
-          setIsInWorkspace(true);
-        }}
-        theme={settings.theme}
-        userName={user?.name || user?.email?.split('@')[0] || ''}
-        userEmail={user?.email || ''}
-        userId={user?.id || ''}
-        onOpenAuth={() => setIsAuthOpen(true)}
-      />
+      {startupBriefing && (
+        <StartupBriefingView
+          theme={settings.theme}
+          status={startupBriefing.status}
+          items={startupBriefing.items}
+          activeTaskTitle={startupBriefing.activeTaskTitle}
+          onStartApp={() => {
+            startupBriefingCancelledRef.current = true;
+            setStartupBriefing(null);
+          }}
+          onOpenInChat={(title, output, chatSessionId) => {
+            startupBriefingCancelledRef.current = true;
+            const sessions = chatService.getSessions();
+            if (chatSessionId && sessions.some((s) => s.id === chatSessionId)) {
+              setChatSessions(sessions);
+              setActiveChatId(chatSessionId);
+              setActiveWorkspace('chat');
+              setStartupBriefing(null);
+              return;
+            }
+            const session = chatService.createSession(selectedModelId, title);
+            const updated = chatService.appendMessagesToSession(
+              session.id,
+              output
+                ? [
+                    {
+                      id: `asst_briefing_${Date.now()}`,
+                      role: 'assistant',
+                      content: output,
+                      timestamp: Date.now(),
+                      modelUsed: selectedModelId,
+                    },
+                  ]
+                : [],
+              selectedModelId,
+              title
+            );
+            setChatSessions(chatService.getSessions());
+            setActiveChatId(updated.id);
+            setActiveWorkspace('chat');
+            setStartupBriefing(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import { ChatMessage, ChatSession, ForgeXModelId, FORGEX_MODELS, GeneratedImage, ImageStyle } from '../types';
+import { ChatMessage, ChatRoleId, ChatSession, ForgeXModelId, FORGEX_MODELS, GeneratedImage, GroundingSource, ImageStyle, ScheduledTask } from '../types';
 import { authService } from './authService';
 import { firestoreStorageService } from './firestoreStorageService';
 import { generateExpertChatReply } from './knowledgeEngine';
 import { imageService } from './imageService';
 import { vaultService } from './vaultService';
+import { buildPersonalizationInstruction } from './personalizationService';
 import { detectImageGenerationIntent } from '../utils/imageIntent';
 export { detectImageGenerationIntent };
 
@@ -21,9 +22,18 @@ export const chatService = {
       const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: ChatSession[] = JSON.parse(stored);
-        // Clean out any legacy mock sessions to strictly adhere to NO default/false data
-        const realSessions = Array.isArray(parsed) 
-          ? parsed.filter((s) => !MOCK_CHAT_IDS.has(s.id)) 
+        // Clean out any legacy mock sessions and duplicate empty non-scheduled sessions
+        let seenEmptyStandard = false;
+        const realSessions = Array.isArray(parsed)
+          ? parsed.filter((s) => {
+              if (MOCK_CHAT_IDS.has(s.id)) return false;
+              const isEmptyStandard = (!s.messages || s.messages.length === 0) && !s.scheduledTaskId;
+              if (isEmptyStandard) {
+                if (seenEmptyStandard) return false;
+                seenEmptyStandard = true;
+              }
+              return true;
+            })
           : [];
         if (realSessions.length !== parsed.length) {
           this.saveSessions(realSessions);
@@ -92,7 +102,7 @@ export const chatService = {
     }
   },
 
-  createSession(modelId: ForgeXModelId = 'forge-2-ultra', initialTitle = 'New Chat'): ChatSession {
+  createSession(modelId: ForgeXModelId = 'forge-2-ultra', initialTitle = 'New Chat', roleId?: ChatRoleId): ChatSession {
     const sessions = this.getSessions();
     const newSession: ChatSession = {
       id: 'chat_' + Date.now(),
@@ -100,6 +110,7 @@ export const chatService = {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       modelId,
+      ...(roleId ? { roleId } : {}),
       messages: [],
     };
     const updated = [newSession, ...sessions];
@@ -111,8 +122,14 @@ export const chatService = {
     return newSession;
   },
 
-  createNewSession(modelId: ForgeXModelId = 'forge-2-ultra'): ChatSession {
-    return this.createSession(modelId, 'New Chat');
+  createNewSession(modelId: ForgeXModelId = 'forge-2-ultra', roleId?: ChatRoleId): ChatSession {
+    const existingEmpty = this.getSessions().find(
+      (s) => (!s.messages || s.messages.length === 0) && !s.scheduledTaskId
+    );
+    if (existingEmpty) {
+      return existingEmpty;
+    }
+    return this.createSession(modelId, 'New Chat', roleId);
   },
 
   renameSession(sessionId: string, newTitle: string): ChatSession[] {
@@ -300,6 +317,120 @@ export const chatService = {
     return session;
   },
 
+  getOrCreateScheduledChatSession(
+    task: ScheduledTask,
+    modelId: ForgeXModelId = 'forge-2-ultra'
+  ): ChatSession {
+    const sessions = this.getSessions();
+    let existing = sessions.find(
+      (s) => (task.chatSessionId && s.id === task.chatSessionId) || s.scheduledTaskId === task.id
+    );
+    if (existing) {
+      if (existing.scheduledTaskId !== task.id) {
+        existing = { ...existing, scheduledTaskId: task.id };
+        this.saveSessions(sessions.map((s) => (s.id === existing!.id ? existing! : s)));
+      }
+      return existing;
+    }
+
+    const now = Date.now();
+    const dedicatedSession: ChatSession = {
+      id: `chat_sched_${task.id}_${now}`,
+      title: task.title || 'Daily Briefing',
+      createdAt: now,
+      updatedAt: now,
+      modelId,
+      scheduledTaskId: task.id,
+      messages: [],
+    };
+    const updated = [dedicatedSession, ...sessions];
+    this.saveSessions(updated);
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.saveUserChat(userId, dedicatedSession).catch(() => {});
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('forgex:chats_updated'));
+    }
+    return dedicatedSession;
+  },
+
+  appendScheduledResultToDedicatedChat(
+    task: ScheduledTask,
+    output: string,
+    modelId: ForgeXModelId = 'forge-2-ultra',
+    meta?: {
+      modelUsed?: string;
+      searchedWeb?: boolean;
+      searchQueries?: string[];
+      groundingSources?: GroundingSource[];
+      runAt?: number;
+    }
+  ): ChatSession {
+    const dedicated = this.getOrCreateScheduledChatSession(task, modelId);
+    const sessions = this.getSessions();
+    const target = sessions.find((s) => s.id === dedicated.id) || dedicated;
+    const runAt = meta?.runAt || Date.now();
+    const dateLabel = new Date(runAt).toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    const cleanOut = output.trim();
+    const formattedContent = cleanOut.includes(dateLabel)
+      ? cleanOut
+      : `### 📅 ${dateLabel}\n\n${cleanOut}`;
+
+    const lastMsg = target.messages[target.messages.length - 1];
+    if (
+      lastMsg &&
+      lastMsg.role === 'assistant' &&
+      runAt - lastMsg.timestamp < 10000 &&
+      lastMsg.content.trim() === formattedContent.trim()
+    ) {
+      return target;
+    }
+
+    const assistantMessage: ChatMessage = {
+      id: `asst_sched_${runAt}_${Math.random().toString(36).slice(2, 6)}`,
+      role: 'assistant',
+      content: formattedContent,
+      timestamp: runAt,
+      modelUsed: meta?.modelUsed || 'ForgeX Live Briefing',
+      searchedWeb: meta?.searchedWeb ?? true,
+      ...(meta?.searchQueries && meta.searchQueries.length > 0 ? { searchQueries: meta.searchQueries } : {}),
+      ...(meta?.groundingSources && meta.groundingSources.length > 0
+        ? { groundingSources: meta.groundingSources }
+        : {}),
+    };
+
+    const updatedSession: ChatSession = {
+      ...target,
+      title: task.title || target.title,
+      scheduledTaskId: task.id,
+      modelId,
+      updatedAt: runAt,
+      messages: [...target.messages, assistantMessage],
+    };
+
+    const nextSessions = [
+      updatedSession,
+      ...sessions.filter((s) => s.id !== updatedSession.id),
+    ];
+    this.saveSessions(nextSessions);
+
+    const userId = authService.getCurrentUserId();
+    if (userId && userId !== 'guest') {
+      firestoreStorageService.saveUserChat(userId, updatedSession).catch(() => {});
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('forgex:chats_updated'));
+    }
+    return updatedSession;
+  },
+
   updateMessageInSession(
     sessionId: string,
     messageId: string,
@@ -331,7 +462,9 @@ export const chatService = {
     searchMode: 'auto' | 'on' | 'off' = 'auto',
     onSearchStatus?: (searching: boolean, searchQuery?: string) => void,
     onImageProgress?: (progress: number) => void,
-    toolBadge?: ChatMessage['toolBadge']
+    toolBadge?: ChatMessage['toolBadge'],
+    roleInstruction?: string,
+    roleId?: ChatRoleId
   ): Promise<{ updatedSession: ChatSession; assistantMessage: ChatMessage }> {
     let sessions = this.getSessions();
     const trimmedTitleSource = userContent.trim() || (attachments?.some((a) => a.type === 'image') ? 'Image Analysis' : 'New Chat');
@@ -343,6 +476,7 @@ export const chatService = {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         modelId,
+        ...(roleId ? { roleId } : {}),
         messages: [],
       };
       sessions = [session, ...sessions.filter((s) => s.id !== session!.id)];
@@ -363,6 +497,9 @@ export const chatService = {
     }
     session.updatedAt = Date.now();
     session.modelId = modelId;
+    if (roleId) {
+      session.roleId = roleId;
+    }
 
     // Immediately persist user turn so messages are never lost
     this.saveSessions(sessions);
@@ -423,11 +560,15 @@ export const chatService = {
 
     const isCreatorQuery = /(?:who\s+(?:created|made|developed|built|designed|programmed|coded|founded|invented)\s+(?:you|forgex|this\s+(?:app|ai|website|platform|software|system))|who\s+is\s+your\s+(?:creator|maker|developer|author|architect|father|founder|boss|programmer)|who\s+created\s+you|who\s+made\s+you|who\s+are\s+your\s+creators|who\s+owns\s+you|who\s+built\s+forgex|creator\s+of\s+forgex|who\s+is\s+vishwesh|who\s+is\s+vishweshvarman|what\s+is\s+the\s+creator(?:'s)?\s+name)/i.test(userContent);
 
-    // Knowledge Vault Grounding (RAG from user's active private documents)
+    // Personalization & Knowledge Vault Grounding
+    const personalizationInstruction = buildPersonalizationInstruction();
     const vaultGrounding = vaultService.getGroundingContext(userContent);
     const vaultInstruction = vaultGrounding.hasContext
       ? `=== USER KNOWLEDGE VAULT (ACTIVE GROUNDING CONTEXT) ===\nThe user has activated the following documents from their private Knowledge Vault. Ground and verify your response using these facts:\n\n${vaultGrounding.contextText}\n======================================================`
       : undefined;
+
+    const combinedSystemInstruction =
+      [roleInstruction?.trim(), personalizationInstruction, vaultInstruction].filter(Boolean).join('\n\n') || undefined;
 
     if (vaultGrounding.hasContext && vaultGrounding.sources.length > 0) {
       const vaultSources = vaultGrounding.sources.map((s) => ({
@@ -469,7 +610,7 @@ export const chatService = {
           attachments,
           apiKey: geminiApiKey,
           searchMode,
-          systemInstruction: vaultInstruction,
+          systemInstruction: combinedSystemInstruction,
         }),
       });
 
@@ -558,7 +699,7 @@ export const chatService = {
             attachments,
             apiKey: geminiApiKey,
             searchMode,
-            systemInstruction: vaultInstruction,
+            systemInstruction: combinedSystemInstruction,
           }),
         });
 

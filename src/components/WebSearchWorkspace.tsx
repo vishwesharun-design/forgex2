@@ -80,7 +80,7 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
         summary: `Search query failed: ${msg}`,
         sources: [
           {
-            title: `Search "${targetQuery}" on Google`,
+            title: `Search "${targetQuery}" on Web Index`,
             url: `https://www.google.com/search?q=${encodeURIComponent(targetQuery)}`,
             snippet: 'Manual web fallback portal',
           },

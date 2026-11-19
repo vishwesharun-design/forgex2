@@ -1231,13 +1231,13 @@ Historical transitions—from the **Agricultural Revolution** to the **Industria
       /(?:show|give|display|reveal)\s+(?:me\s+)?(?:your\s+)?(?:server\s*code\s*secrets|backend\s*secrets|source\s*code\s*secrets)/i.test(clean)) {
     return `### Security & Confidentiality Notice
 
-As **ForgeX**, system credentials, private API keys (such as Gemini, Firebase, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.
+As **ForgeX**, system credentials, private API keys (such as neural engine, database, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.
 
 ---
 
 ### What I Can Share:
 * **How ForgeX Works**: Platform features, architecture, and studio workflows.
-* **How to Build with APIs**: Assistance writing code to integrate Firebase, Gemini SDK, REST APIs, or your own application backends.
+* **How to Build with APIs**: Assistance writing code to integrate databases, REST APIs, or your own application backends.
 * **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.
 * **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.
 
@@ -1256,7 +1256,7 @@ Creating and publishing your own custom AI Studio on ForgeX is straightforward. 
 
 #### 1. Sign In to Your Account
 * Access to specialized studios and studio creation requires an authenticated account.
-* Click **Sign In** (via Google or Email). This ensures your studio is securely linked to your verified identity and synced to your private Firebase storage.
+* Click **Sign In** (via Single Sign-On or Email). This ensures your studio is securely linked to your verified identity and synced to your private cloud storage.
 
 #### 2. Open the Studio Hub & Store
 * In the left sidebar, click the **"+ Add Studio"** button, or click the **Studio Store** icon in the navigation bar.
@@ -1291,41 +1291,31 @@ Click **"Upload Your Studio"** and fill in your individual studio app's configur
   if (/(?:what\s+(?:can|do)\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+forgex\s+do|capabilities|features\s+of\s+forgex|how\s+can\s+you\s+help\s+me|tell\s+me\s+what\s+you\s+can\s+do)/i.test(clean)) {
     return `### What ForgeX Can Do
 
-I am **ForgeX**, an all-in-one AI intelligence and creation platform created by **VishweshVarman**. Here is an overview of everything I can do for you:
+I am **ForgeX**, an all-in-one AI intelligence and creation platform created by **VishweshVarman**. Every tool works **directly inside Chat** via the **+** menu:
 
 ---
 
-### 🎨 1. AI Creation Studios
-* **Images Studio**: Create high-fidelity photorealistic, anime, 3D render, watercolor, or cinematic images with custom aspect ratios, style presets, negative prompts, and seed controls.
-* **Make Song Studio**: Compose original music and songs powered by neural synthesis—complete with custom genres, moods, tempo, and generated lyrics.
-* **Music Player Studio**: Listen to your generated and featured tracks with audio waveform visualization, queue management, volume controls, and playback options.
-* **Deep Research Studio**: Conduct multi-source investigations, syntheses, technical deep dives, and structured analytical reports with verified web citations.
-* **Code Studio**: Generate, inspect, debug, and test code in Python, TypeScript, Rust, C++, Go, SQL, and more.
-* **Custom Studio Hub & Store**: Browse pre-built studios, add them to your sidebar, or create and publish your own custom AI studios under your registered Studio Name!
+### ✨ 1. Inline Chat Creation & Productivity Tools (**+**)
+* **Create Image**: Generate photorealistic, anime, 3D, watercolor, claymation, and handwritten study visuals inline.
+* **Deep Research**: Multi-pass investigations with live web grounding and cited reports right inside chat.
+* **Web Search**: Real-time answers backed by live sources and web citations.
+* **Code Workspace**: Generate, debug, refactor, and live-preview web apps and code across 15+ languages.
+* **Make Song & Music Player**: Compose original tracks with lyrics and stream music inline.
+* **Presentations & AI Canvas**: Build interactive slide decks, mindmaps, and flowcharts right in the conversation.
+* **Data Analysis & Document AI**: Analyze CSV/JSON datasets with charts & KPIs, summarize documents, extract tables, or generate interactive quizzes.
+* **Writing Assistant & AI Agents**: Draft and refine structured prose inline or run autonomous multi-step tasks.
+* **Knowledge Vault & Projects**: Ground any chat answer in your private saved notes and documents.
 
 ---
 
-### 💬 2. Conversational Reasoning & Problem Solving
-* **Advanced Problem Solving**: Step-by-step reasoning for complex math, physics, logic, algorithms, and system architecture.
-* **Full-Stack Programming**: Write complete, production-grade applications, fix bugs, explain algorithms, and design REST/GraphQL APIs.
-* **Writing & Communication**: Draft essays, technical documentation, professional emails, research summaries, and creative stories.
-* **Multimodal Vision & Documents**: Attach images and files for instant OCR, visual scene analysis, diagram interpretation, and debugging.
+### 💬 2. Universal Knowledge & Problem Solving
+* **Every Subject & Discipline**: Science, mathematics, computer science, engineering, world history, finance, law, medicine, philosophy, geography, literature, arts, and live current events.
+* **Multimodal Vision & Math**: Analyze uploaded photos/sketches and solve equations step-by-step with formatted LaTeX, interactive tables, and charts.
+* **Live Voice Mode & Dictation**: Speak naturally in real time or dictate messages directly.
 
 ---
 
-### 🔒 3. Cloud Storage & Privacy
-* **Firebase Authentication**: Sign in with Google or Email.
-* **Isolated User History**: All your chats, generated images, songs, and custom studios are stored separately in private Firestore cloud subcollections.
-
----
-
-### 🎙️ 4. Real-Time Audio & Voice
-* **Live Voice Mode**: Engage in real-time two-way voice conversations with low-latency spoken responses.
-* **Speech-to-Text Dictation**: Dictate prompts directly using the microphone button.
-
----
-
-*What would you like to build, explore, or create today?*`;
+*What would you like to ask, build, or explore today?*`;
   }
 
   // 12.6 Data Privacy, History & Authentication Questions
@@ -1337,7 +1327,7 @@ ForgeX is architected with enterprise-grade privacy and per-user data isolation:
 ---
 
 ### 🔑 1. Firebase Authentication
-* You can sign in using **Google Sign-In** or **Email & Password**.
+* You can sign in using **Single Sign-On** or **Email & Password**.
 * Signing in unlocks full access to all specialized AI studios, custom studio creation, and cloud synchronization.
 
 ### 🛡️ 2. Per-User Isolated Cloud Vault
@@ -1395,5 +1385,5 @@ ForgeX is architected with enterprise-grade privacy and per-user data isolation:
 
   return `I could not reach the live AI reasoning engine to answer **"${displayTopic}"** right now due to a temporary network or API interruption.
 
-Please try sending your message again (or switch to **Forge 1** / **Forge 1.5** in the model selector for instant response, or verify your Gemini API key in **Settings**).`;
+Please try sending your message again (or switch to **Forge 1** / **Forge 1.5** in the model selector for instant response, or check your connection).`;
 }

@@ -40,10 +40,44 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanningCanvas, setIsPanningCanvas] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'generator' | 'canvas'>('canvas');
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const panDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+
+      setZoomScale((prevZoom) => {
+        const factor = Math.exp(-e.deltaY * 0.0018);
+        const nextZoom = Math.max(0.3, Math.min(2.5, Number((prevZoom * factor).toFixed(3))));
+        if (nextZoom === prevZoom) return prevZoom;
+        setPanOffset((prevPan) => {
+          const worldX = (cx - prevPan.x) / prevZoom;
+          const worldY = (cy - prevPan.y) / prevZoom;
+          return {
+            x: cx - worldX * nextZoom,
+            y: cy - worldY * nextZoom,
+          };
+        });
+        return nextZoom;
+      });
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const handleGenerate = async (customTopic?: string) => {
     const targetTopic = customTopic || topicInput;
@@ -66,20 +100,49 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
 
   const handleMouseDownNode = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    const targetTag = (e.target as HTMLElement).tagName;
+    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'BUTTON') {
+      return;
+    }
     const node = activeBoard.nodes.find((n) => n.id === id);
-    if (!node) return;
+    if (!node || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const pointerWorldX = (e.clientX - rect.left - panOffset.x) / zoomScale;
+    const pointerWorldY = (e.clientY - rect.top - panOffset.y) / zoomScale;
     setDraggingNodeId(id);
     setDragOffset({
-      x: e.clientX - node.x,
-      y: e.clientY - node.y,
+      x: pointerWorldX - node.x,
+      y: pointerWorldY - node.y,
     });
   };
 
+  const handleMouseDownContainer = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, input, textarea')) return;
+    setIsPanningCanvas(true);
+    panDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: panOffset.x,
+      origY: panOffset.y,
+    };
+  };
+
   const handleMouseMoveContainer = (e: React.MouseEvent) => {
+    if (isPanningCanvas && panDragRef.current) {
+      setPanOffset({
+        x: panDragRef.current.origX + (e.clientX - panDragRef.current.startX),
+        y: panDragRef.current.origY + (e.clientY - panDragRef.current.startY),
+      });
+      return;
+    }
+
     if (!draggingNodeId || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const newX = Math.max(10, Math.min(1600, e.clientX - rect.left - 20));
-    const newY = Math.max(10, Math.min(1200, e.clientY - rect.top - 20));
+    const pointerWorldX = (e.clientX - rect.left - panOffset.x) / zoomScale;
+    const pointerWorldY = (e.clientY - rect.top - panOffset.y) / zoomScale;
+    const newX = Math.max(10, Math.min(1600, pointerWorldX - dragOffset.x));
+    const newY = Math.max(10, Math.min(1200, pointerWorldY - dragOffset.y));
 
     const updatedNodes = activeBoard.nodes.map((n) =>
       n.id === draggingNodeId ? { ...n, x: newX, y: newY } : n
@@ -90,6 +153,10 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   };
 
   const handleMouseUpContainer = () => {
+    if (isPanningCanvas) {
+      setIsPanningCanvas(false);
+      panDragRef.current = null;
+    }
     if (draggingNodeId) {
       setDraggingNodeId(null);
       canvasService.saveBoard(activeBoard);
@@ -389,9 +456,13 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
         {/* Right 2D Stage Canvas */}
         <div
           ref={containerRef}
+          onMouseDown={handleMouseDownContainer}
           onMouseMove={handleMouseMoveContainer}
           onMouseUp={handleMouseUpContainer}
-          className={`flex-1 relative overflow-auto select-none ${
+          onMouseLeave={handleMouseUpContainer}
+          className={`flex-1 relative overflow-hidden select-none ${
+            isPanningCanvas ? 'cursor-grabbing' : 'cursor-grab'
+          } ${
             mobileTab === 'canvas' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
           } ${
             isDark ? 'bg-[#09090b]' : 'bg-[#f4f4f5]'
@@ -400,29 +471,45 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
             backgroundImage: isDark
               ? 'radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)'
               : 'radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
+            backgroundSize: `${Math.max(12, Math.round(24 * zoomScale))}px ${Math.max(12, Math.round(24 * zoomScale))}px`,
+            backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
           }}
         >
           {/* Zoom & View Controls Overlay */}
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-neutral-900/80 backdrop-blur-md p-1.5 rounded-xl border border-neutral-800 text-xs">
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-neutral-900/80 backdrop-blur-md p-1.5 rounded-xl border border-neutral-800 text-xs text-neutral-100">
             <button
-              onClick={() => setZoomScale((prev) => Math.max(0.6, prev - 0.1))}
+              type="button"
+              onClick={() => setZoomScale((prev) => Math.max(0.3, Number((prev - 0.15).toFixed(2))))}
               className="p-1 hover:text-amber-400 transition-colors"
+              title="Zoom out"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <span className="font-mono text-[10px] w-8 text-center">{Math.round(zoomScale * 100)}%</span>
+            <span className="font-mono text-[10px] w-9 text-center">{Math.round(zoomScale * 100)}%</span>
             <button
-              onClick={() => setZoomScale((prev) => Math.min(1.5, prev + 0.1))}
+              type="button"
+              onClick={() => setZoomScale((prev) => Math.min(2.5, Number((prev + 0.15).toFixed(2))))}
               className="p-1 hover:text-amber-400 transition-colors"
+              title="Zoom in"
             >
               <ZoomIn className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setZoomScale(1);
+                setPanOffset({ x: 0, y: 0 });
+              }}
+              className="p-1 hover:text-amber-400 transition-colors"
+              title="Reset view"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div
-            className="w-[1800px] h-[1400px] relative transition-transform origin-top-left"
-            style={{ transform: `scale(${zoomScale})` }}
+            className="w-[1800px] h-[1400px] relative origin-top-left"
+            style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}
           >
             {/* SVG Connecting Edges */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">

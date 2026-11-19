@@ -179,6 +179,8 @@ export const firestoreStorageService = {
           createdAt: data.createdAt || Date.now(),
           updatedAt: data.updatedAt || Date.now(),
           modelId: data.modelId || 'unreal-5',
+          ...(data.roleId ? { roleId: data.roleId } : {}),
+          ...(data.scheduledTaskId ? { scheduledTaskId: data.scheduledTaskId } : {}),
           messages: Array.isArray(data.messages) ? data.messages : [],
         });
       });
@@ -662,6 +664,39 @@ export const firestoreStorageService = {
       await deleteDoc(studioRef);
     } catch (err) {
       console.warn('Firestore deleteUserCustomStudio notice:', err);
+    }
+  },
+
+  // --- USER SCHEDULED TASKS STORAGE ---
+  async saveUserScheduledTask(userId: string, task: any): Promise<void> {
+    if (!userId || !task || !task.id || !isAuthorizedForUser(userId)) return;
+    try {
+      const taskRef = doc(db, 'users', userId, 'scheduledTasks', String(task.id));
+      await setDoc(taskRef, { ...task, userId, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveUserScheduledTask notice:', err);
+    }
+  },
+
+  async loadUserScheduledTasks(userId: string): Promise<any[]> {
+    if (!userId || !isAuthorizedForUser(userId)) return [];
+    try {
+      const tasksRef = collection(db, 'users', userId, 'scheduledTasks');
+      const snap = await getDocs(query(tasksRef, orderBy('createdAt', 'desc'), limit(60)));
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    } catch (err) {
+      console.warn('Firestore loadUserScheduledTasks notice:', err);
+      return [];
+    }
+  },
+
+  async deleteUserScheduledTask(userId: string, taskId: string): Promise<void> {
+    if (!userId || !taskId || !isAuthorizedForUser(userId)) return;
+    try {
+      const taskRef = doc(db, 'users', userId, 'scheduledTasks', String(taskId));
+      await deleteDoc(taskRef);
+    } catch (err) {
+      console.warn('Firestore deleteUserScheduledTask notice:', err);
     }
   }
 };

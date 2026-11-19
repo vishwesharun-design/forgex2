@@ -73,7 +73,16 @@ function getEffectiveApiKey(req: Request): string | undefined {
 // Active Gemini model cascades & per-model execution profiles
 const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
 const PREMIER_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
+const SEARCH_GROUNDING_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
 const RESILIENT_MODELS = PREMIER_MODELS;
+
+function hasGoogleSearchTool(config?: any): boolean {
+  return Array.isArray(config?.tools) && config.tools.some((t: any) => t && "googleSearch" in t);
+}
+
+function prioritizeGoogleSearchModels(models: string[]): string[] {
+  return Array.from(new Set(["gemini-4-hydrogen", ...models, ...SEARCH_GROUNDING_MODELS]));
+}
 
 type CanonicalForgeModelId = "forge-1" | "forge-1.5" | "forge-2" | "forge-2-pro" | "forge-2-ultra";
 
@@ -358,10 +367,10 @@ function analyzeWebSearchIntent(
     triggerReason = "Live event, score, or tournament results lookup.";
   }
 
-  // G. Breaking news, live developments, real-world status
-  if (/\b(?:breaking\s+news|what\s+happened\s+(?:to|in|with)|latest\s+news|current\s+status\s+of|is\s+.*?still\s+alive|who\s+is\s+currently|who\s+is\s+the\s+current\s+(?:president|prime\s+minister|ceo|governor|chancellor|leader|mayor)|who\s+is\s+the\s+ceo\s+of|patch\s+notes|changelog|release\s+date\s+of|is\s+.*?released\s+yet|new\s+features\s+in)\b/i.test(clean)) {
+  // G. Breaking news, live developments, prices, comparisons, recommendations, biographies & factual lookups
+  if (/\b(?:breaking\s+news|what\s+happened\s+(?:to|in|with)|latest\s+news|daily\s+news|morning\s+briefing|daily\s+roundup|news\s+updates?|top\s+stories|headlines|current\s+events|current\s+status\s+of|is\s+.*?still\s+alive|who\s+is\s+currently|who\s+(?:is|was|were)\s+|who\s+(?:invented|discovered|founded|wrote|directed|painted|composed)\s+|when\s+(?:did|was|were|is)\s+|where\s+is\s+|capital\s+of\s+|population\s+of\s+|ceo\s+of\s+|founder\s+of\s+|price\s+of\s+|cost\s+of\s+|how\s+much\s+(?:is|does|are|cost)|compare\s+.+\s+(?:vs|and|or)\s+|best\s+(?:\w+\s+){0,3}(?:in|for|of|2024|2025|2026)|top\s+\d+|tell\s+me\s+about\s+|history\s+of\s+|biography\s+of\s+|meaning\s+of\s+|define\s+|patch\s+notes|changelog|release\s+date\s+of|is\s+.*?released\s+yet|new\s+features\s+in)\b/i.test(clean)) {
     shouldSearch = true;
-    triggerReason = "Current news or real-world status lookup.";
+    triggerReason = "Real-world factual, news, or current status lookup.";
   }
 
   // H. Quizzes & Trivia requiring current, real-world, or verified factual data
@@ -375,7 +384,7 @@ function analyzeWebSearchIntent(
 
   if (shouldSearch) {
     const cleanSearchQuery = userQuery
-      .replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:tell\s+me|show\s+me|find|search\s+(?:for)?|what\s+is|what\s+are|who\s+is|who\s+won)\s*/i, "")
+      .replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:tell\s+me\s+(?:about\s+)?|show\s+me\s+|explain\s+(?:how\s+)?|describe\s+|define\s+|find\s+(?:info\s+about\s+|out\s+about\s+)?|search\s+(?:the\s+web\s+for|for)?|what\s+(?:is|are|was|were)\s+(?:a|an|the)?\s*|who\s+(?:is|are|was|were)\s+|where\s+is\s+|when\s+(?:did|was|were)\s+)/i, "")
       .replace(/^(?:make\s+it\s+do\s+|create\s+(?:an?\s+)?|give\s+me\s+(?:an?\s+)?|quiz\s+me\s+on\s+)?(?:interactive\s+)?(?:quizes|quiz|trivia|test)\s+(?:about|on|for)?\s*/i, "")
       .replace(/(?:it\s+should\s+search\s+web.*|with\s+(?:accurate|perfect)\s+answers.*)/i, "")
       .replace(/[?!.]+$/, "")
@@ -395,38 +404,319 @@ function analyzeWebSearchIntent(
   };
 }
 
+function isLiveNewsQuery(text: string): boolean {
+  return /\b(?:news|headlines|breaking|daily\s+roundup|daily\s+briefing|morning\s+briefing|world\s+news|tech\s+news|today(?:'s)?\s+(?:news|updates|events|developments|headlines|stories)|what\s+happened\s+today|current\s+events|top\s+stories|news\s+updates?)\b/i.test(
+    text || ""
+  );
+}
+
+// Determines whether native live Search Grounding should be attached so ForgeX
+// can dynamically pull up-to-date Web Search data whenever relevant for factual/real-world accuracy.
+function shouldAttachGoogleSearchTool(
+  userQuery: string,
+  searchMode: "auto" | "on" | "off" = "auto",
+  hasImageAttachments: boolean = false,
+  isQuiz: boolean = false
+): boolean {
+  if (searchMode === "off") return false;
+  if (searchMode === "on") return true;
+  if (hasImageAttachments && !/(?:search\s+(?:the\s+web|google|online)|look\s+up\s+online)/i.test(userQuery)) {
+    return false;
+  }
+
+  const clean = (userQuery || "").trim().toLowerCase();
+  if (!clean || clean.length < 3) return false;
+
+  // Skip greetings / small talk
+  if (/^(?:hi|hello|hey|yo|sup|good\s+(?:morning|afternoon|evening|night)|thanks|thank\s+you|ok|okay|cool|nice|bye|goodbye)[!.\s]*$/i.test(clean)) {
+    return false;
+  }
+  // Skip pure math arithmetic
+  if (/^(?:calculate|compute|solve|what\s+is|evaluate|\d+)\s*[\d\s+\-*/^().=]+$/i.test(clean) ||
+      /^(?:what\s+is\s+)?\d+\s*[\+\-\*\/]\s*\d+/i.test(clean)) {
+    return false;
+  }
+  // Skip pure creative writing / poetry / jokes
+  if (/(?:write|compose|generate)\s+(?:a|an)?\s*(?:poem|story|haiku|song|rap|limerick|joke|dialogue|script)/i.test(clean) ||
+      /(?:tell\s+me|give\s+me)\s+(?:a\s+joke|a\s+riddle|a\s+story)/i.test(clean)) {
+    return false;
+  }
+  // Skip ForgeX self-identity questions
+  if (/(?:who\s+(?:created|made|developed|built|designed|founded)\s+(?:you|forgex)|who\s+are\s+you|what\s+is\s+forgex)/i.test(clean)) {
+    return false;
+  }
+  // Skip pure coding prompts without recent-framework/version questions
+  if (/```/.test(clean) || /\b(?:debug|refactor|fix\s+(?:this|my)\s+code|syntax\s+error|reverse\s+a\s+string|center\s+a\s+div|binary\s+search|fibonacci|palindrome)\b/i.test(clean)) {
+    return false;
+  }
+  // Quizzes only use search grounding when asking about real-world/current topics
+  if (isQuiz) {
+    return /\b(?:2024|2025|2026|2027|latest|recent|current|news|today|world|science|history|geography|space|sports|tech|ai)\b/i.test(clean);
+  }
+
+  return true;
+}
+
+function extractGoogleGroundingData(groundingMetadata: any): {
+  sources: WebGroundingSource[];
+  queries: string[];
+} {
+  const sources: WebGroundingSource[] = [];
+  const queries: string[] = [];
+  if (!groundingMetadata) return { sources, queries };
+
+  if (Array.isArray(groundingMetadata.webSearchQueries)) {
+    for (const q of groundingMetadata.webSearchQueries) {
+      if (typeof q === "string" && q.trim() && !queries.includes(q.trim())) {
+        queries.push(q.trim());
+      }
+    }
+  }
+
+  if (Array.isArray(groundingMetadata.groundingChunks)) {
+    for (const chunk of groundingMetadata.groundingChunks) {
+      const uri = chunk?.web?.uri;
+      if (uri && !sources.some((s) => s.url === uri)) {
+        let domain = "";
+        try {
+          domain = new URL(uri).hostname.replace(/^www\./, "");
+        } catch {}
+        sources.push({
+          title: chunk.web?.title || domain || "Web Search Result",
+          url: uri,
+          snippet: chunk.web?.title || domain,
+          sourceDomain: domain === "vertexaisearch.cloud.google.com" ? "web" : domain || "web",
+        });
+      }
+    }
+  }
+
+  return { sources, queries };
+}
+
 // Fast in-memory cache for live web search grounding (10-minute TTL)
 const webGroundingCache = new Map<string, { result: WebGroundingResult; timestamp: number }>();
 
-// Multi-Source Live Web Grounding Service (Fast-path optimized with caching and strict sub-second timeouts)
+function extractCoreSearchTopic(rawQuery: string): string {
+  const cleaned = rawQuery
+    .trim()
+    .replace(/^(?:please\s+)?(?:can\s+you\s+|could\s+you\s+|would\s+you\s+)?(?:tell\s+me\s+(?:about\s+)?|explain\s+(?:how\s+|what\s+|why\s+)?|describe\s+|define\s+|give\s+me\s+(?:an?\s+)?(?:overview|summary|details|info|information)\s+(?:on|about)\s+|summarize\s+|what\s+(?:is|are|was|were)\s+(?:a|an|the)?\s*|who\s+(?:is|are|was|were)\s+(?:the\s+)?|where\s+(?:is|are|was|were)\s+|when\s+(?:did|was|were)\s+|how\s+(?:does|do|did|to)\s+)/i, "")
+    .replace(/\s+(?:work|works|mean|means)\s*\??$/i, "")
+    .replace(/[?!.]+$/, "")
+    .trim();
+  return cleaned || rawQuery.trim();
+}
+
+function decodeXmlEntities(str: string): string {
+  return (str || "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseRssNewsItems(xml: string, fallbackPublisher: string, maxAgeHours = 72): Array<WebGroundingSource & { pubMs: number }> {
+  const items: Array<WebGroundingSource & { pubMs: number }> = [];
+  const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/gi);
+  const now = Date.now();
+  const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+
+  for (const match of itemMatches) {
+    const block = match[1] || "";
+    const rawTitle = block.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || "";
+    const rawLink = block.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || "";
+    const rawPubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] || "";
+    const rawDesc = block.match(/<description>([\s\S]*?)<\/description>/i)?.[1] || "";
+    const sourceMatch = block.match(/<source(?:\s+url="([^"]*)")?>([\s\S]*?)<\/source>/i);
+
+    const publisher = decodeXmlEntities(sourceMatch?.[2] || fallbackPublisher) || fallbackPublisher;
+    let title = decodeXmlEntities(rawTitle);
+    // Strip trailing " - Publisher" from aggregator titles
+    if (publisher && title.endsWith(` - ${publisher}`)) {
+      title = title.slice(0, -(` - ${publisher}`.length)).trim();
+    }
+    const url = decodeXmlEntities(rawLink);
+    const pubMs = rawPubDate ? Date.parse(rawPubDate.trim()) : now;
+    if (!title || !url || !Number.isFinite(pubMs)) continue;
+    if (now - pubMs > maxAgeMs) continue;
+
+    let domain = "news";
+    try {
+      const targetUrl = sourceMatch?.[1] || url;
+      domain = new URL(targetUrl).hostname.replace(/^www\./, "");
+    } catch {}
+    if (domain === "news.google.com" && publisher) {
+      domain = publisher.toLowerCase().replace(/[^a-z0-9]+/g, "") + ".com";
+    }
+
+    const publishedLabel = new Date(pubMs).toUTCString().replace(":00 GMT", " UTC");
+    const desc = decodeXmlEntities(rawDesc);
+    const snippetCore = desc && desc.length > 20 && !desc.includes(title) ? desc.slice(0, 260) : title;
+
+    items.push({
+      title: `${title} (${publisher})`,
+      url,
+      snippet: `[Published: ${publishedLabel} | Source: ${publisher}] ${snippetCore}`,
+      sourceDomain: publisher || domain,
+      pubMs,
+    });
+  }
+  return items;
+}
+
+async function fetchLiveNewsSources(rawQuery: string): Promise<WebGroundingSource[]> {
+  const cleanTopic = rawQuery
+    .replace(/\b(?:give\s+me|concise|well[\s-]organized|daily\s+roundup|daily\s+briefing|morning\s+briefing|scheduled|news\s+updates?|with\s+key\s+highlights|headlines|today(?:'s)?)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const wantsTechOrAi = /\b(?:tech|technology|ai|science|software|developer|coding|startup|breakthrough|space)\b/i.test(rawQuery);
+  const feedPromises: Array<Promise<Array<WebGroundingSource & { pubMs: number }>>> = [];
+
+  // 1. Real-time Headline Feed (world/top stories)
+  const gNewsUrl =
+    cleanTopic.length >= 4 && !/^(?:of|the|and|for|on|in|top|global|world)$/i.test(cleanTopic)
+      ? `https://news.google.com/rss/search?q=${encodeURIComponent(cleanTopic + " when:2d")}&hl=en-US&gl=US&ceid=US:en`
+      : `https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en`;
+
+  feedPromises.push(
+    fetch(gNewsUrl, { headers: { "User-Agent": "ForgeX/1.0" }, signal: AbortSignal.timeout(2200) })
+      .then((r) => (r.ok ? r.text() : ""))
+      .then((xml) => (xml ? parseRssNewsItems(xml, "Live News Wire", 48).slice(0, 8) : []))
+      .catch(() => [])
+  );
+
+  // 2. BBC World News RSS
+  feedPromises.push(
+    fetch("https://feeds.bbci.co.uk/news/rss.xml", {
+      headers: { "User-Agent": "ForgeX/1.0" },
+      signal: AbortSignal.timeout(2000),
+    })
+      .then((r) => (r.ok ? r.text() : ""))
+      .then((xml) => (xml ? parseRssNewsItems(xml, "BBC News", 48).slice(0, 5) : []))
+      .catch(() => [])
+  );
+
+  // 3. Tech/Science Feeds when query touches tech/AI/science
+  if (wantsTechOrAi) {
+    feedPromises.push(
+      fetch("https://feeds.bbci.co.uk/news/technology/rss.xml", {
+        headers: { "User-Agent": "ForgeX/1.0" },
+        signal: AbortSignal.timeout(2000),
+      })
+        .then((r) => (r.ok ? r.text() : ""))
+        .then((xml) => (xml ? parseRssNewsItems(xml, "BBC Technology", 72).slice(0, 4) : []))
+        .catch(() => [])
+    );
+
+    feedPromises.push(
+      fetch("https://hn.algolia.com/api/v1/search_by_date?tags=front_page&hitsPerPage=5", {
+        headers: { "User-Agent": "ForgeX/1.0" },
+        signal: AbortSignal.timeout(2000),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: any) => {
+          const hits = Array.isArray(data?.hits) ? data.hits : [];
+          return hits
+            .filter((h: any) => h?.title && (h?.url || h?.objectID))
+            .map((h: any) => {
+              const pubMs = h.created_at_i ? Number(h.created_at_i) * 1000 : Date.now();
+              const targetUrl = h.url || `https://news.ycombinator.com/item?id=${h.objectID}`;
+              let domain = "news.ycombinator.com";
+              try {
+                domain = new URL(targetUrl).hostname.replace(/^www\./, "");
+              } catch {}
+              return {
+                title: `${h.title} (${domain})`,
+                url: targetUrl,
+                snippet: `[Published: ${new Date(pubMs).toUTCString().replace(":00 GMT", " UTC")} | Source: ${domain}] Front-page tech story (${h.points || 0} pts).`,
+                sourceDomain: domain,
+                pubMs,
+              };
+            });
+        })
+        .catch(() => [])
+    );
+  }
+
+  const results = await Promise.all(feedPromises);
+  const combined = results.flat().sort((a, b) => b.pubMs - a.pubMs);
+
+  const deduped: WebGroundingSource[] = [];
+  const seenTitles = new Set<string>();
+  for (const item of combined) {
+    const key = item.title.toLowerCase().slice(0, 48);
+    if (seenTitles.has(key)) continue;
+    seenTitles.add(key);
+    deduped.push({
+      title: item.title,
+      url: item.url,
+      snippet: item.snippet,
+      sourceDomain: item.sourceDomain,
+    });
+    if (deduped.length >= 10) break;
+  }
+  return deduped;
+}
+
+// Multi-Source Live Web & Encyclopedic Grounding Service
 async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundingResult> {
-  const cacheKey = searchQuery.trim().toLowerCase();
+  const coreTopic = extractCoreSearchTopic(searchQuery);
+  const isNews = isLiveNewsQuery(searchQuery);
+  const todayStamp = new Date().toISOString().split("T")[0];
+  const cacheKey = isNews ? `news:${todayStamp}:${coreTopic.toLowerCase()}` : coreTopic.toLowerCase();
+  const cacheTtlMs = isNews ? 2 * 60 * 1000 : 10 * 60 * 1000;
   const cached = webGroundingCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
+  if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return cached.result;
   }
 
-  const sources: WebGroundingSource[] = [];
-  const searchQueries: string[] = [searchQuery];
+  const newsSources: WebGroundingSource[] = [];
+  const exactSources: WebGroundingSource[] = [];
+  const wikiRankedSources: WebGroundingSource[] = [];
+  const ddgSources: WebGroundingSource[] = [];
+  const wiktSources: WebGroundingSource[] = [];
+  const searchQueries: string[] = [isNews ? `${coreTopic} ${todayStamp}` : coreTopic];
 
   try {
-    // 1. DuckDuckGo Instant Answer API (fast 900ms timeout)
+    // 0. If this is a news/daily-briefing request, fetch real live timestamped news feeds FIRST
+    const newsPromise = isNews
+      ? fetchLiveNewsSources(searchQuery).then((items) => {
+          newsSources.push(...items);
+        })
+      : Promise.resolve();
+
+    // 1. DuckDuckGo Instant Answer API (queries clean topic for high hit rate)
     const ddgPromise = (async () => {
       try {
-        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1`;
+        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(coreTopic)}&format=json&no_html=1&skip_disambig=1`;
         const res = await fetch(ddgUrl, {
           headers: { "User-Agent": "ForgeX/1.0" },
-          signal: AbortSignal.timeout(900),
+          signal: AbortSignal.timeout(1200),
         });
         if (res.ok) {
           const data = (await res.json()) as any;
+          if (data.Answer) {
+            ddgSources.push({
+              title: `${coreTopic} — Direct Fact`,
+              url: data.AbstractURL || `https://duckduckgo.com/?q=${encodeURIComponent(coreTopic)}`,
+              snippet: String(data.Answer),
+              sourceDomain: "duckduckgo.com",
+            });
+          }
           if (data.AbstractText && data.AbstractURL) {
             let domain = "duckduckgo.com";
             try { domain = new URL(data.AbstractURL).hostname.replace(/^www\./, ""); } catch {}
-            sources.push({
-              title: data.Heading || `${searchQuery} Overview`,
+            ddgSources.push({
+              title: data.Heading || `${coreTopic} Overview`,
               url: data.AbstractURL,
-              snippet: data.AbstractText.slice(0, 260),
+              snippet: String(data.AbstractText).slice(0, 1200),
               sourceDomain: domain,
             });
           }
@@ -435,10 +725,10 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
               if (topic.Text && topic.FirstURL) {
                 let domain = "";
                 try { domain = new URL(topic.FirstURL).hostname.replace(/^www\./, ""); } catch {}
-                sources.push({
+                ddgSources.push({
                   title: topic.Text.split(" - ")[0] || topic.Text.slice(0, 60),
                   url: topic.FirstURL,
-                  snippet: topic.Text.slice(0, 200),
+                  snippet: topic.Text.slice(0, 320),
                   sourceDomain: domain || "web",
                 });
               }
@@ -448,97 +738,168 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
       } catch {}
     })();
 
-    // 2. Wikipedia OpenSearch for verified authoritative articles (fast 900ms timeout)
-    const wikiPromise = (async () => {
-      try {
-        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(searchQuery)}&limit=4&namespace=0&format=json`;
-        const res = await fetch(wikiUrl, {
-          headers: { "User-Agent": "ForgeX/1.0" },
-          signal: AbortSignal.timeout(900),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as any;
-          const titles = data[1] || [];
-          const snippets = data[2] || [];
-          const links = data[3] || [];
-          for (let i = 0; i < titles.length; i++) {
-            if (links[i] && titles[i]) {
-              sources.push({
-                title: titles[i],
-                url: links[i],
-                snippet: snippets[i] || `Wikipedia reference for ${titles[i]}`,
-                sourceDomain: "wikipedia.org",
-              });
-            }
-          }
-        }
-      } catch {}
-    })();
-
-    // 3. Wikipedia REST Page Summary for rich factual overview (fast 900ms timeout)
-    const wikiSummaryPromise = (async () => {
-      try {
-        const slug = encodeURIComponent(searchQuery.trim().replace(/\s+/g, "_"));
-        const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`;
-        const res = await fetch(summaryUrl, {
-          headers: { "User-Agent": "ForgeX/1.0" },
-          signal: AbortSignal.timeout(900),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as any;
-          if (data?.extract && data?.content_urls?.desktop?.page) {
-            sources.unshift({
-              title: data.title || searchQuery,
-              url: data.content_urls.desktop.page,
-              snippet: String(data.extract).slice(0, 420),
-              sourceDomain: "wikipedia.org",
+    // 2. Wikipedia Full-Text Search + Full Multi-Paragraph Plaintext Intro Extracts (skip for pure breaking news if live news succeeded)
+    const wikiFullPromise = isNews
+      ? Promise.resolve()
+      : (async () => {
+          try {
+            const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(coreTopic)}&srlimit=4&format=json&origin=*`;
+            const searchRes = await fetch(searchUrl, {
+              headers: { "User-Agent": "ForgeX/1.0" },
+              signal: AbortSignal.timeout(1100),
             });
-          }
-        }
-      } catch {}
-    })();
+            if (!searchRes.ok) return;
+            const searchData = (await searchRes.json()) as any;
+            const hits: Array<{ title: string; snippet?: string }> = searchData?.query?.search || [];
+            if (hits.length === 0) return;
 
-    // Hard ceiling: never wait more than 950ms so response streaming begins immediately
-    const timeoutGate = new Promise<void>((resolve) => setTimeout(resolve, 950));
-    await Promise.race([Promise.allSettled([ddgPromise, wikiPromise, wikiSummaryPromise]), timeoutGate]);
+            const titlesParam = hits.slice(0, 3).map((h) => h.title).join("|");
+            const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|info&exintro=1&explaintext=1&inprop=url&redirects=1&titles=${encodeURIComponent(titlesParam)}&format=json&origin=*`;
+            const extRes = await fetch(extractUrl, {
+              headers: { "User-Agent": "ForgeX/1.0" },
+              signal: AbortSignal.timeout(1100),
+            });
+            if (extRes.ok) {
+              const extData = (await extRes.json()) as any;
+              const pages = Object.values(extData?.query?.pages || {}) as any[];
+              for (const hit of hits.slice(0, 3)) {
+                const matchedPage =
+                  pages.find(
+                    (p) => typeof p?.title === "string" && p.title.toLowerCase() === hit.title.toLowerCase()
+                  ) || pages.find((p) => p?.extract);
+                if (matchedPage?.extract && matchedPage?.fullurl) {
+                  wikiRankedSources.push({
+                    title: matchedPage.title,
+                    url: matchedPage.fullurl,
+                    snippet: String(matchedPage.extract).trim().slice(0, 1800),
+                    sourceDomain: "wikipedia.org",
+                  });
+                } else if (hit.snippet) {
+                  const cleanSnippet = String(hit.snippet).replace(/<[^>]+>/g, "").trim();
+                  if (cleanSnippet) {
+                    wikiRankedSources.push({
+                      title: hit.title,
+                      url: `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/\s+/g, "_"))}`,
+                      snippet: cleanSnippet,
+                      sourceDomain: "wikipedia.org",
+                    });
+                  }
+                }
+              }
+            }
+          } catch {}
+        })();
+
+    // 3. Direct Wikipedia REST Page Summary for exact entity titles + Wiktionary for single-word definitions
+    const directSummaryPromise = isNews
+      ? Promise.resolve()
+      : (async () => {
+          try {
+            const slug = encodeURIComponent(coreTopic.replace(/\s+/g, "_"));
+            const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`;
+            const res = await fetch(summaryUrl, {
+              headers: { "User-Agent": "ForgeX/1.0" },
+              signal: AbortSignal.timeout(1000),
+            });
+            if (res.ok) {
+              const data = (await res.json()) as any;
+              if (data?.extract && data?.type !== "disambiguation" && data?.content_urls?.desktop?.page) {
+                exactSources.push({
+                  title: data.title || coreTopic,
+                  url: data.content_urls.desktop.page,
+                  snippet: String(data.extract).slice(0, 1200),
+                  sourceDomain: "wikipedia.org",
+                });
+              }
+            }
+          } catch {}
+
+          if (/^[a-zA-Z-]{2,32}$/.test(coreTopic)) {
+            try {
+              const defUrl = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(coreTopic.toLowerCase())}`;
+              const defRes = await fetch(defUrl, {
+                headers: { "User-Agent": "ForgeX/1.0" },
+                signal: AbortSignal.timeout(900),
+              });
+              if (defRes.ok) {
+                const defData = (await defRes.json()) as any;
+                const enEntries = Array.isArray(defData?.en) ? defData.en : [];
+                const defs = enEntries
+                  .slice(0, 2)
+                  .map((entry: any) => {
+                    const pos = entry.partOfSpeech || "term";
+                    const mean = (entry.definitions?.[0]?.definition || "").replace(/<[^>]+>/g, "").trim();
+                    return mean ? `**${pos}**: ${mean}` : "";
+                  })
+                  .filter(Boolean)
+                  .join("\n");
+                if (defs) {
+                  wiktSources.push({
+                    title: `Definition of "${coreTopic}"`,
+                    url: `https://en.wiktionary.org/wiki/${encodeURIComponent(coreTopic.toLowerCase())}`,
+                    snippet: defs,
+                    sourceDomain: "wiktionary.org",
+                  });
+                }
+              }
+            } catch {}
+          }
+        })();
+
+    const timeoutGate = new Promise<void>((resolve) => setTimeout(resolve, isNews ? 2400 : 1500));
+    await Promise.race([
+      Promise.allSettled([newsPromise, wikiFullPromise, ddgPromise, directSummaryPromise]),
+      timeoutGate,
+    ]);
   } catch (err) {
     console.warn("Live web search grounding notice:", err);
   }
 
-  // Deduplicate sources by URL
+  const sources: WebGroundingSource[] = [
+    ...newsSources,
+    ...exactSources,
+    ...wikiRankedSources,
+    ...ddgSources,
+    ...wiktSources,
+  ];
+
+  // Deduplicate sources by URL, preferring richer snippets
   const uniqueSources: WebGroundingSource[] = [];
-  const seenUrls = new Set<string>();
+  const urlIndex = new Map<string, number>();
   for (const src of sources) {
-    if (src.url && !seenUrls.has(src.url)) {
-      seenUrls.add(src.url);
+    if (!src.url) continue;
+    const existingIdx = urlIndex.get(src.url);
+    if (existingIdx === undefined) {
+      urlIndex.set(src.url, uniqueSources.length);
       uniqueSources.push(src);
+    } else if ((src.snippet?.length || 0) > (uniqueSources[existingIdx].snippet?.length || 0)) {
+      uniqueSources[existingIdx] = src;
     }
   }
 
-  // Ensure high-utility verified portal link if few results were found
   if (uniqueSources.length === 0) {
     uniqueSources.push({
-      title: `Google Live Index: "${searchQuery}"`,
-      url: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
-      snippet: `Real-time search index and authoritative reports for ${searchQuery}.`,
-      sourceDomain: "google.com",
+      title: `Live Web Index: "${coreTopic}"`,
+      url: `https://duckduckgo.com/?q=${encodeURIComponent(coreTopic)}`,
+      snippet: `Real-time search index and authoritative reports for ${coreTopic}.`,
+      sourceDomain: "web",
     });
   }
 
   // Format grounding context to feed into prompt
+  const maxContextSources = isNews ? 8 : 5;
   const groundingContext = uniqueSources
-    .slice(0, 5)
+    .slice(0, maxContextSources)
     .map((s, idx) => `[Source ${idx + 1}: ${s.title} (${s.sourceDomain})](${s.url})\n${s.snippet || ""}`)
     .join("\n\n");
 
   const result: WebGroundingResult = {
     searchedWeb: true,
     searchQueries,
-    groundingSources: uniqueSources.slice(0, 6),
+    groundingSources: uniqueSources.slice(0, isNews ? 8 : 6),
     groundingContext,
   };
 
-  // Cache successful result
   webGroundingCache.set(cacheKey, { result, timestamp: Date.now() });
   return result;
 }
@@ -617,10 +978,13 @@ async function generateContentResilient(
   options?: { timeoutMs?: number }
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
+  const modelsToTry = hasGoogleSearchTool(request.config)
+    ? prioritizeGoogleSearchModels(preferredModels)
+    : preferredModels;
 
-  for (let i = 0; i < preferredModels.length; i++) {
-    const model = preferredModels[i];
-    const hasNextModel = i < preferredModels.length - 1;
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+    const hasNextModel = i < modelsToTry.length - 1;
     const callTimeoutMs = options?.timeoutMs ?? (hasNextModel ? 14000 : 25000);
 
     try {
@@ -731,7 +1095,9 @@ async function* generateContentStreamResilient(
     );
 
     let emittedAny = false;
-    let lastGrounding: any = null;
+    const mergedQueries: string[] = [];
+    const mergedChunks: any[] = [];
+    let mergedSearchEntryPoint: any = undefined;
     const iter = responseStream[Symbol.asyncIterator]();
 
     while (true) {
@@ -744,22 +1110,59 @@ async function* generateContentStreamResilient(
       const text = chunk.text || "";
       const grounding = chunk.candidates?.[0]?.groundingMetadata;
       if (grounding) {
-        lastGrounding = grounding;
+        if (Array.isArray(grounding.webSearchQueries)) {
+          for (const q of grounding.webSearchQueries) {
+            if (typeof q === "string" && !mergedQueries.includes(q)) mergedQueries.push(q);
+          }
+        }
+        if (Array.isArray(grounding.groundingChunks)) {
+          for (const gc of grounding.groundingChunks) {
+            const uri = gc?.web?.uri;
+            if (!uri || !mergedChunks.some((c) => c?.web?.uri === uri)) {
+              mergedChunks.push(gc);
+            }
+          }
+        }
+        if (grounding.searchEntryPoint) {
+          mergedSearchEntryPoint = grounding.searchEntryPoint;
+        }
       }
+      const snapshotGrounding =
+        mergedQueries.length > 0 || mergedChunks.length > 0 || mergedSearchEntryPoint
+          ? {
+              webSearchQueries: mergedQueries,
+              groundingChunks: mergedChunks,
+              ...(mergedSearchEntryPoint ? { searchEntryPoint: mergedSearchEntryPoint } : {}),
+            }
+          : grounding;
       if (text) {
         emittedAny = true;
-        yield { text, model, groundingMetadata: grounding };
+        yield { text, model, groundingMetadata: snapshotGrounding };
+      } else if (grounding && emittedAny) {
+        yield { text: "", model, groundingMetadata: snapshotGrounding };
       }
     }
 
     if (emittedAny) {
-      yield { text: "", model, done: true, groundingMetadata: lastGrounding };
+      const finalGrounding =
+        mergedQueries.length > 0 || mergedChunks.length > 0 || mergedSearchEntryPoint
+          ? {
+              webSearchQueries: mergedQueries,
+              groundingChunks: mergedChunks,
+              ...(mergedSearchEntryPoint ? { searchEntryPoint: mergedSearchEntryPoint } : {}),
+            }
+          : undefined;
+      yield { text: "", model, done: true, groundingMetadata: finalGrounding };
     }
   };
 
-  for (let i = 0; i < preferredModels.length; i++) {
-    const model = preferredModels[i];
-    const hasNextModel = i < preferredModels.length - 1;
+  const modelsToTry = hasGoogleSearchTool(request.config)
+    ? prioritizeGoogleSearchModels(preferredModels)
+    : preferredModels;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+    const hasNextModel = i < modelsToTry.length - 1;
     const firstChunkTimeoutMs = options?.firstChunkTimeoutMs ?? (hasNextModel ? 12000 : 25000);
 
     try {
@@ -989,16 +1392,70 @@ async function generateRealAiImage(
       if (imgBytes) {
         return {
           imageUrl: `data:image/jpeg;base64,${imgBytes}`,
-          engine: "Google Imagen 3 (High Fidelity)",
+          engine: "ForgeX Imagen (High Fidelity)",
         };
       }
     } catch (_err) {}
   }
 
-  throw new Error(`Image generation for "${cleanPrompt}" requires Puter authentication for Black Forest Labs FLUX or a Gemini API key. Please connect Puter in Image Studio.`);
+  throw new Error(`Image generation for "${cleanPrompt}" requires Puter authentication for Black Forest Labs FLUX or a ForgeX API key. Please connect Puter in Image Studio.`);
 }
 
-// Comprehensive Universal Knowledge & Synthesis Engine (with live web grounding backstop)
+function sanitizeAiBrandMentions(text: string): string {
+  if (!text) return text;
+  const protectedUrls: string[] = [];
+  const withPlaceholders = text.replace(/https?:\/\/[^\s)\]<>"']+/gi, (url) => {
+    const token = `__FORGEX_URL_${protectedUrls.length}__`;
+    protectedUrls.push(url);
+    return token;
+  });
+
+  const cleaned = withPlaceholders
+    .replace(/\bGoogle\s+Gemini(?:\s+(?:\d+(?:\.\d+)?|Pro|Ultra|Flash|Lite|Nano|Hydrogen|Argon|Carbon|Neon|Experimental|Live))*\b/gi, "ForgeX Neural Engine")
+    .replace(/\bGemini(?:\s+(?:\d+(?:\.\d+)?|Pro|Ultra|Flash|Lite|Nano|Hydrogen|Argon|Carbon|Neon|AI|Vision|Live))+\b/gi, "ForgeX Neural Engine")
+    .replace(/\b(?:trained|created|built|developed|made|powered)\s+by\s+Google(?:\s+(?:AI|DeepMind|LLC))?\b/gi, "built on ForgeX")
+    .replace(/\bI\s+am\s+(?:a\s+large\s+language\s+model\s+(?:trained|built|created|developed)\s+by\s+Google|Gemini|Google(?:'s)?\s+AI)\b/gi, "I am ForgeX")
+    .replace(/\bGoogle\s+DeepMind\b/gi, "ForgeX Research")
+    .replace(/\bGoogle\s+AI(?:\s+Studio)?\b/gi, "ForgeX Cloud")
+    .replace(/\bGoogle\s+Live\s+Index\b/gi, "Web Live Index")
+    .replace(/\bGoogle\s+Web\s+Index\b/gi, "Web Index")
+    .replace(/\bGoogle\s+Search\s+Result\b/gi, "Web Search Result")
+    .replace(/\bGoogle\s+Imagen(?:\s+\d+(?:\.\d+)?)?\b/gi, "ForgeX Imagen")
+    .replace(/\bGoogle\s+Veo(?:\s+\d+(?:\.\d+)?)?\b/gi, "ForgeX Veo")
+    .replace(/\bGoogle(?:'s)?\s+(?:AI\s+(?:model|assistant|chatbot|engine)|LLM|large\s+language\s+model)\b/gi, "ForgeX")
+    .replace(/\busing\s+Google\s+Search\b/gi, "using Web Search")
+    .replace(/\bpowered\s+by\s+Google\s+Search\b/gi, "powered by Web Search")
+    .replace(/\b(?:Bard|PaLM\s*2)\b/gi, "ForgeX");
+
+  return cleaned.replace(/__FORGEX_URL_(\d+)__/g, (_, idx) => protectedUrls[Number(idx)] || "");
+}
+
+function sanitizeGroundingSources<T extends { title?: string; sourceDomain?: string; snippet?: string }>(sources: T[]): T[] {
+  if (!Array.isArray(sources)) return [];
+  const cleanSourceLabel = (val: string) =>
+    val
+      .replace(/\s*-\s*Google\s+News\b/gi, "")
+      .replace(/\bGoogle\s+Search\s+Result\b/gi, "Web Search Result")
+      .replace(/\bGoogle\s+Live\s+Index\b/gi, "Web Live Index")
+      .replace(/\bGoogle\s+Gemini\b/gi, "ForgeX Neural Engine")
+      .trim();
+
+  return sources.map((s) => ({
+    ...s,
+    ...(s.sourceDomain
+      ? {
+          sourceDomain:
+            s.sourceDomain === "vertexaisearch.cloud.google.com" || s.sourceDomain === "news.google.com"
+              ? "live-news"
+              : s.sourceDomain,
+        }
+      : {}),
+    ...(s.title ? { title: cleanSourceLabel(s.title) } : {}),
+    ...(s.snippet ? { snippet: cleanSourceLabel(s.snippet) } : {}),
+  }));
+}
+
+// Comprehensive Universal Knowledge & Synthesis Engine (with live encyclopedic & web grounding backstop)
 function generateFallbackChatReply(
   prompt: string,
   modelId: string,
@@ -1011,67 +1468,69 @@ function generateFallbackChatReply(
   }
 
   const informativeSources = (liveGrounding?.groundingSources || []).filter(
-    (s) => s.snippet && s.snippet.trim().length > 25 && !s.url.includes("google.com/search")
+    (s) =>
+      s.snippet &&
+      s.snippet.trim().length > 25 &&
+      !s.url.includes("google.com/search") &&
+      !s.snippet.startsWith("Wikipedia reference for ")
   );
+
   if (informativeSources.length > 0) {
-    const primary = informativeSources[0];
-    const extraBullets = informativeSources
-      .slice(1, 3)
-      .map((s) => `* **${s.title}**: ${s.snippet}`)
+    // Prefer full Wikipedia/DuckDuckGo article extract first
+    const primary =
+      informativeSources.find((s) => (s.snippet?.length || 0) > 160) || informativeSources[0];
+    const related = informativeSources
+      .filter((s) => s.url !== primary.url)
+      .slice(0, 3)
+      .map((s) => `* **${s.title}**: ${s.snippet!.slice(0, 260)}${s.snippet!.length > 260 ? "..." : ""}`)
       .join("\n");
-    return `### ${primary.title}\n\n${primary.snippet}${extraBullets ? `\n\n#### Related Context:\n${extraBullets}` : ""}`;
+
+    return `### ${primary.title}\n\n${primary.snippet}${related ? `\n\n---\n\n#### Related Topics & Context\n${related}` : ""}`;
   }
 
   return expert;
 }
 
-const FORGEX_SYSTEM_INSTRUCTION = `You are ForgeX, the world's most advanced, versatile, and accurate AI intelligence platform created by VishweshVarman.
+const FORGEX_SYSTEM_INSTRUCTION = `You are ForgeX, an all-in-one, universally knowledgeable AI intelligence and creation platform created by VishweshVarman.
+
+UNIVERSAL KNOWLEDGE MANDATE (KNOW EVERYTHING & ANSWER WITH AUTHORITY):
+You possess encyclopedic, graduate-to-expert mastery across EVERY domain of human knowledge:
+- **Sciences & Medicine**: Physics (classical, relativity, quantum, astrophysics), Chemistry (organic, inorganic, physical, biochemistry), Biology (genetics, neuroscience, evolution, ecology), Earth & Climate Science, and Evidence-Based Health/Medicine.
+- **Mathematics & Quantitative Logic**: Arithmetic, Algebra, Geometry, Trigonometry, Calculus, Linear Algebra, Differential Equations, Probability, Statistics, Discrete Math, Number Theory, and Optimization.
+- **Technology & Engineering**: 25+ programming languages, full-stack web/mobile engineering, distributed systems, databases, AI/ML, cybersecurity, cloud infrastructure, electronics, mechanical & aerospace engineering.
+- **Humanities, Society & Culture**: World History (ancient civilizations to modern geopolitics), Geography, Economics, Finance, Investing, Law & Public Policy, Philosophy, Psychology, Literature, Linguistics, Art, Architecture, Music Theory, Cinema, Culinary Arts, and Global Sports.
+- **Practical Everyday Life & Real-Time Events**: Travel planning, career coaching, productivity, cooking, DIY troubleshooting, language translation, and real-time current events via live Web Search grounding.
+
+When answering any question:
+- Give a complete, clear, authoritative answer across ANY subject without unnecessary refusals or artificial limits.
+- When time-sensitive or specific real-world facts are needed, synthesize verified Web Search / Vault grounding context directly.
 
 CORE IDENTITY & CREATOR ATTRIBUTION:
+- STRICT BRAND & IDENTITY RULE: NEVER mention "Google", "Gemini", "Google AI", "Google Search", "Google DeepMind", "Bard", or "PaLM" anywhere in your responses. When asked who you are, what model powers you, or how your search works, state that you are **ForgeX**, powered by the **ForgeX Neural Engine** and **Web Search**.
 - If the user explicitly asks who created you, who made you, or who your creator/founder is, answer that you were created by VishweshVarman.
 - Do NOT mention VishweshVarman or your creator in normal conversation, greetings, questions, or capability breakdowns unless specifically and directly asked about your creator.
-- When answering other queries, stay 100% focused on directly, brilliantly answering what the user asked without unprompted self-introductions or creator mentions.
 
-SELF-KNOWLEDGE & HOW FORGEX WORKS:
-You possess complete, accurate knowledge about the ForgeX platform, its studios, workflows, and capabilities:
-1. HOW TO UPLOAD A CUSTOM STUDIO (Studio Hub & Store):
-   When users ask how to upload or create their own studio, explain the exact workflow:
-   - Step 1: Sign In — Users must be signed in with their account (Google or Email) to access studios and upload custom studios. Unauthenticated access is restricted.
-   - Step 2: Open Studio Store — Click "+ Add Studio" in the left sidebar or the Studio Store icon.
-   - Step 3: Register Studio Name — Before uploading, the user must first register their unique Studio Name (with brand icon, accent color, and optional bio/tagline). This Studio Name is permanently linked to their verified login email.
-   - Step 4: Configure & Upload Studio — Switch to "Upload Your Studio", choose a title, category (Intelligence, Creative, Productivity, Utility, Gaming), accent color, system instructions (the AI reasoning prompt that powers the studio), welcome message, starter prompts, and UI template (Chat or Prompt Pad).
-   - Step 5: Publish & Launch — Save and launch! The studio is published under your registered Studio Name and saved to your private cloud storage. Only the creator's logged-in email has permissions to manage or delete it.
+SELF-KNOWLEDGE & HOW FORGEX WORKS (INLINE CHAT ARCHITECTURE):
+- **Unified Inline Chat Workspace**: Every ForgeX creative & analytical tool launches directly inside Chat via the **+** menu (behaving just like Deep Research with interactive cards inside the conversation):
+  1. **Create Image**: Photorealistic, anime, 3D, claymation, watercolor, and handwritten notes generated inline.
+  2. **Web Search**: Real-time Web grounded answers with cited source pills.
+  3. **Deep Research**: Multi-step autonomous research planning and comprehensive cited reports inside Chat.
+  4. **Thinking**: Extended multi-step reasoning via Forge 2 Ultra.
+  5. **Code Workspace**: Multi-language code generation, debugging, refactoring, and live HTML/JS previews inside Chat.
+  6. **Make Song & Music Player**: Original AI song synthesis with lyrics and inline audio track streaming.
+  7. **Presentations & AI Canvas**: Interactive slide decks and zoomable node/edge mindmaps inside Chat.
+  8. **Data Analysis & Document AI**: CSV/JSON statistical reports, charts, data tables, document summaries, and interactive quizzes.
+  9. **Writing Assistant & AI Agents**: Inline prose drafting/refinement and autonomous step-by-step agent execution with action confirmation.
+  10. **Knowledge Vault & Projects**: Ground any chat answer using private saved Vault documents or Project context.
+- **Landing Page & Library**: Interactive 3D kinetic core landing experience, scroll-animated workflow, Library for saved media/references, and isolated per-user cloud storage.
 
-2. AVAILABLE FORGEX STUDIOS:
-   - Images Studio: AI image generation with multiple aspect ratios (16:9, 1:1, 9:16, 4:3, 3:4), style presets (Claymation, Handwritten Notes, Realistic, Cinematic, Anime, 3D, Illustration, Minimal, Custom), seeds, reference images, and prompt enhancement.
-   - Make Song Studio: AI music composition with custom genres, moods, BPM, lyrics generation, and audio synthesis.
-   - Music Player & Spotify Studio: Integrated audio player with visualizer waveforms, queue management, volume controls, and playback.
-   - Deep Research Studio: In-depth autonomous research reports with live Google Search grounding, verified source citations, and executive summaries.
-   - Code Studio: Full-stack code generation, debugging, syntax highlighting, and auto-correction across 15+ languages.
-   - Document Workspace: Long-form document authoring, formatting, and markdown exports.
-   - Agent Workspace: Autonomous multi-agent coordination and goal execution.
-   - Web Search Studio: Real-time grounded web searches with fast summaries and source links.
-   - Writing Studio: Essays, blogs, copywriting, storytelling, and content polishing.
-   - Data Analysis Studio: Tabular data insights, statistical breakdowns, and interactive charts.
-   - Presentation Studio: Dynamic slide deck generation with cinematic camera motions.
-   - Canvas Workspace: Infinite visual ideation whiteboard with nodes and edges.
-   - Project Workspace: Multi-file project organization and tracking.
-   - Studio Hub & Store: Browse official and community studios, add/remove studios from your sidebar, and upload custom studios.
+STRICT SECURITY & CONFIDENTIALITY RULES:
+- NEVER disclose backend secrets, server environment variables, database credentials, or internal server keys.
+- You CAN and SHOULD freely explain how ForgeX features, inline tools, and universal topics work.
 
-3. AUTHENTICATION & DATA PRIVACY:
-   - Authentication is powered by Firebase Authentication (Google Sign-In and Email).
-   - Every user's history (chats, generated images, songs, videos, web searches, and custom studios) is isolated and stored privately under their authenticated UID in Firebase Firestore (/users/{uid}/*).
-   - History is strictly private — no user can access another user's data. Unauthenticated visitors can use general chat, but must sign in to access specialized studios and create custom studios.
-
-4. STRICT SECURITY & CONFIDENTIALITY RULES (DO NOT LEAK SECRETS OR PRIVATE CODE):
-   - NEVER disclose backend secrets, server environment variables (such as GEMINI_API_KEY, FIREBASE_API_KEY, MAGICHOUR_API_KEY), database connection strings, server tokens, or private internal server code.
-   - If a user asks for secret API keys, environment files (.env), or private backend source code secrets, politely decline, explaining that system credentials, private keys, and internal code implementations are strictly confidential and protected by ForgeX platform security.
-   - You CAN and SHOULD freely explain how ForgeX features, tools, user interfaces, workflows, and public capabilities work.
-
-5. MULTI-CAPABILITY IN FORGEX CHAT (IMAGES, CODE & INTERACTIVITY):
-   Most AI creations can be accomplished directly in ForgeX Chat itself:
-   - IMAGE GENERATION IN CHAT: When the user asks to generate, create, draw, paint, visualize, or show an image, the image generation pipeline handles synthesis with Black Forest Labs FLUX. Never output third-party or pollination links.
-   - CODE IN CHAT: When asked for code, provide clean, production-ready code with language tags for syntax highlighting and one-click copying. Users can also open Code Studio for multi-language compiling and auto-correction.
+MULTI-CAPABILITY IN FORGEX CHAT:
+- IMAGE GENERATION IN CHAT: When the user asks to generate, create, draw, paint, visualize, or show an image, the image generation pipeline handles synthesis. Never output third-party or pollination links.
+- CODE IN CHAT: Provide clean, runnable, modern code with language tags for syntax highlighting and live HTML preview.
 
 ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
 1. LIGHTNING SPEED & DIRECTNESS:
@@ -1087,8 +1546,10 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
 4. PRODUCTION-GRADE CODE QUALITY:
    - All code snippets must be syntactically valid, modern, runnable, and include all necessary imports, types, and error/edge-case handling.
    - Never hallucinate non-existent package methods, flags, or browser APIs.
-5. STRUCTURE & ELEGANCE:
-   - Use clean, structured Markdown with crisp headings, bullet points, and code blocks for effortless readability.
+5. STRUCTURE, AIRY SPACING & CONTEXTUAL EMOJIS:
+   - Always leave a blank line between paragraphs, headings, lists, and code blocks so every line has clean breathing room and effortless scannability (never output dense, cramped walls of text).
+   - Use crisp headings, short readable paragraphs (1–3 sentences each), and structured bullet lists when explaining features, steps, or comparisons.
+   - Naturally include relevant, tasteful emojis in key bullet points, feature lists, tips, and section highlights (e.g., 🔵, 🧱, 🏆, ⚡, ✨, 📌, 🛠️) whenever helpful, unless the user's personalization sets Emoji to "Less". Never place emojis inside code blocks, JSON, or LaTeX formulas.
 
 6. MATHEMATICAL SUMS & EQUATIONS (CHATGPT STYLE):
    - Always format math problems, arithmetic sums, algebra, calculus, and formulas using clean standard LaTeX formatting.
@@ -1178,7 +1639,11 @@ function buildGroundedSystemInstruction(
   }
 
   if (liveWebContext) {
-    out += `\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe following verified real-time web results were retrieved:\n${liveWebContext}\n\nInstructions for using search results:\n1. Ground facts, dates, metrics, and current developments directly in these verified web results and Google Search tool output.\n2. When citing sources, reference the provided domain or title cleanly.\n3. Never invent unsupported claims beyond what the verified sources state.`;
+    out += `\n\n=== REAL-TIME LIVE WEB SEARCH RESULTS ===\nThe following verified real-time web results were retrieved:\n${liveWebContext}\n\nInstructions for using search results:\n1. Ground facts, dates, metrics, and current developments directly in these verified web results and Web Search grounding output.\n2. When citing sources, reference the provided publisher/domain cleanly (never cite aggregator brand names).\n3. Never invent unsupported claims beyond what the verified sources state.`;
+  }
+
+  if (isLiveNewsQuery(userQuery)) {
+    out += `\n\n=== MANDATORY LIVE DAILY NEWS RECENCY RULE ===\nToday's real date is ${dateStamp}. The user is asking for current/today's news.\n1. Report ONLY real, verified news stories published TODAY (${dateStamp}) or within the last 24–48 hours.\n2. STRICTLY FORBIDDEN: Never surface old news from previous weeks, months, or years from training memory.\n3. Rely strictly on the timestamped live news feed results above and live Web Search results from today.\n4. State each story's headline clearly with a concise, accurate summary, timeframe/date, and publisher attribution.`;
   }
 
   return out;
@@ -1271,7 +1736,7 @@ async function startServer() {
           status: "ok",
           validKey: true,
           hasEnvKey,
-          message: "API key is active and ready for Gemini, Imagen & Veo!",
+          message: "API key is active and ready for ForgeX Neural Engine, Imagen & Veo!",
           modelsSupported: [
             "gemini-3.1-flash-lite",
             "gemini-flash-latest",
@@ -1372,7 +1837,7 @@ async function startServer() {
       if (isSecretSeekingQuery) {
         return res.json({
           success: true,
-          reply: `### Security & Confidentiality Notice\n\nAs **ForgeX**, system credentials, private API keys (such as Gemini, Firebase, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.\n\n---\n\n### What I Can Help With:\n* **How ForgeX Works**: Platform features, architecture, and studio workflows.\n* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.\n* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.\n\nFeel free to ask about any feature, studio workflow, or programming task!`,
+          reply: `### Security & Confidentiality Notice\n\nAs **ForgeX**, system credentials, private API keys (such as neural engine, database, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.\n\n---\n\n### What I Can Help With:\n* **How ForgeX Works**: Platform features, architecture, and studio workflows.\n* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.\n* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.\n\nFeel free to ask about any feature, studio workflow, or programming task!`,
           model: "ForgeX Security Engine",
           searchedWeb: false,
           searchQueries: [],
@@ -1387,7 +1852,7 @@ async function startServer() {
       // Intelligently evaluate whether web search is needed (skip auto search when analyzing an attached image unless explicitly asked)
       const shouldSkipAutoSearchForVision = hasImageAttachments && searchMode === "auto" && !/(?:search\s+(?:the\s+web|google|online)|look\s+up\s+online)/i.test(cleanMessage);
       const searchIntent = shouldSkipAutoSearchForVision
-        ? { shouldSearch: false, searchQuery: "", reason: "Analyzing attached image directly via Gemini Vision." }
+        ? { shouldSearch: false, searchQuery: "", reason: "Analyzing attached image directly via ForgeX Vision." }
         : analyzeWebSearchIntent(cleanMessage, searchMode);
       let liveGrounding: WebGroundingResult = {
         searchedWeb: false,
@@ -1511,19 +1976,30 @@ The UI renders this as an interactive playable quiz widget!`;
             hasImageAttachments
           );
 
-          // If search is needed, attach googleSearch tool for dynamic search grounding
+          const useGoogleSearch = shouldAttachGoogleSearchTool(
+            cleanMessage,
+            searchMode,
+            hasImageAttachments,
+            isQuizQuery(cleanMessage)
+          );
+
+          // Attach googleSearch tool with gemini-4-hydrogen whenever Search Grounding is relevant
           const requestConfig: any = {
             systemInstruction: enhancedSystemInstruction,
             thinkingConfig: {
-              thinkingLevel: adaptiveThinking,
+              thinkingLevel: useGoogleSearch && adaptiveThinking === ThinkingLevel.MINIMAL ? ThinkingLevel.LOW : adaptiveThinking,
             },
           };
 
-          if (searchIntent.shouldSearch) {
+          if (useGoogleSearch) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
 
-          const modelCascade = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
+          const baseCascade = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
+          const modelCascade = useGoogleSearch
+            ? prioritizeGoogleSearchModels(baseCascade)
+            : baseCascade;
+
           const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
             {
@@ -1531,36 +2007,17 @@ The UI renders this as an interactive playable quiz widget!`;
               config: requestConfig,
             },
             modelCascade,
-            { timeoutMs: 14000 }
+            { timeoutMs: 16000 }
           );
 
           if (replyText) {
-            let finalReply = replyText;
+            let finalReply = sanitizeAiBrandMentions(replyText);
             // Ensure creator queries always attribute to VishweshVarman
             if (isCreatorQuery && !finalReply.toLowerCase().includes("vishweshvarman")) {
               finalReply = `I was created by **VishweshVarman** as part of **ForgeX** — an all-in-one AI creation platform for conversations, image creation, AI song making, deep research, and Code Studio.`;
             }
 
-            const geminiSources: WebGroundingSource[] = [];
-            const geminiQueries: string[] = [];
-
-            if (groundingMetadata?.webSearchQueries) {
-              geminiQueries.push(...groundingMetadata.webSearchQueries);
-            }
-            if (groundingMetadata?.groundingChunks) {
-              for (const chunk of groundingMetadata.groundingChunks) {
-                if (chunk.web?.uri) {
-                  let domain = "";
-                  try { domain = new URL(chunk.web.uri).hostname.replace(/^www\./, ""); } catch {}
-                  geminiSources.push({
-                    title: chunk.web.title || domain || "Web Source",
-                    url: chunk.web.uri,
-                    snippet: chunk.web.title,
-                    sourceDomain: domain || "web",
-                  });
-                }
-              }
-            }
+            const { sources: geminiSources, queries: geminiQueries } = extractGoogleGroundingData(groundingMetadata);
 
             const hasActiveSearch = Boolean(
               searchIntent.shouldSearch ||
@@ -1568,9 +2025,9 @@ The UI renders this as an interactive playable quiz widget!`;
               geminiSources.length > 0
             );
 
-            const finalSources = geminiSources.length > 0
-              ? geminiSources
-              : liveGrounding.groundingSources;
+            const finalSources = sanitizeGroundingSources(
+              geminiSources.length > 0 ? geminiSources : liveGrounding.groundingSources
+            );
 
             const finalQueries = geminiQueries.length > 0
               ? geminiQueries
@@ -1615,12 +2072,15 @@ The UI renders this as an interactive playable quiz widget!`;
 
       return res.json({
         success: true,
-        reply,
+        reply: sanitizeAiBrandMentions(reply),
         model: `ForgeX ${modelId.toUpperCase()} Engine`,
         notice: candidateKeys.length > 0 ? undefined : "Operating via ForgeX Neural Engine.",
         searchedWeb: Boolean(searchIntent.shouldSearch || hasUsefulSources),
         searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
-        groundingSources: searchIntent.shouldSearch || hasUsefulSources ? liveGrounding.groundingSources : [],
+        groundingSources:
+          searchIntent.shouldSearch || hasUsefulSources
+            ? sanitizeGroundingSources(liveGrounding.groundingSources)
+            : [],
       });
     } catch (err: unknown) {
       console.error("Error in /api/chat:", err);
@@ -1697,7 +2157,7 @@ The UI renders this as an interactive playable quiz widget!`;
       const isSecretSeekingQuery = /(?:(?:show|give|what\s+is|display|reveal|leak|print|share)\s+(?:me\s+)?(?:your\s+)?(?:api\s*keys?|secret\s*keys?|gemini\s*key|firebase\s*key|env\s*file|\.env|tokens?|credentials?|passwords?|private\s*keys?)|(?:show|give|display|reveal)\s+(?:me\s+)?(?:your\s+)?(?:server\s*code\s*secrets|backend\s*secrets|source\s*code\s*secrets))/i.test(cleanMessage);
 
       if (isSecretSeekingQuery) {
-        const reply = `### Security & Confidentiality Notice\n\nAs **ForgeX**, system credentials, private API keys (such as Gemini, Firebase, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.\n\n---\n\n### What I Can Help With:\n* **How ForgeX Works**: Platform features, architecture, and studio workflows.\n* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.\n* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.\n\nFeel free to ask about any feature, studio workflow, or programming task!`;
+        const reply = `### Security & Confidentiality Notice\n\nAs **ForgeX**, system credentials, private API keys (such as neural engine, database, or cloud provider tokens), and backend environment secrets are strictly confidential and safeguarded by platform security policies.\n\n---\n\n### What I Can Help With:\n* **How ForgeX Works**: Platform features, architecture, and studio workflows.\n* **Studio Uploading & Customization**: How to create, configure, and manage your own custom AI studios.\n* **Code Studio**: Writing, debugging, and generating production-ready code across 15+ programming languages.\n\nFeel free to ask about any feature, studio workflow, or programming task!`;
         res.write(`data: ${JSON.stringify({ text: reply })}\n\n`);
         res.write(`data: ${JSON.stringify({ done: true, model: "ForgeX Security Engine", searchedWeb: false, searchQueries: [], groundingSources: [] })}\n\n`);
         return res.end();
@@ -1710,7 +2170,7 @@ The UI renders this as an interactive playable quiz widget!`;
       // Automatically evaluate if web search is needed (skip auto search when analyzing an attached image unless explicitly asked)
       const shouldSkipAutoSearchForVision = hasImageAttachments && searchMode === "auto" && !/(?:search\s+(?:the\s+web|google|online)|look\s+up\s+online)/i.test(cleanMessage);
       const searchIntent = shouldSkipAutoSearchForVision
-        ? { shouldSearch: false, searchQuery: "", reason: "Analyzing attached image directly via Gemini Vision." }
+        ? { shouldSearch: false, searchQuery: "", reason: "Analyzing attached image directly via ForgeX Vision." }
         : analyzeWebSearchIntent(cleanMessage, searchMode);
       let liveGrounding: WebGroundingResult = {
         searchedWeb: false,
@@ -1838,21 +2298,33 @@ The UI renders this as an interactive playable quiz widget!`;
             hasImageAttachments
           );
 
+          const useGoogleSearch = shouldAttachGoogleSearchTool(
+            cleanMessage,
+            searchMode,
+            hasImageAttachments,
+            isQuizQuery(cleanMessage)
+          );
+
           const requestConfig: any = {
             systemInstruction: forgexSystemInstruction,
             thinkingConfig: {
-              thinkingLevel: adaptiveThinking,
+              thinkingLevel: useGoogleSearch && adaptiveThinking === ThinkingLevel.MINIMAL ? ThinkingLevel.LOW : adaptiveThinking,
             },
           };
 
-          if (searchIntent.shouldSearch) {
+          if (useGoogleSearch) {
             requestConfig.tools = [{ googleSearch: {} }];
           }
+
+          const streamCascade = useGoogleSearch
+            ? prioritizeGoogleSearchModels(modelCascade)
+            : modelCascade;
 
           let streamedAny = false;
           let modelUsed = modelProfile.displayName;
           const geminiSources: WebGroundingSource[] = [];
           const geminiQueries: string[] = [];
+          let pendingStreamBuffer = "";
 
           for await (const chunk of generateContentStreamResilient(
             ai,
@@ -1860,43 +2332,66 @@ The UI renders this as an interactive playable quiz widget!`;
               contents,
               config: requestConfig,
             },
-            modelCascade,
-            { firstChunkTimeoutMs: 12000 }
+            streamCascade,
+            { firstChunkTimeoutMs: 14000 }
           )) {
             if (streamClosed || res.writableEnded) break;
             if (chunk.groundingMetadata) {
-              if (chunk.groundingMetadata.webSearchQueries) {
-                for (const q of chunk.groundingMetadata.webSearchQueries) {
-                  if (!geminiQueries.includes(q)) geminiQueries.push(q);
+              const extracted = extractGoogleGroundingData(chunk.groundingMetadata);
+              let sourcesUpdated = false;
+              for (const q of extracted.queries) {
+                if (!geminiQueries.includes(q)) {
+                  geminiQueries.push(q);
+                  sourcesUpdated = true;
                 }
               }
-              if (chunk.groundingMetadata.groundingChunks) {
-                for (const gc of chunk.groundingMetadata.groundingChunks) {
-                  if (gc.web?.uri) {
-                    let domain = "";
-                    try { domain = new URL(gc.web.uri).hostname.replace(/^www\./, ""); } catch {}
-                    if (!geminiSources.some((s) => s.url === gc.web.uri)) {
-                      geminiSources.push({
-                        title: gc.web.title || domain || "Web Source",
-                        url: gc.web.uri,
-                        snippet: gc.web.title,
-                        sourceDomain: domain || "web",
-                      });
-                    }
-                  }
+              for (const src of sanitizeGroundingSources(extracted.sources)) {
+                if (!geminiSources.some((s) => s.url === src.url)) {
+                  geminiSources.push(src);
+                  sourcesUpdated = true;
+                }
+              }
+              if (sourcesUpdated && (geminiSources.length > 0 || geminiQueries.length > 0)) {
+                res.write(`data: ${JSON.stringify({
+                  searchedWeb: true,
+                  searchQueries: geminiQueries,
+                  groundingSources: geminiSources,
+                })}\n\n`);
+                if (typeof (res as any).flush === "function") {
+                  (res as any).flush();
                 }
               }
             }
 
             if (chunk.text) {
               streamedAny = true;
-              res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
-              if (typeof (res as any).flush === "function") {
-                (res as any).flush();
+              pendingStreamBuffer += chunk.text;
+              // Emit up to last whitespace leaving a safety tail so multi-word phrases like "Google Gemini" never split across SSE chunks
+              const lastWsIdx = Math.max(pendingStreamBuffer.lastIndexOf(" "), pendingStreamBuffer.lastIndexOf("\n"));
+              if (lastWsIdx > 24) {
+                const safeSlice = pendingStreamBuffer.slice(0, lastWsIdx + 1);
+                pendingStreamBuffer = pendingStreamBuffer.slice(lastWsIdx + 1);
+                const sanitizedSlice = sanitizeAiBrandMentions(safeSlice);
+                if (sanitizedSlice) {
+                  res.write(`data: ${JSON.stringify({ text: sanitizedSlice })}\n\n`);
+                  if (typeof (res as any).flush === "function") {
+                    (res as any).flush();
+                  }
+                }
               }
             }
             if (chunk.done) {
               modelUsed = modelProfile.displayName;
+            }
+          }
+
+          if (pendingStreamBuffer && !streamClosed && !res.writableEnded) {
+            const flushed = sanitizeAiBrandMentions(pendingStreamBuffer);
+            if (flushed) {
+              res.write(`data: ${JSON.stringify({ text: flushed })}\n\n`);
+              if (typeof (res as any).flush === "function") {
+                (res as any).flush();
+              }
             }
           }
 
@@ -1907,9 +2402,9 @@ The UI renders this as an interactive playable quiz widget!`;
               geminiSources.length > 0
             );
 
-            const finalSources = geminiSources.length > 0
-              ? geminiSources
-              : liveGrounding.groundingSources;
+            const finalSources = sanitizeGroundingSources(
+              geminiSources.length > 0 ? geminiSources : liveGrounding.groundingSources
+            );
 
             const finalQueries = geminiQueries.length > 0
               ? geminiQueries
@@ -1927,22 +2422,24 @@ The UI renders this as an interactive playable quiz widget!`;
             return res.end();
           }
         } catch (_geminiErr: unknown) {
-          console.error("Gemini stream error:", _geminiErr);
+          console.error("Stream generation error:", _geminiErr);
           // Continue to next key candidate or fallback
         }
       }
 
-      // If all Gemini models failed, fetch quick factual grounding before fallback so general queries still get real info
+      // If all upstream calls failed, fetch quick factual grounding before fallback so general queries still get real info
       if (!liveGrounding.groundingContext && cleanMessage.length >= 2) {
         try {
           liveGrounding = await performLiveWebGrounding(cleanMessage);
         } catch {}
       }
 
-      let fallbackReply = generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId, liveGrounding);
+      let fallbackReply = sanitizeAiBrandMentions(
+        generateFallbackChatReply(cleanMessage || "Analyze attached scene", modelId, liveGrounding)
+      );
       const hasUsefulSources = liveGrounding.groundingSources.some((s) => !s.url.includes("google.com/search"));
       if (hasUsefulSources) {
-        const sourceLinks = liveGrounding.groundingSources
+        const sourceLinks = sanitizeGroundingSources(liveGrounding.groundingSources)
           .filter((s) => !s.url.includes("google.com/search"))
           .slice(0, 3)
           .map((s) => `* [${s.title}](${s.url}) — *${s.sourceDomain}*`)
@@ -1966,7 +2463,10 @@ The UI renders this as an interactive playable quiz widget!`;
           model: `ForgeX ${modelId.toUpperCase()} Engine`,
           searchedWeb: Boolean(searchIntent.shouldSearch || hasUsefulSources),
           searchQueries: searchIntent.shouldSearch ? [searchIntent.searchQuery] : [],
-          groundingSources: searchIntent.shouldSearch || hasUsefulSources ? liveGrounding.groundingSources : [],
+          groundingSources:
+            searchIntent.shouldSearch || hasUsefulSources
+              ? sanitizeGroundingSources(liveGrounding.groundingSources)
+              : [],
         })}\n\n`);
       }
       return res.end();
@@ -2722,7 +3222,7 @@ The UI renders this as an interactive playable quiz widget!`;
     if (signal?.aborted) throw new Error("Research cancelled");
 
     if (candidateKeys.length === 0) {
-      throw new Error("No Gemini API key is configured on the server to synthesize deep research.");
+      throw new Error("No AI API key is configured on the server to synthesize deep research.");
     }
 
     const compiledResearchContext = allSources
@@ -2778,15 +3278,15 @@ The UI renders this as an interactive playable quiz widget!`;
           `- Include well-organized thematic sections synthesizing the completed research steps.\n` +
           `- Conclude with practical takeaways or direct answers.`;
 
-        // Multi-pass resilient synthesis across cascade (streaming -> backoff + non-streaming fallback on 503 high demand)
-        const synthesisCascade = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
+        // Multi-pass resilient synthesis across cascade prioritizing gemini-4-hydrogen with Google Search grounding
+        const synthesisCascade = prioritizeGoogleSearchModels(modelProfile.models);
         const runSynthesisAttempt = async (synthModel: string, useStream: boolean) => {
           const synthThinking = synthModel.startsWith("gemini-4")
             ? ThinkingLevel.LOW
             : ThinkingLevel.MINIMAL;
           const timeoutMs = synthModel.startsWith("gemini-4") ? 28000 : 20000;
           const reqConfig: any = {
-            ...(allSources.length < 2 ? { tools: [{ googleSearch: {} }] } : {}),
+            tools: [{ googleSearch: {} }],
             systemInstruction: sysInstruction,
             thinkingConfig: {
               thinkingLevel: synthThinking,
@@ -2915,15 +3415,16 @@ The UI renders this as an interactive playable quiz widget!`;
       ? findingsMatches.slice(0, 6).map((line) => line.replace(/^[\s\n-*•]+/, "").trim())
       : [`Completed live multi-step research synthesis on "${cleanQuery}".`];
 
+    const cleanAnswer = sanitizeAiBrandMentions(reportAnswer);
     return {
       id: `research_${Date.now()}`,
       query: cleanQuery,
       depth,
       timestamp: Date.now(),
-      answer: reportAnswer,
-      summary: reportAnswer.split("\n\n")[0].replace(/^#+\s*/, "") || `Research report on ${cleanQuery}`,
-      keyFindings,
-      sources: finalSources.slice(0, 12),
+      answer: cleanAnswer,
+      summary: cleanAnswer.split("\n\n")[0].replace(/^#+\s*/, "") || `Research report on ${cleanQuery}`,
+      keyFindings: keyFindings.map((f) => sanitizeAiBrandMentions(f)),
+      sources: sanitizeGroundingSources(finalSources.slice(0, 12)),
       searchQueriesUsed: Array.from(new Set(searchQueriesUsed)),
       steps: stepsList.map((title, idx) => ({
         id: String(idx + 1),
@@ -3051,30 +3552,28 @@ The UI renders this as an interactive playable quiz widget!`;
         prompt = "",
         language = "typescript",
         mode = "correct", // 'correct' | 'refactor' | 'optimize' | 'types' | 'custom'
-        modelId = "gemini-3.8-flash"
+        modelId = "forge-2-ultra"
       } = req.body;
 
-      const apiKey = getEffectiveApiKey(req);
+      const candidateKeys = getEffectiveApiKeys(req);
       let outputCode = "";
       let explanation = "";
       let correctionsList: string[] = [];
 
-      if (apiKey) {
-        try {
-          const ai = getGenAiClient(apiKey);
-          let systemTask = "";
-          let userPrompt = "";
+      if (candidateKeys.length > 0) {
+        let systemTask = "";
+        let userPrompt = "";
 
-          if (action === "generate") {
-            systemTask = `You are ForgeX Code Studio AI, an expert software architect and senior engineer in ${language}.
+        if (action === "generate") {
+          systemTask = `You are ForgeX Code Studio AI, an expert software architect and senior engineer in ${language}.
 Your job is to generate production-ready, clean, well-commented, fully working code.
 Format your response with:
 1. A brief 1-2 sentence overview.
 2. The code enclosed in a single markdown code fence (\`\`\`${language} ... \`\`\`).
 3. 2-4 bullet points detailing key architectural choices or usage instructions.`;
-            userPrompt = `Generate robust code for: "${prompt || "Interactive feature"}" in ${language}.`;
-          } else if (action === "correct") {
-            systemTask = `You are ForgeX Code Studio AI, an elite debugging and compiler expert.
+          userPrompt = `Generate robust code for: "${prompt || "Interactive feature"}" in ${language}.`;
+        } else if (action === "correct") {
+          systemTask = `You are ForgeX Code Studio AI, an elite debugging and compiler expert.
 Carefully review the provided ${language} code. Detect syntax errors, logic bugs, unhandled exceptions, unclosed brackets, missing imports/types, and security pitfalls.
 Fix ALL errors completely and output the full corrected code.
 Format your response as:
@@ -3085,17 +3584,17 @@ Format your response as:
 \`\`\`${language}
 [Full, complete corrected code here]
 \`\`\``;
-            userPrompt = `Please inspect, debug, and auto-correct this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nSpecific areas to check: ${prompt || "All syntax errors, logic flaws, and potential runtime crashes."}`;
-          } else {
-            // alter mode (refactor, optimize, types, or custom)
-            const modeDescriptions: Record<string, string> = {
-              refactor: "Refactor code for modularity, readability, and modern clean architecture standards.",
-              optimize: "Optimize algorithms, reduce computational complexity, and improve memory/performance efficiency.",
-              types: "Add comprehensive strict TypeScript types, interfaces, generics, and JSDoc documentation.",
-              custom: prompt || "Apply requested modifications and improvements.",
-            };
+          userPrompt = `Please inspect, debug, and auto-correct this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nSpecific areas to check: ${prompt || "All syntax errors, logic flaws, and potential runtime crashes."}`;
+        } else {
+          // alter mode (refactor, optimize, types, or custom)
+          const modeDescriptions: Record<string, string> = {
+            refactor: "Refactor code for modularity, readability, and modern clean architecture standards.",
+            optimize: "Optimize algorithms, reduce computational complexity, and improve memory/performance efficiency.",
+            types: "Add comprehensive strict TypeScript types, interfaces, generics, and JSDoc documentation.",
+            custom: prompt || "Apply requested modifications and improvements.",
+          };
 
-            systemTask = `You are ForgeX Code Studio AI, a senior refactoring and code alteration engine.
+          systemTask = `You are ForgeX Code Studio AI, a senior refactoring and code alteration engine.
 Task: ${modeDescriptions[mode] || modeDescriptions.custom}
 Format your response as:
 ### Alterations Applied
@@ -3105,62 +3604,69 @@ Format your response as:
 \`\`\`${language}
 [Full, complete altered code here]
 \`\`\``;
-            userPrompt = `Alter and improve this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nUser instructions: ${prompt || modeDescriptions[mode]}`;
-          }
+          userPrompt = `Alter and improve this ${language} code:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nUser instructions: ${prompt || modeDescriptions[mode]}`;
+        }
 
-          const modelProfile = getModelExecutionProfile(modelId);
-          const candidateModels = modelProfile.models;
-          let modelSuccess = false;
+        const modelProfile = getModelExecutionProfile(modelId);
+        const candidateModels = Array.from(new Set([...modelProfile.models, ...FAST_MODELS]));
+        const rawThinking = resolveChatThinkingLevel(
+          modelProfile,
+          `${prompt || ""}\n${code || ""}`,
+          false
+        );
+        const safeThinking =
+          (rawThinking as string) === "XHIGH" ? ThinkingLevel.HIGH : rawThinking;
+        const codeTrained = retrieveTrainingContext(`${language} ${prompt || ""}`, 2800);
 
-          for (const cand of candidateModels) {
-            try {
-              const codeTrained = retrieveTrainingContext(`${language} ${prompt || ""}`, 2800);
-              const reqConfig = buildModelConfig(cand, {
-                systemInstruction: `${modelProfile.instruction}${codeTrained.hasContext ? `\n\n=== VERIFIED ENGINEERING REFERENCE ===\n${codeTrained.contextText}` : ""}`,
-                thinkingConfig: {
-                  thinkingLevel: modelProfile.thinkingLevel,
-                },
-              });
-              const result = await ai.models.generateContent({
-                model: cand,
+        for (const currentKey of candidateKeys) {
+          try {
+            const ai = getGenAiClient(currentKey);
+            const { text } = await generateContentResilient(
+              ai,
+              {
                 contents: [
                   {
                     role: "user",
-                    parts: [{ text: `${systemTask}\n\n${userPrompt}` }]
-                  }
+                    parts: [{ text: `${systemTask}\n\n${userPrompt}` }],
+                  },
                 ],
-                config: reqConfig,
-              });
+                config: {
+                  systemInstruction: `${modelProfile.instruction}${
+                    codeTrained.hasContext
+                      ? `\n\n=== VERIFIED ENGINEERING REFERENCE ===\n${codeTrained.contextText}`
+                      : ""
+                  }`,
+                  thinkingConfig: {
+                    thinkingLevel: safeThinking,
+                  },
+                },
+              },
+              candidateModels,
+              { timeoutMs: 8000 }
+            );
 
-              const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (text && text.trim().length > 0) {
-                // Extract code block
-                const codeMatch = text.match(/```(?:[a-zA-Z0-9_\-+]*)\n([\s\S]*?)```/);
-                if (codeMatch && codeMatch[1]) {
-                  outputCode = codeMatch[1].trim();
-                  // Extract explanation by removing code block
-                  explanation = text.replace(/```(?:[a-zA-Z0-9_\-+]*)\n[\s\S]*?```/, '').trim();
-                } else {
-                  outputCode = text.trim();
-                  explanation = "Code processed successfully.";
-                }
-
-                // Extract bulleted corrections if present
-                const bullets = text.match(/(?:^|\n)[-*•]\s+([^\n]+)/g);
-                if (bullets) {
-                  correctionsList = bullets.map((b) => b.replace(/^[\s\n-*•]+/, '').trim());
-                }
-
-                modelSuccess = true;
-                break;
+            if (text && text.trim().length > 0) {
+              // Extract code block
+              const codeMatch = text.match(/```(?:[a-zA-Z0-9_\-+]*)\n([\s\S]*?)```/);
+              if (codeMatch && codeMatch[1]) {
+                outputCode = codeMatch[1].trim();
+                // Extract explanation by removing code block
+                explanation = text.replace(/```(?:[a-zA-Z0-9_\-+]*)\n[\s\S]*?```/, "").trim();
+              } else {
+                outputCode = text.trim();
+                explanation = "Code processed successfully.";
               }
-            } catch (candErr: unknown) {
-              const msg = candErr instanceof Error ? candErr.message : String(candErr);
-              if (msg.includes("429") || msg.includes("quota")) break;
+
+              // Extract bulleted corrections if present
+              const bullets = text.match(/(?:^|\n)[-*•]\s+([^\n]+)/g);
+              if (bullets) {
+                correctionsList = bullets.map((b) => b.replace(/^[\s\n-*•]+/, "").trim());
+              }
+              break;
             }
+          } catch (apiErr) {
+            console.warn("Gemini Code Studio resilient call fallback:", apiErr);
           }
-        } catch (apiErr) {
-          console.warn("Gemini Code Studio API error, using algorithmic processor", apiErr);
         }
       }
 
@@ -3190,8 +3696,8 @@ Format your response as:
         action,
         code: outputCode,
         originalCode: code,
-        explanation,
-        corrections: correctionsList,
+        explanation: sanitizeAiBrandMentions(explanation),
+        corrections: correctionsList.map((c) => sanitizeAiBrandMentions(c)),
         language,
         timestamp: Date.now()
       });
@@ -3724,7 +4230,7 @@ store.set('counter', 42);`,
       let fallbackResult = "";
 
       if (action === "summarize") {
-        fallbackResult = `### Executive Summary for ${firstDocName}\n\nThis document contains comprehensive information spanning **${docs.length} file(s)** and approximately **${docContext.length} characters**. The content establishes core objectives, background contexts, and operational parameters.\n\n### Key Highlights\n- **Primary Focus**: Document addresses foundational principles, system configurations, and operational workflows.\n- **Data Structure**: Includes contextual explanations, supporting evidence, and procedural guidance.\n- **Takeaways**: Key conclusions highlight continuous optimization, risk mitigation, and strategic execution.\n\n*Note: Add your Gemini API Key in Settings for deep semantic multi-modal neural document parsing.*`;
+        fallbackResult = `### Executive Summary for ${firstDocName}\n\nThis document contains comprehensive information spanning **${docs.length} file(s)** and approximately **${docContext.length} characters**. The content establishes core objectives, background contexts, and operational parameters.\n\n### Key Highlights\n- **Primary Focus**: Document addresses foundational principles, system configurations, and operational workflows.\n- **Data Structure**: Includes contextual explanations, supporting evidence, and procedural guidance.\n- **Takeaways**: Key conclusions highlight continuous optimization, risk mitigation, and strategic execution.\n\n*Note: Add your API Key in Settings for deep semantic multi-modal neural document parsing.*`;
       } else if (action === "generate-quiz") {
         const sampleQuiz = [
           {
@@ -4567,11 +5073,13 @@ Explain recent developments, user reception, and best practices.`;
               contents: prompt,
               config: {
                 systemInstruction: groundedSysInstruction,
-                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+                thinkingConfig: {
+                  thinkingLevel: modelProfile.thinkingLevel === ThinkingLevel.MINIMAL ? ThinkingLevel.LOW : modelProfile.thinkingLevel,
+                },
                 tools: [{ googleSearch: {} }],
               },
             },
-            modelProfile.models
+            prioritizeGoogleSearchModels(modelProfile.models)
           );
 
           summaryText = result.text || "";
@@ -4606,19 +5114,19 @@ Explain recent developments, user reception, and best practices.`;
 
       // Add general search portal source
       webSources.push({
-        title: `Search "${effectiveSearchTerm}" on Google Web Index`,
+        title: `Search "${effectiveSearchTerm}" on Web Index`,
         url: `https://www.google.com/search?q=${encodeURIComponent(effectiveSearchTerm)}`,
         snippet: `Real-time search results, official documentation, and community discussions for ${effectiveSearchTerm}.`,
       });
 
-      // 4. Fallback summary if Gemini was unavailable
+      // 4. Fallback summary if live engine was unavailable
       if (!summaryText) {
         if (exactApp) {
           summaryText = `${didYouMean ? `### 💡 Did you mean: **${didYouMean}**?\n*(Corrected spelling from "${rawQuery}")*\n\n` : ""}### 🔍 Exact Application: **${exactApp.name}**\n\n**${exactApp.name}** is a leading **${exactApp.category}** created by **${exactApp.developer}**.\n\n- **Official Website**: [${exactApp.url}](${exactApp.url})\n- **Category**: ${exactApp.category}\n- **Developer**: ${exactApp.developer}\n- **Access**: ${exactApp.access || "Free / Web-based"}\n\n### ⚡ Key Capabilities\n${exactApp.description}\n\n${wikiData?.extract ? `### 📖 Grounded Knowledge\n${wikiData.extract}\n\n` : ""}- **Primary Workflow**: Direct browser-based access and seamless tool integration.\n- **Authentication**: Sign in via official account provider.\n- **Direct Link**: You can launch the official application directly at [${exactApp.url}](${exactApp.url}).`;
         } else if (wikiData?.extract) {
           summaryText = `### Web Overview for: "${effectiveSearchTerm}"\n\n${wikiData.extract}\n\n- **Authoritative Source**: Verified against real-time encyclopedic and digital indexes.\n- **Reference URL**: [${wikiData.url}](${wikiData.url})`;
         } else {
-          summaryText = `### Web Search Briefing for: "${effectiveSearchTerm}"\n\nRecent web indices and documentation confirm active developments regarding **${effectiveSearchTerm}**.\n\n- **Topic**: ${effectiveSearchTerm}\n- **Verification**: Cross-referenced against authoritative live search index nodes.\n- **Primary Portal**: [Google Live Index](https://www.google.com/search?q=${encodeURIComponent(effectiveSearchTerm)})`;
+          summaryText = `### Web Search Briefing for: "${effectiveSearchTerm}"\n\nRecent web indices and documentation confirm active developments regarding **${effectiveSearchTerm}**.\n\n- **Topic**: ${effectiveSearchTerm}\n- **Verification**: Cross-referenced against authoritative live search index nodes.\n- **Primary Portal**: [Web Live Index](https://www.google.com/search?q=${encodeURIComponent(effectiveSearchTerm)})`;
         }
       }
 
@@ -4637,8 +5145,8 @@ Explain recent developments, user reception, and best practices.`;
               access: exactApp.access,
             }
           : undefined,
-        summary: summaryText,
-        sources: webSources,
+        summary: sanitizeAiBrandMentions(summaryText),
+        sources: sanitizeGroundingSources(webSources),
         searchType,
         timestamp: Date.now(),
       });
@@ -4846,9 +5354,16 @@ ${currentContent}
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const text = await generateGeminiText(ai, prompt, undefined, req.body?.modelId);
+          const writingConfig: any =
+            action === "generate" && !/^(?:story|script)$/i.test(category)
+              ? {
+                  tools: [{ googleSearch: {} }],
+                  thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+                }
+              : undefined;
+          const text = await generateGeminiText(ai, prompt, writingConfig, req.body?.modelId);
           if (text && text.trim()) {
-            return res.json({ content: text });
+            return res.json({ content: sanitizeAiBrandMentions(text) });
           }
         } catch (apiErr) {
           console.warn("Writing Studio API error, using algorithmic copywriter:", apiErr);
@@ -5027,17 +5542,23 @@ ${currentContent}
       if (isCreatorQuery) {
         replyText = "I was created by VishweshVarman as part of ForgeX.";
       } else {
-        const needsLiveSearch = /\b(?:weather|forecast|latest\s+news|breaking\s+news|today'?s|right\s+now|current\s+(?:price|score|time))\b/i.test(cleanMessage);
+        const needsLiveSearch = /\b(?:weather|forecast|latest|newest|breaking|news|today'?s|right\s+now|current|currently|2024|2025|2026|2027|price|cost|score|who\s+(?:is|was|won)|when\s+(?:did|was|is)|where\s+is|population|capital|release\s+date|stock|crypto|bitcoin)\b/i.test(cleanMessage);
         const nowUtc = new Date().toISOString().slice(0, 10);
         const voiceSystemInstruction =
           `You are ForgeX in a live real-time voice call. Current UTC date: ${nowUtc}. ` +
           `Respond in warm, natural, conversational spoken English in 1 to 2 concise sentences (under 40 words). ` +
+          `Never mention Google, Gemini, Bard, or PaLM; identify strictly as ForgeX. ` +
           `Never use bullet points, markdown symbols, asterisks, or URLs. Be accurate and direct.`;
 
-        const voiceCascade: Array<{ model: string; thinking: ThinkingLevel; label: string }> = [
-          { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Gemini 3.1 Flash Lite (Voice)" },
-          { model: "gemini-4-hydrogen", thinking: ThinkingLevel.LOW, label: "Gemini 4 Hydrogen (Voice)" },
-        ];
+        const voiceCascade: Array<{ model: string; thinking: ThinkingLevel; label: string }> = needsLiveSearch
+          ? [
+              { model: "gemini-4-hydrogen", thinking: ThinkingLevel.LOW, label: "Forge 2 Ultra (Voice + Web Search)" },
+              { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Forge 1 (Voice)" },
+            ]
+          : [
+              { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Forge 1 (Voice)" },
+              { model: "gemini-4-hydrogen", thinking: ThinkingLevel.LOW, label: "Forge 2 Ultra (Voice)" },
+            ];
 
         for (const currentKey of candidateKeys) {
           const ai = getGenAiClient(currentKey);
@@ -5071,7 +5592,7 @@ ${currentContent}
               });
               const candidateText = genRes.text?.trim();
               if (candidateText) {
-                replyText = candidateText;
+                replyText = sanitizeAiBrandMentions(candidateText);
                 modelUsed = candidate.label;
                 break;
               }
@@ -5662,6 +6183,14 @@ Return only the clean lyrics with section headers.`;
       res.set("Access-Control-Allow-Origin", "*");
     }
   }));
+
+  // Ensure unmatched /api/* endpoints always return JSON rather than SPA HTML fallback
+  app.use("/api", (req: Request, res: Response) => {
+    return res.status(404).json({
+      success: false,
+      error: `API endpoint not found: ${req.method} ${req.originalUrl}`,
+    });
+  });
 
   // Vite middleware setup
   if (process.env.NODE_ENV !== "production") {
