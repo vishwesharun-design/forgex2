@@ -1099,18 +1099,18 @@ export const ResearchWorkspace: React.FC<ResearchWorkspaceProps> = ({
               )}
             </div>
 
-            {/* In-depth Markdown Analysis Document */}
-            <div className={`p-6 sm:p-8 rounded-3xl border shadow-md ${
-              isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-200'
-            }`}>
-              <div className="flex items-center gap-2 mb-6 border-b pb-4 border-inherit">
+            {/* In-depth Markdown Analysis Document (seamless on background, no outer box) */}
+            <div className="py-2 min-w-0">
+              <div className={`flex items-center gap-2 mb-5 border-b pb-3 ${
+                isDark ? 'border-neutral-800/70' : 'border-neutral-200/80'
+              }`}>
                 <BookOpen className="w-4 h-4 text-amber-400" />
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
                   Verified Research Synthesis
                 </h3>
               </div>
 
-              <div className="max-w-none text-sm leading-relaxed space-y-4">
+              <div className="max-w-none min-w-0 text-sm sm:text-[15px] leading-[1.75] space-y-4">
                 <MarkdownRenderer content={currentReport.answer} theme={isDark ? 'dark' : 'light'} />
               </div>
             </div>

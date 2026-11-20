@@ -367,6 +367,13 @@ async function searchGoogleGrounding(
 
   for (const model of models) {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const attemptController = new AbortController();
+    const onAbort = () => attemptController.abort(options?.signal?.reason);
+    if (options?.signal) {
+      if (options.signal.aborted) attemptController.abort(options.signal.reason);
+      else options.signal.addEventListener("abort", onAbort, { once: true });
+    }
+    const modelTimeoutMs = model.includes("flash-lite") ? Math.min(timeoutMs, 12000) : timeoutMs;
     try {
       const reqPromise = ai.models.generateContent({
         model,
@@ -386,13 +393,18 @@ async function searchGoogleGrounding(
         config: {
           tools: [{ googleSearch: {} }],
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          abortSignal: attemptController.signal,
         },
       });
 
       const response = await Promise.race([
         reqPromise,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`Google Search grounding (${model}) timed out after ${timeoutMs}ms`)), timeoutMs);
+          timer = setTimeout(() => {
+            const timeoutErr = new Error(`Google Search grounding (${model}) timed out after ${modelTimeoutMs}ms`);
+            attemptController.abort(timeoutErr);
+            reject(timeoutErr);
+          }, modelTimeoutMs);
         }),
       ]);
 
@@ -455,9 +467,11 @@ async function searchGoogleGrounding(
         return { sources: resolvedSources, queriesUsed, tokens };
       }
     } catch (err: any) {
+      attemptController.abort(err);
       lastError = `Google Search grounding (${model}) failed for "${query}": ${err?.message || String(err)}`;
     } finally {
       if (timer) clearTimeout(timer);
+      if (options?.signal) options.signal.removeEventListener("abort", onAbort);
     }
   }
 

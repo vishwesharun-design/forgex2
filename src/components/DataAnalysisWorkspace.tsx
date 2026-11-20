@@ -696,7 +696,7 @@ ${reportRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
                                 </div>
                                 <div className="w-full h-3 rounded-full bg-neutral-800/60 overflow-hidden">
                                   <div
-                                    className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-500"
+                                    className="h-full rounded-full bg-gradient-to-r from-pink-500 to-blue-500 transition-all duration-500"
                                     style={{ width: `${pct}%` }}
                                   />
                                 </div>

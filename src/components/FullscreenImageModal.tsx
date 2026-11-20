@@ -391,19 +391,19 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
           TOP BAR (White Background: "Image ▾" on left, "45% ▾", Download, Share, X on right)
           ========================================================================= */}
       <div
-        className="w-full flex items-center justify-between px-4 py-3 z-30 shrink-0 border-b border-neutral-200 bg-white/95"
+        className="w-full flex items-center justify-between px-2.5 sm:px-4 py-2.5 sm:py-3 z-30 shrink-0 border-b border-neutral-200 bg-white/95 gap-2"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Left: "Image ▾" Dropdown Button */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setIsImageMenuOpen(!isImageMenuOpen)}
-            className="px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
           >
-            <ImageIcon className="w-4 h-4 text-neutral-700" />
+            <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-700" />
             <span>Image</span>
-            <ChevronDown className="w-3.5 h-3.5 text-neutral-500" />
+            <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-neutral-500" />
           </button>
 
           {/* Image Menu Dropdown */}
@@ -437,13 +437,13 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
         </div>
 
         {/* Top Right: Zoom pill ("45% ▾"), Download, Share, Close X */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1 sm:gap-2.5 min-w-0">
           {/* Zoom Percentage Dropdown Pill */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsZoomMenuOpen(!isZoomMenuOpen)}
-              className="px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 flex items-center gap-1.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+              className="px-2 sm:px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
               title="Change zoom level"
             >
               <span>{currentZoomLabel}</span>
@@ -478,11 +478,11 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
             <button
               type="button"
               onClick={() => setPanOffset({ x: 0, y: 0 })}
-              className="px-2.5 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors"
+              className="px-2 sm:px-2.5 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors"
               title="Reset position to center"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>Center</span>
+              <span className="hidden sm:inline">Center</span>
             </button>
           )}
 
@@ -495,7 +495,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               }
               setIsEditMinimized(!isEditMinimized);
             }}
-            className={`px-2.5 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
+            className={`px-2 sm:px-2.5 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors ${
               isEditMinimized
                 ? 'bg-amber-500/10 border-amber-300 text-amber-800 hover:bg-amber-500/20'
                 : 'bg-neutral-100 hover:bg-neutral-200 border-neutral-200 text-neutral-800'
@@ -511,7 +511,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
             type="button"
             onClick={handleDownload}
             title="Download image"
-            className="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 transition-colors cursor-pointer"
           >
             {isDownloaded ? <Check className="w-4 h-4 text-emerald-600" /> : <Download className="w-4 h-4" />}
           </button>
@@ -521,7 +521,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
             type="button"
             onClick={handleShare}
             title="Share image"
-            className="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 transition-colors cursor-pointer"
           >
             {isCopiedShare ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
           </button>
@@ -531,7 +531,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
             type="button"
             onClick={onClose}
             title="Close viewer (Esc)"
-            className="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 transition-colors cursor-pointer ml-1"
+            className="p-1.5 sm:p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 transition-colors cursor-pointer sm:ml-1"
           >
             <X className="w-4 h-4" />
           </button>
@@ -553,7 +553,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
         {/* Left Vertical Thumbnail Strip */}
         {galleryImages.length > 0 && (
           <div
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-2.5 max-h-[70vh] overflow-y-auto p-1 scrollbar-none"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-2 sm:gap-2.5 max-h-[65dvh] overflow-y-auto p-1 scrollbar-none"
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -564,7 +564,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
                   key={imgItem.id}
                   type="button"
                   onClick={() => onSelectImage?.(imgItem)}
-                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                  className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
                     isActive
                       ? 'border-amber-500 ring-2 ring-amber-500/30 scale-105 shadow-md'
                       : 'border-neutral-200 opacity-60 hover:opacity-100 hover:border-neutral-400'
@@ -640,7 +640,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
             [Grid dots] | [Markup] | [Comment] | [Remove BG] | [Erase] | [Resize] | [Minimize ▾]
             ========================================================================= */}
         <div
-          className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30"
+          className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 w-[calc(100vw-20px)] sm:w-auto max-w-full flex flex-col items-center"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -657,20 +657,20 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
             </button>
           ) : (
-            /* Expanded Full Toolbar */
-            <div className="flex items-center gap-1 sm:gap-2 px-3 py-1.5 rounded-full bg-[#212121]/95 text-white border border-neutral-700/80 shadow-2xl backdrop-blur-md select-none text-xs sm:text-sm font-medium animate-in fade-in duration-150">
+            /* Expanded Full Toolbar (scrolls cleanly on narrow viewports) */
+            <div className="max-w-full overflow-x-auto no-scrollbar flex items-center gap-0.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-[#212121]/95 text-white border border-neutral-700/80 shadow-2xl backdrop-blur-md select-none text-xs sm:text-sm font-medium animate-in fade-in duration-150 whitespace-nowrap">
               {/* Grip / Grid Icon */}
-              <div className="p-1 text-neutral-400 hover:text-white cursor-grab">
+              <div className="hidden sm:block p-1 text-neutral-400 hover:text-white cursor-grab shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
 
-              <div className="h-4 w-px bg-neutral-700 mx-0.5" />
+              <div className="hidden sm:block h-4 w-px bg-neutral-700 mx-0.5 shrink-0" />
 
               {/* Markup Tool Button */}
               <button
                 type="button"
                 onClick={() => setActiveTool(activeTool === 'markup' ? 'none' : 'markup')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
                   activeTool === 'markup'
                     ? 'bg-white text-neutral-900 font-semibold'
                     : 'hover:bg-white/10 text-neutral-200'
@@ -685,7 +685,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTool(activeTool === 'comment' ? 'none' : 'comment')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
                   activeTool === 'comment'
                     ? 'bg-white text-neutral-900 font-semibold'
                     : 'hover:bg-white/10 text-neutral-200'
@@ -700,7 +700,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               <button
                 type="button"
                 onClick={handleRemoveBackground}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
                   bgRemovedUrl
                     ? 'bg-amber-500 text-neutral-950 font-semibold'
                     : 'hover:bg-white/10 text-neutral-200'
@@ -715,7 +715,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTool(activeTool === 'erase' ? 'none' : 'erase')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
                   activeTool === 'erase'
                     ? 'bg-white text-neutral-900 font-semibold'
                     : 'hover:bg-white/10 text-neutral-200'
@@ -730,7 +730,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTool(activeTool === 'resize' ? 'none' : 'resize')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
                   activeTool === 'resize'
                     ? 'bg-white text-neutral-900 font-semibold'
                     : 'hover:bg-white/10 text-neutral-200'
@@ -741,7 +741,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
                 <span>Resize</span>
               </button>
 
-              <div className="h-4 w-px bg-neutral-700 mx-0.5" />
+              <div className="h-4 w-px bg-neutral-700 mx-0.5 shrink-0" />
 
               {/* Minimize Toolbar Button */}
               <button
@@ -750,7 +750,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
                   setActiveTool('none');
                   setIsEditMinimized(true);
                 }}
-                className="p-1 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                className="p-1 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0"
                 title="Minimize edit toolbar"
               >
                 <ChevronDown className="w-4 h-4" />
@@ -760,24 +760,24 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
 
           {/* Sub-panel: Markup Color Palette */}
           {activeTool === 'markup' && (
-            <div className="mt-2 flex items-center justify-center gap-2 p-1.5 rounded-full bg-[#1e1e1e] border border-white/10 shadow-xl w-fit mx-auto text-xs text-white">
-              <span className="text-[11px] text-neutral-400 pl-2">Pen:</span>
+            <div className="mt-2 max-w-full overflow-x-auto no-scrollbar flex items-center justify-center gap-2 p-1.5 rounded-full bg-[#1e1e1e] border border-white/10 shadow-xl w-fit mx-auto text-xs text-white">
+              <span className="text-[11px] text-neutral-400 pl-2 shrink-0">Pen:</span>
               {['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#ffffff'].map((color) => (
                 <button
                   key={color}
                   type="button"
                   onClick={() => setMarkupColor(color)}
-                  className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                  className={`w-5 h-5 rounded-full transition-transform cursor-pointer shrink-0 ${
                     markupColor === color ? 'scale-125 ring-2 ring-white' : 'opacity-80 hover:opacity-100'
                   }`}
                   style={{ backgroundColor: color }}
                 />
               ))}
-              <div className="h-3 w-px bg-neutral-700 mx-1" />
+              <div className="h-3 w-px bg-neutral-700 mx-1 shrink-0" />
               <button
                 type="button"
                 onClick={handleClearMarkup}
-                className="px-2 py-0.5 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white text-[11px] cursor-pointer"
+                className="px-2 py-0.5 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white text-[11px] cursor-pointer shrink-0"
               >
                 Clear
               </button>
@@ -786,14 +786,14 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
 
           {/* Sub-panel: Resize Ratios */}
           {activeTool === 'resize' && (
-            <div className="mt-2 flex items-center justify-center gap-1.5 p-1.5 rounded-full bg-[#1e1e1e] border border-white/10 shadow-xl w-fit mx-auto text-xs text-white">
-              <span className="text-[11px] text-neutral-400 pl-2">Ratio:</span>
+            <div className="mt-2 max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 p-1.5 rounded-full bg-[#1e1e1e] border border-white/10 shadow-xl w-fit mx-auto text-xs text-white whitespace-nowrap">
+              <span className="text-[11px] text-neutral-400 pl-2 shrink-0">Ratio:</span>
               {['Original', '1:1', '16:9', '9:16', '4:3'].map((ratio) => (
                 <button
                   key={ratio}
                   type="button"
                   onClick={() => setSelectedRatio(ratio)}
-                  className={`px-2.5 py-1 rounded-full text-xs transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-full text-xs transition-colors cursor-pointer shrink-0 ${
                     selectedRatio === ratio ? 'bg-amber-500 text-neutral-950 font-bold' : 'hover:bg-white/10 text-neutral-300'
                   }`}
                 >
@@ -807,7 +807,7 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
                   onClose();
                   onOpenInImageStudio?.(prompt, imageUrl);
                 }}
-                className="ml-1 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs cursor-pointer font-medium"
+                className="ml-1 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs cursor-pointer font-medium shrink-0"
               >
                 Crop in Studio
               </button>
@@ -855,11 +855,11 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
           ========================================================================= */}
       {!isEditMinimized && (
         <div
-          className="w-full max-w-3xl mx-auto px-4 pb-4 pt-1 z-30 shrink-0 bg-white animate-in fade-in duration-150"
+          className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-3 sm:pb-4 pt-1 z-30 shrink-0 bg-white animate-in fade-in duration-150"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="relative rounded-full px-4 py-2.5 bg-neutral-100 border border-neutral-300 shadow-sm flex items-center gap-3">
+          <div className="relative rounded-full px-3 sm:px-4 py-2 sm:py-2.5 bg-neutral-100 border border-neutral-300 shadow-sm flex items-center gap-2 sm:gap-3">
             {/* Plus / Attach Button */}
             <button
               type="button"
@@ -885,11 +885,11 @@ export const FullscreenImageModal: React.FC<FullscreenImageModalProps> = ({
                 }
               }}
               placeholder="Ask ForgeX or edit this image..."
-              className="flex-1 bg-transparent text-sm text-neutral-900 placeholder:text-neutral-500 outline-none"
+              className="flex-1 min-w-0 bg-transparent text-sm text-neutral-900 placeholder:text-neutral-500 outline-none"
             />
 
             {/* Right Action Icons: Think, Mic, Send */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <button
                 type="button"
                 className="p-1.5 rounded-full hover:bg-neutral-200 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer hidden sm:flex items-center gap-1 text-xs"

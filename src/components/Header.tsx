@@ -127,12 +127,12 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Left: Mobile menu toggle + Model & Role Switching */}
-      <div className="relative z-10 flex items-center gap-1.5 sm:gap-2.5">
+      <div className="relative z-10 flex items-center gap-1 sm:gap-2.5 min-w-0 flex-1">
         {/* Mobile menu button */}
         <button
           id="btn-mobile-nav-toggle"
           onClick={onToggleMobileNav}
-          className={`p-2 rounded-xl md:hidden border transition-colors ${
+          className={`p-1.5 sm:p-2 rounded-xl md:hidden border transition-colors shrink-0 ${
             isDark
               ? 'border-white/15 text-neutral-200 hover:bg-white/10'
               : 'border-neutral-900/10 text-neutral-700 hover:bg-white/70'
@@ -143,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Model Switching + Role Selector: Placed on the left */}
         {activeWorkspace === 'chat' ? (
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-0.5 sm:gap-2 min-w-0 flex-1">
             <ModelSelector
               selectedModelId={selectedModelId}
               onSelectModel={onSelectModel}
@@ -153,21 +153,21 @@ export const Header: React.FC<HeaderProps> = ({
             />
 
             {onSelectRole && (
-              <div ref={roleMenuRef} className="relative inline-block text-left">
+              <div ref={roleMenuRef} className="relative inline-block text-left min-w-0">
                 <button
                   id="btn-chat-role-selector"
                   type="button"
                   onClick={() => setRoleMenuOpen((prev) => !prev)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-display font-semibold text-base sm:text-lg transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                  className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 rounded-xl font-display font-semibold text-sm sm:text-lg transition-all duration-150 cursor-pointer whitespace-nowrap min-w-0 max-w-full ${
                     isDark
                       ? 'text-neutral-200 hover:text-white hover:bg-neutral-900/90'
                       : 'text-neutral-800 hover:text-neutral-950 hover:bg-neutral-100'
                   }`}
                   title={`Chatbot role: ${activeRole.name} — ${activeRole.description}`}
                 >
-                  <span className="truncate max-w-[140px] sm:max-w-none">{activeRole.shortLabel}</span>
+                  <span className="truncate max-w-[78px] sm:max-w-none">{activeRole.shortLabel}</span>
                   <ChevronDown
-                    className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${
+                    className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${
                       roleMenuOpen ? 'rotate-180' : ''
                     }`}
                   />
@@ -175,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                 {roleMenuOpen && (
                   <div
-                    className={`absolute left-0 mt-2 w-56 sm:w-60 max-w-[calc(100vw-24px)] rounded-2xl border p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
+                    className={`absolute right-0 sm:left-0 sm:right-auto mt-2 w-56 sm:w-60 max-w-[calc(100vw-24px)] rounded-2xl border p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
                       isDark
                         ? 'bg-neutral-950/95 backdrop-blur-md border-neutral-800 text-white shadow-black/80'
                         : 'bg-white/95 backdrop-blur-md border-neutral-200 text-neutral-900 shadow-neutral-300'
@@ -227,13 +227,13 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 pr-1">
             {onNavigateToChat && (
               <button
                 id="btn-header-back-to-chat"
                 type="button"
                 onClick={onNavigateToChat}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium inline-flex items-center gap-1.5 border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-medium inline-flex items-center gap-1 sm:gap-1.5 border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   isDark
                     ? 'border-white/15 text-neutral-200 hover:bg-white/10 hover:text-white'
                     : 'border-neutral-900/10 text-neutral-700 hover:bg-white hover:text-neutral-950'
@@ -244,10 +244,10 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>Chat</span>
               </button>
             )}
-            <h1 id="header-workspace-title" className="font-display font-semibold text-base sm:text-lg tracking-tight truncate max-w-[140px] sm:max-w-none flex items-center gap-1.5">
-              {workspaceInfo.title}
+            <h1 id="header-workspace-title" className="font-display font-semibold text-sm sm:text-lg tracking-tight truncate min-w-0 flex items-center gap-1.5">
+              <span className="truncate">{workspaceInfo.title}</span>
               {activeWorkspace === 'agents' && (
-                <span className={`text-xs font-mono font-medium lowercase ${
+                <span className={`text-[11px] sm:text-xs font-mono font-medium lowercase shrink-0 ${
                   isDark ? 'text-neutral-400' : 'text-neutral-500'
                 }`}>
                   beta
@@ -255,7 +255,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </h1>
             {activeWorkspace !== 'agents' && (
-              <span className={`hidden sm:inline-block text-xs font-normal ${
+              <span className={`hidden sm:inline-block text-xs font-normal shrink-0 ${
                 isDark ? 'text-neutral-400' : 'text-neutral-500'
               }`}>
                 · {workspaceInfo.category}
@@ -266,7 +266,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right: Clean & minimal */}
-      <div className="relative z-10 flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <div className="relative z-10 flex items-center gap-1.5 sm:gap-2 shrink-0 ml-1">
         {/* If in non-chat workspace, show model switch pill on right if helpful */}
         {activeWorkspace !== 'chat' && (
           <div className="hidden sm:flex items-center mr-1">
@@ -287,7 +287,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="btn-header-signin"
             type="button"
             onClick={onOpenAuth}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer border ${
+            className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer border ${
               isDark
                 ? 'bg-black hover:bg-neutral-900 text-white border-white/20'
                 : 'bg-neutral-950 hover:bg-neutral-800 text-white border-neutral-900'

@@ -389,7 +389,7 @@ export const VaultWorkspace: React.FC<VaultWorkspaceProps> = ({
           </div>
 
           {/* Search Bar */}
-          <div className="relative min-w-[200px] sm:w-64">
+          <div className="relative min-w-0 w-full sm:w-64">
             <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -579,7 +579,7 @@ export const VaultWorkspace: React.FC<VaultWorkspaceProps> = ({
       {inspectingDoc && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
           <div
-            className={`w-full max-w-2xl max-h-[90vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
+            className={`w-full max-w-2xl max-h-[90dvh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
               isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
             }`}
           >

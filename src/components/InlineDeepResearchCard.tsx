@@ -146,10 +146,10 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
   if (dr.status === 'cancelled') {
     return (
       <div
-        className={`w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] rounded-2xl border px-4 py-3 text-xs flex items-center justify-between gap-3 ${
+        className={`w-full max-w-3xl min-w-0 rounded-xl border px-3.5 py-2.5 text-xs flex items-center justify-between gap-3 ${
           isDark
-            ? 'bg-neutral-900/60 border-neutral-800 text-neutral-400'
-            : 'bg-neutral-50 border-neutral-200 text-neutral-600'
+            ? 'bg-neutral-500/[0.06] border-neutral-800/80 text-neutral-400'
+            : 'bg-neutral-500/[0.04] border-neutral-200/80 text-neutral-600'
         }`}
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -176,7 +176,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
 
   if (dr.status === 'planning') {
     return (
-      <div className="w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] flex flex-col gap-2 animate-in fade-in duration-200">
+      <div className="w-full max-w-3xl min-w-0 flex flex-col gap-2 animate-in fade-in duration-200">
         <button
           type="button"
           onClick={() => setIsPlanExpanded((p) => !p)}
@@ -202,8 +202,8 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
           <div
             className={`rounded-2xl border p-4 sm:p-5 transition-all ${
               isDark
-                ? 'bg-neutral-900/90 border-neutral-800 text-neutral-100 shadow-md shadow-black/30'
-                : 'bg-white border-neutral-200/90 text-neutral-900 shadow-xs'
+                ? 'bg-neutral-500/[0.05] border-neutral-800/80 text-neutral-100'
+                : 'bg-neutral-500/[0.03] border-neutral-200/80 text-neutral-900'
             }`}
           >
             <h4 className="text-[15px] font-semibold tracking-tight mb-3.5">
@@ -333,7 +333,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
     const m = dr.metrics;
 
     return (
-      <div className="w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] py-2 flex flex-col gap-3 animate-in fade-in duration-200">
+      <div className="w-full max-w-3xl min-w-0 py-2 flex flex-col gap-3 animate-in fade-in duration-200">
         {/* Real Progress Bar */}
         <div className="flex flex-wrap items-center gap-2.5">
           <div
@@ -396,8 +396,8 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
                 key={i}
                 className={`text-[11px] px-2 py-0.5 rounded-full border truncate max-w-[220px] ${
                   isDark
-                    ? 'bg-neutral-900 border-neutral-800 text-neutral-300'
-                    : 'bg-neutral-50 border-neutral-200 text-neutral-600'
+                    ? 'bg-neutral-500/[0.06] border-neutral-800 text-neutral-300'
+                    : 'bg-neutral-500/[0.04] border-neutral-200 text-neutral-600'
                 }`}
                 title={q}
               >
@@ -441,7 +441,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         {dr.sources && dr.sources.length > 0 && (
           <div
             className={`mt-1 rounded-xl border p-2.5 space-y-1.5 ${
-              isDark ? 'bg-neutral-950/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
+              isDark ? 'bg-neutral-500/[0.04] border-neutral-800/80' : 'bg-neutral-500/[0.03] border-neutral-200/80'
             }`}
           >
             <div className="text-[11px] font-medium text-neutral-500">
@@ -480,25 +480,19 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
 
   return (
     <div
-      className={`relative w-full max-w-[96%] sm:max-w-[88%] md:max-w-[82%] lg:max-w-[78%] rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-all text-xs sm:text-sm leading-relaxed ${
-        isDark
-          ? `bg-neutral-900/90 border ${
-              isFailed ? 'border-amber-500/40' : 'border-neutral-800'
-            } text-neutral-100 rounded-tl-sm shadow-md shadow-black/40`
-          : `bg-white border ${
-              isFailed ? 'border-amber-300' : 'border-neutral-200'
-            } text-neutral-900 rounded-tl-sm shadow-sm`
+      className={`relative w-full max-w-3xl min-w-0 py-1 transition-colors text-sm sm:text-[15px] leading-[1.75] ${
+        isDark ? 'text-neutral-100' : 'text-neutral-900'
       }`}
     >
-      {/* Top Status & Toggles Row */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* Top Status & Toggles Row (blends cleanly into background, no heavy box) */}
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
           type="button"
           onClick={() => setIsStepsExpanded((p) => !p)}
-          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 -ml-2 rounded-lg transition-colors cursor-pointer ${
             isDark
-              ? 'bg-neutral-800/80 border-neutral-700 text-neutral-300 hover:bg-neutral-800'
-              : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
+              ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
+              : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200/60'
           }`}
         >
           <Telescope className={`w-3.5 h-3.5 shrink-0 ${isFailed ? 'text-amber-500' : 'text-sky-500'}`} />
@@ -517,12 +511,12 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
           <button
             type="button"
             onClick={() => setIsFactCheckExpanded((p) => !p)}
-            className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
               factCheck.overallReliability === 'HIGH'
-                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
                 : factCheck.overallReliability === 'MODERATE'
-                ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
-                : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                ? 'text-sky-600 dark:text-sky-400 hover:bg-sky-500/10'
+                : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
@@ -537,10 +531,10 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
           <button
             type="button"
             onClick={() => setIsSourcesExpanded((p) => !p)}
-            className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
               isDark
-                ? 'bg-neutral-800/70 border-neutral-700 text-neutral-300 hover:bg-neutral-800'
-                : 'bg-neutral-50 border-neutral-200 text-neutral-700 hover:bg-neutral-100'
+                ? 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/60'
             }`}
           >
             <Database className="w-3 h-3 text-sky-500 shrink-0" />
@@ -557,10 +551,10 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
           <button
             type="button"
             onClick={() => onStart(message.id, draftSteps)}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
               isDark
-                ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-200'
-                : 'border-neutral-300 hover:bg-neutral-100 text-neutral-800'
+                ? 'hover:bg-neutral-800/70 text-neutral-300'
+                : 'hover:bg-neutral-200/70 text-neutral-700'
             }`}
           >
             <RotateCcw className="w-3 h-3" />
@@ -569,30 +563,28 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         )}
       </div>
 
-      {/* Real Execution Metrics Strip */}
+      {/* Quiet Execution Metrics Line (matches background, no box) */}
       {metrics && (
         <div
-          className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-lg border text-[11px] tabular-nums ${
-            isDark
-              ? 'bg-neutral-950/60 border-neutral-800 text-neutral-400'
-              : 'bg-neutral-50 border-neutral-200/80 text-neutral-600'
+          className={`mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] tabular-nums ${
+            isDark ? 'text-neutral-400' : 'text-neutral-500'
           }`}
         >
           <span>{metrics.queriesExecuted} queries</span>
           <span>·</span>
           <span>{metrics.sourcesOpened} opened</span>
           <span>·</span>
-          <span className="text-emerald-500 font-medium">{metrics.sourcesVerified} verified</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">{metrics.sourcesVerified} verified</span>
           {metrics.sourcesPartiallyVerified > 0 && (
             <>
               <span>·</span>
-              <span className="text-amber-500">{metrics.sourcesPartiallyVerified} partial</span>
+              <span className="text-amber-600 dark:text-amber-400">{metrics.sourcesPartiallyVerified} partial</span>
             </>
           )}
           {metrics.sourcesRejected > 0 && (
             <>
               <span>·</span>
-              <span className="text-orange-500">{metrics.sourcesRejected} rejected</span>
+              <span className="text-orange-600 dark:text-orange-400">{metrics.sourcesRejected} rejected</span>
             </>
           )}
           <span>·</span>
@@ -600,20 +592,18 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         </div>
       )}
 
-      {/* Failure or Fact-Check Warnings Banner */}
+      {/* Failure or Fact-Check Warnings Notice */}
       {(dr.failureReason || (factCheck?.warnings && factCheck.warnings.length > 0)) && (
         <div
-          className={`mb-3 p-2.5 rounded-xl border text-xs flex items-start gap-2 ${
-            isDark
-              ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-              : 'bg-amber-50 border-amber-200 text-amber-800'
+          className={`mb-3 pl-3 border-l-2 border-amber-500/60 text-xs flex items-start gap-2 ${
+            isDark ? 'text-amber-300' : 'text-amber-800'
           }`}
         >
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-          <div className="space-y-1">
-            {dr.failureReason && <p className="font-medium">{dr.failureReason}</p>}
+          <div className="space-y-1 min-w-0">
+            {dr.failureReason && <p className="font-medium break-words">{dr.failureReason}</p>}
             {factCheck?.warnings?.map((w, idx) => (
-              <p key={idx} className="opacity-90">
+              <p key={idx} className="opacity-90 break-words">
                 {w}
               </p>
             ))}
@@ -626,8 +616,8 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         <div
           className={`mb-3.5 p-3 rounded-xl border space-y-1.5 text-xs ${
             isDark
-              ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300'
-              : 'bg-neutral-50 border-neutral-200/80 text-neutral-700'
+              ? 'bg-neutral-500/[0.04] border-neutral-800/80 text-neutral-300'
+              : 'bg-neutral-500/[0.03] border-neutral-200/80 text-neutral-700'
           }`}
         >
           {dr.steps.map((step, idx) => (
@@ -644,8 +634,8 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         <div
           className={`mb-3.5 p-3 rounded-xl border space-y-2 text-xs ${
             isDark
-              ? 'bg-neutral-950/70 border-neutral-800 text-neutral-300'
-              : 'bg-neutral-50 border-neutral-200 text-neutral-700'
+              ? 'bg-neutral-500/[0.04] border-neutral-800/80 text-neutral-300'
+              : 'bg-neutral-500/[0.03] border-neutral-200/80 text-neutral-700'
           }`}
         >
           <div className="font-semibold text-[11px] uppercase tracking-wider text-neutral-500">
@@ -656,7 +646,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
               <div
                 key={idx}
                 className={`p-2 rounded-lg border ${
-                  isDark ? 'bg-neutral-900/70 border-neutral-800' : 'bg-white border-neutral-200'
+                  isDark ? 'bg-neutral-500/[0.04] border-neutral-800/70' : 'bg-neutral-500/[0.03] border-neutral-200/70'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
@@ -688,8 +678,8 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         <div
           className={`mb-3.5 p-3 rounded-xl border space-y-2 text-xs ${
             isDark
-              ? 'bg-neutral-950/70 border-neutral-800 text-neutral-300'
-              : 'bg-neutral-50 border-neutral-200 text-neutral-700'
+              ? 'bg-neutral-500/[0.04] border-neutral-800/80 text-neutral-300'
+              : 'bg-neutral-500/[0.03] border-neutral-200/80 text-neutral-700'
           }`}
         >
           <div className="font-semibold text-[11px] uppercase tracking-wider text-neutral-500">
@@ -703,7 +693,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
                 <div
                   key={src.url + idx}
                   className={`p-2.5 rounded-lg border ${
-                    isDark ? 'bg-neutral-900/70 border-neutral-800' : 'bg-white border-neutral-200'
+                    isDark ? 'bg-neutral-500/[0.04] border-neutral-800/70' : 'bg-neutral-500/[0.03] border-neutral-200/70'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -771,7 +761,7 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
                             <div
                               key={ev.id}
                               className={`p-2 rounded border ${
-                                isDark ? 'bg-neutral-950/70 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
+                                isDark ? 'bg-neutral-500/[0.04] border-neutral-800/70' : 'bg-neutral-500/[0.03] border-neutral-200/70'
                               }`}
                             >
                               <div className="font-medium">{ev.claim}</div>
@@ -797,8 +787,8 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         </div>
       )}
 
-      {/* Full Markdown Deep Research Report */}
-      <div className="relative">
+      {/* Full Markdown Deep Research Report (directly on background, no box) */}
+      <div className="relative min-w-0">
         <MarkdownRenderer
           content={message.content}
           theme={theme}
@@ -813,24 +803,20 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
         ? renderSourcePills(message.groundingSources, message.id)
         : null}
 
-      {/* Reply Footer Actions */}
+      {/* Minimal Borderless Reply Footer Actions matching normal chat messages */}
       <div
-        className={`mt-2.5 pt-2 border-t flex items-center justify-between text-xs ${
-          isDark ? 'border-neutral-800/40 text-neutral-400' : 'border-neutral-200 text-neutral-600'
+        className={`mt-2.5 flex items-center gap-2 text-xs ${
+          isDark ? 'text-neutral-400' : 'text-neutral-500'
         }`}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-sky-600 dark:text-sky-400 inline-flex items-center gap-1 font-medium bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
-            <Globe className="w-2.5 h-2.5" />
-            <span>Deep Research</span>
-          </span>
-        </div>
-
         <button
           type="button"
           onClick={() => onCopy(message.content, message.id)}
-          className={`flex items-center gap-1 transition-colors cursor-pointer ${
-            isDark ? 'hover:text-white text-neutral-400' : 'hover:text-neutral-950 text-neutral-600'
+          title="Copy response"
+          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors cursor-pointer ${
+            isDark
+              ? 'hover:bg-neutral-800/70 hover:text-neutral-100 text-neutral-400'
+              : 'hover:bg-neutral-200/70 hover:text-neutral-900 text-neutral-500'
           }`}
         >
           {copiedMessageId === message.id ? (
@@ -841,12 +827,18 @@ export const InlineDeepResearchCard: React.FC<InlineDeepResearchCardProps> = ({
               </span>
             </>
           ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Copy</span>
-            </>
+            <Copy className="w-3.5 h-3.5" />
           )}
         </button>
+
+        <span
+          className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+            isDark ? 'text-sky-400/90' : 'text-sky-600'
+          }`}
+        >
+          <Globe className="w-3 h-3" />
+          <span>Deep Research</span>
+        </span>
       </div>
     </div>
   );

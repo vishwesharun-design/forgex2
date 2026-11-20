@@ -21,6 +21,7 @@ import { InteractiveChart, ChartConfig } from './InteractiveChart';
 import { InteractiveTable, TableCellRenderer } from './InteractiveTable';
 import { InteractiveQuiz, QuizConfig } from './InteractiveQuiz';
 import { InlineVisualDiagram, parseVisualDiagramConfig } from './InlineVisualDiagram';
+import { InlineScorecard, parseScorecardConfig } from './InlineScorecard';
 
 interface MarkdownRendererProps {
   content: string;
@@ -200,7 +201,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const isDark = theme === 'dark';
 
   return (
-    <div className={`markdown-body text-sm sm:text-[15px] leading-[1.75] space-y-4 break-words ${className}`}>
+    <div className={`markdown-body min-w-0 w-full max-w-full text-sm sm:text-[15px] leading-[1.75] space-y-4 break-words [overflow-wrap:anywhere] ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
@@ -280,6 +281,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 }
               } catch {
                 // Fall back to CodeBlock
+              }
+            }
+
+            // Detect inline evaluation scorecard / rubric blocks
+            if (lang === 'scorecard' || lang === 'assessment' || lang === 'evaluation' || lang === 'json') {
+              const scorecardConfig = parseScorecardConfig(codeString, lang);
+              if (scorecardConfig) {
+                return <InlineScorecard config={scorecardConfig} theme={theme} />;
               }
             }
 
@@ -894,7 +903,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
             <iframe
               key={previewRefreshKey}
               srcDoc={buildHtmlPreviewDoc(code, cleanLang)}
-              className="w-full h-[460px] sm:h-[520px] border-0 bg-white block"
+              className="w-full h-[340px] sm:h-[480px] border-0 bg-white block"
               sandbox="allow-scripts allow-modals allow-forms"
               title="Interactive Live Page"
             />
@@ -950,20 +959,20 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
         >
           <div
-            className={`w-full max-w-6xl h-[86vh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col ${
+            className={`w-full max-w-6xl h-[90dvh] sm:h-[86dvh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col ${
               isDark ? 'bg-[#18181b] border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
             }`}
           >
             {/* Modal Top Bar */}
-            <div className={`px-4 py-3 border-b flex items-center justify-between gap-3 shrink-0 ${
+            <div className={`px-3 sm:px-4 py-2.5 sm:py-3 border-b flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0 ${
               isDark ? 'border-neutral-800 bg-[#1e1e22]' : 'border-neutral-200 bg-[#f8f8f8]'
             }`}>
-              <div className="flex items-center gap-2.5">
-                <Code2 className="w-4 h-4 text-neutral-500" />
-                <span className="font-sans font-semibold text-sm">{displayLang} Canvas</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <Code2 className="w-4 h-4 text-neutral-500 shrink-0" />
+                <span className="font-sans font-semibold text-sm truncate">{displayLang} Canvas</span>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {onOpenInCodeStudio && (
                   <button
                     type="button"
@@ -971,7 +980,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
                       setIsCanvasModalOpen(false);
                       onOpenInCodeStudio(editableCode, language);
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                       isDark
                         ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-200'
                         : 'border-neutral-300 hover:bg-neutral-100 text-neutral-800'
@@ -989,7 +998,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                     isDark
                       ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-200'
                       : 'border-neutral-300 hover:bg-neutral-100 text-neutral-800'
@@ -1003,7 +1012,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
                   <button
                     type="button"
                     onClick={() => setPreviewRefreshKey((k) => k + 1)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                       isDark
                         ? 'bg-white text-neutral-950 hover:bg-neutral-200'
                         : 'bg-neutral-900 text-white hover:bg-neutral-800'
@@ -1028,8 +1037,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
             </div>
 
             {/* Split Editor + Live Preview Body */}
-            <div className={`flex-1 min-h-0 grid ${isHtmlPreviewable ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-              <div className={`flex flex-col min-h-0 ${isHtmlPreviewable ? 'border-b lg:border-b-0 lg:border-r' : ''} ${
+            <div className={`flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid ${isHtmlPreviewable ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`flex flex-col min-h-[220px] ${isHtmlPreviewable ? 'border-b lg:border-b-0 lg:border-r' : ''} ${
                 isDark ? 'border-neutral-800 bg-[#141416]' : 'border-neutral-200 bg-[#f7f7f7]'
               }`}>
                 <textarea
@@ -1043,11 +1052,11 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
               </div>
 
               {isHtmlPreviewable && (
-                <div className="flex flex-col min-h-0 bg-white">
+                <div className="flex flex-col min-h-[260px] bg-white">
                   <iframe
                     key={`modal-${previewRefreshKey}`}
                     srcDoc={buildHtmlPreviewDoc(editableCode, cleanLang)}
-                    className="w-full h-full border-none bg-white"
+                    className="w-full h-full border-none bg-white flex-1"
                     sandbox="allow-scripts allow-modals allow-forms"
                     title="Canvas Live Preview"
                   />

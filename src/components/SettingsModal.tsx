@@ -524,9 +524,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* App Settings Sections (Real ForgeX Features Only) */}
-        <div className="px-4 pt-2 pb-4 flex-1 overflow-y-auto">
+        <div className="px-4 pt-2 pb-2 md:pb-4 md:flex-1 md:overflow-y-auto shrink-0">
           <div className={`px-2 pb-1.5 text-xs font-medium ${mutedText}`}>App</div>
-          <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
+          <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0 no-scrollbar">
             {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isSelected = activeTab === item.id;
@@ -563,8 +563,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-6 sm:px-10 py-8 sm:py-12">
+      <main className="flex-1 overflow-y-auto min-h-0">
+        <div className="max-w-3xl mx-auto px-4 sm:px-10 py-5 sm:py-12">
           {/* PERSONALIZATION TAB */}
           {activeTab === 'personalization' && (
             <div className="space-y-8">
@@ -1310,12 +1310,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <div className={`py-4 border-b flex items-center justify-between gap-4 ${rowDivider}`}>
-                  <div>
+                <div className={`py-4 border-b flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 sm:gap-4 ${rowDivider}`}>
+                  <div className="min-w-0">
                     <div className={`text-sm font-medium ${primaryText}`}>Theme</div>
                     <div className={`text-xs sm:text-sm mt-0.5 ${mutedText}`}>Switch between Light and Dark workspaces</div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => {
@@ -1454,14 +1454,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <div className={`py-4 border-b flex items-center justify-between gap-4 ${rowDivider}`}>
-                  <div>
+                <div className={`py-4 border-b flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 sm:gap-4 ${rowDivider}`}>
+                  <div className="min-w-0">
                     <div className={`text-sm font-medium ${primaryText}`}>Neural Voice Profile</div>
                     <div className={`text-xs sm:text-sm mt-0.5 ${mutedText}`}>
                       Used in Voice Mode and speech playback
                     </div>
                   </div>
-                  <div className="relative inline-flex items-center shrink-0">
+                  <div className="relative inline-flex items-center shrink-0 max-w-full">
                     <select
                       id="select-settings-voice"
                       value={settings.preferredVoiceId || 'gemini-Zephyr'}
@@ -1471,7 +1471,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onUpdateSettings({ ...settings, preferredVoiceId: voiceId });
                         flashSaved();
                       }}
-                      className={`appearance-none rounded-full pl-3.5 pr-8 py-1.5 text-xs sm:text-sm font-medium border cursor-pointer focus:outline-none max-w-[230px] ${
+                      className={`appearance-none rounded-full pl-3.5 pr-8 py-1.5 text-xs sm:text-sm font-medium border cursor-pointer focus:outline-none max-w-full sm:max-w-[230px] ${
                         isDark
                           ? 'bg-neutral-800 border-neutral-700 text-neutral-100'
                           : 'bg-neutral-100 border-neutral-200 text-neutral-800'

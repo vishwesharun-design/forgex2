@@ -612,7 +612,7 @@ export const chatService = {
           'Content-Type': 'application/json',
           ...(geminiApiKey ? { 'x-api-key': geminiApiKey } : {}),
         },
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(90000),
         body: JSON.stringify({
           message: userContent,
           history,
@@ -651,6 +651,9 @@ export const chatService = {
             }
             if (data.model) {
               modelUsedName = /gemini/i.test(data.model) ? 'ForgeX Neural Engine' : data.model;
+            }
+            if (data.error) {
+              console.warn('Chat stream server notice:', data.error);
             }
             if (data.text) {
               if (onSearchStatus) onSearchStatus(false);
@@ -701,7 +704,7 @@ export const chatService = {
             'Content-Type': 'application/json',
             ...(geminiApiKey ? { 'x-api-key': geminiApiKey } : {}),
           },
-          signal: AbortSignal.timeout(45000),
+          signal: AbortSignal.timeout(60000),
           body: JSON.stringify({
             message: userContent,
             history,

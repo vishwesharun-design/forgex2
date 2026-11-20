@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import { BarChart3, Download, Copy, Check, TrendingUp, Maximize2 } from 'lucide-react';
+import { BarChart3, Download, Copy, Check, TrendingUp } from 'lucide-react';
 import { ForgeXTheme } from '../types';
 
 export interface ChartDataPoint {
@@ -22,24 +22,95 @@ interface InteractiveChartProps {
   theme?: ForgeXTheme;
 }
 
+function wrapChartLabel(label: string, maxCharsPerLine: number, maxLines = 3): string[] {
+  const clean = String(label || '').trim();
+  if (!clean) return [''];
+  const safeMax = Math.max(5, maxCharsPerLine);
+  const words = clean.split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+
+  const pushWord = (word: string) => {
+    if (word.length <= safeMax) {
+      if (!current) {
+        current = word;
+      } else if (current.length + 1 + word.length <= safeMax) {
+        current += ' ' + word;
+      } else {
+        lines.push(current);
+        current = word;
+      }
+      return;
+    }
+    // Word itself exceeds maxCharsPerLine: flush current and chunk word
+    if (current) {
+      lines.push(current);
+      current = '';
+    }
+    let remaining = word;
+    while (remaining.length > safeMax && lines.length < maxLines - 1) {
+      lines.push(remaining.slice(0, safeMax - 1) + '-');
+      remaining = remaining.slice(safeMax - 1);
+    }
+    current = remaining;
+  };
+
+  for (const w of words) {
+    if (lines.length >= maxLines) break;
+    pushWord(w);
+  }
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  // Ellipsize last line if text was truncated or still too wide
+  if (lines.length > 0) {
+    const lastIdx = lines.length - 1;
+    const joined = lines.join(' ');
+    const overflowed = joined.replace(/-/g, '').length < clean.replace(/\s+/g, ' ').length;
+    if (lines[lastIdx].length > safeMax) {
+      lines[lastIdx] = lines[lastIdx].slice(0, Math.max(2, safeMax - 1)) + '…';
+    } else if (overflowed && lines.length === maxLines && !lines[lastIdx].endsWith('…')) {
+      lines[lastIdx] =
+        lines[lastIdx].length >= safeMax
+          ? lines[lastIdx].slice(0, Math.max(2, safeMax - 1)) + '…'
+          : lines[lastIdx] + '…';
+    }
+  }
+
+  return lines.slice(0, maxLines);
+}
+
+function truncateText(str: string, maxChars: number): string {
+  const s = String(str || '').trim();
+  if (s.length <= maxChars) return s;
+  return s.slice(0, Math.max(3, maxChars - 1)) + '…';
+}
+
 export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, theme = 'dark' }) => {
   const isDark = theme === 'dark';
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(1); // Default to Geometry like in screenshot or null
+  const data = config.data || [];
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(
+    data.length > 1 ? 1 : data.length > 0 ? 0 : null
+  );
   const [copied, setCopied] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'line'>(config.type === 'line' ? 'line' : 'bar');
   const chartId = useId();
 
-  const data = config.data || [];
-  const rawMax = Math.max(...data.map((d) => d.value), 10);
+  const rawMax = Math.max(...data.map((d) => Number(d.value) || 0), 10);
   const calculatedMax = config.max || Math.ceil(rawMax / 30) * 30 || 120;
   const unit = config.unit || 'Score';
 
   // Y-axis tick divisions (e.g. 0, 30, 60, 90, 120)
   const steps = 4;
-  const tickValues = Array.from({ length: steps + 1 }, (_, i) => Math.round((calculatedMax / steps) * (steps - i)));
+  const tickValues = Array.from({ length: steps + 1 }, (_, i) =>
+    Math.round((calculatedMax / steps) * (steps - i))
+  );
+  const maxTickChars = Math.max(...tickValues.map((v) => String(v).length), 3);
 
   const handleCopyData = () => {
-    const text = `${config.title}\n${config.subtitle || ''}\n\n` +
+    const text =
+      `${config.title}\n${config.subtitle || ''}\n\n` +
       data.map((d) => `${d.label}: ${d.value} ${unit}`).join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -54,44 +125,56 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${config.title.toLowerCase().replace(/\s+/g, '-')}-chart.svg`;
+    link.download = `${(config.title || 'chart').toLowerCase().replace(/\s+/g, '-')}-chart.svg`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  // Dimensions
-  const svgWidth = 600;
-  const svgHeight = 280;
-  const paddingLeft = 45;
-  const paddingRight = 25;
-  const paddingTop = 25;
-  const paddingBottom = 45;
+  // Responsive dimensions with strict overflow protection
+  const barCount = Math.max(data.length, 1);
+  const svgWidth = Math.max(600, barCount * 82);
+  const paddingLeft = Math.max(46, maxTickChars * 7 + 16);
+  const paddingRight = 28;
+  const paddingTop = 26;
 
   const plotWidth = svgWidth - paddingLeft - paddingRight;
-  const plotHeight = svgHeight - paddingTop - paddingBottom;
-
-  const barCount = data.length || 1;
   const slotWidth = plotWidth / barCount;
-  const barWidth = Math.min(slotWidth * 0.62, 54);
+  const barWidth = Math.min(slotWidth * 0.58, 54);
+  const labelFontSize = barCount > 8 ? 9.5 : 10.5;
+  const maxCharsPerLine = Math.max(6, Math.floor((slotWidth - 10) / (labelFontSize * 0.58)));
+
+  const wrappedLabels = data.map((item) => wrapChartLabel(item.label, maxCharsPerLine, 3));
+  const maxWrappedLines = Math.max(1, ...wrappedLabels.map((lines) => lines.length));
+
+  const paddingBottom = 26 + maxWrappedLines * 13;
+  const plotHeight = 205;
+  const svgHeight = paddingTop + plotHeight + paddingBottom;
+
+  const barGradientId = `bar-pink-blue-${chartId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const lineGradientId = `line-pink-blue-${chartId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   return (
     <div
-      className={`my-3 sm:my-4 rounded-xl sm:rounded-2xl border transition-all shadow-sm ${
+      className={`my-3 sm:my-4 w-full max-w-full min-w-0 overflow-hidden rounded-xl sm:rounded-2xl border transition-all shadow-sm ${
         isDark ? 'bg-neutral-900/70 border-neutral-800' : 'bg-white border-neutral-200'
       } p-3 sm:p-5`}
     >
       {/* Header with Title, Subtitle, and Toolbar - strict no-overflow wrapping */}
-      <div className="flex items-start justify-between gap-2.5 mb-3 sm:mb-4">
+      <div className="flex items-start justify-between gap-2.5 mb-3 sm:mb-4 min-w-0">
         <div className="min-w-0 flex-1 pr-2">
-          <h3 className={`font-bold text-xs sm:text-base tracking-tight font-display break-words ${
-            isDark ? 'text-neutral-100' : 'text-neutral-900'
-          }`}>
+          <h3
+            className={`font-bold text-xs sm:text-base tracking-tight font-display break-words ${
+              isDark ? 'text-neutral-100' : 'text-neutral-900'
+            }`}
+          >
             {config.title}
           </h3>
           {config.subtitle && (
-            <p className={`text-[10px] sm:text-xs mt-0.5 break-words leading-normal ${
-              isDark ? 'text-neutral-400' : 'text-neutral-500'
-            }`}>
+            <p
+              className={`text-[10px] sm:text-xs mt-0.5 break-words leading-normal ${
+                isDark ? 'text-neutral-400' : 'text-neutral-500'
+              }`}
+            >
               {config.subtitle}
             </p>
           )}
@@ -100,8 +183,8 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
         <div className="flex items-center gap-1 shrink-0 pt-0.5">
           <button
             type="button"
-            onClick={() => setChartType(prev => prev === 'bar' ? 'line' : 'bar')}
-            className={`p-1.5 rounded-lg border text-xs transition-colors ${
+            onClick={() => setChartType((prev) => (prev === 'bar' ? 'line' : 'bar'))}
+            className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
               isDark
                 ? 'border-neutral-800 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200'
                 : 'border-neutral-200 hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
@@ -114,7 +197,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
           <button
             type="button"
             onClick={handleCopyData}
-            className={`p-1.5 rounded-lg border text-xs transition-colors ${
+            className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
               isDark
                 ? 'border-neutral-800 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200'
                 : 'border-neutral-200 hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
@@ -127,7 +210,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
           <button
             type="button"
             onClick={handleDownloadSvg}
-            className={`p-1.5 rounded-lg border text-xs transition-colors ${
+            className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
               isDark
                 ? 'border-neutral-800 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200'
                 : 'border-neutral-200 hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900'
@@ -140,12 +223,25 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
       </div>
 
       {/* SVG Interactive Chart Area */}
-      <div className="relative w-full overflow-x-auto -mx-1 px-1 touch-pan-x custom-scrollbar">
+      <div className="relative w-full min-w-0 overflow-x-auto touch-pan-x custom-scrollbar">
         <svg
           id={`chart-svg-${chartId}`}
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="w-full h-auto min-w-[300px] max-h-[320px] select-none"
+          className={`w-full h-auto max-h-[340px] select-none block ${
+            barCount > 7 ? 'min-w-[540px]' : 'min-w-0'
+          }`}
         >
+          <defs>
+            <linearGradient id={barGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#ec4899" />
+              <stop offset="50%" stopColor="#a855f7" />
+              <stop offset="100%" stopColor="#3b82f6" />
+            </linearGradient>
+            <linearGradient id={lineGradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#ec4899" />
+              <stop offset="100%" stopColor="#3b82f6" />
+            </linearGradient>
+          </defs>
           {/* Subtle Gridlines and Y-Axis Ticks */}
           {tickValues.map((val, idx) => {
             const yPos = paddingTop + (idx / steps) * plotHeight;
@@ -178,13 +274,17 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
           {chartType === 'bar' &&
             data.map((item, idx) => {
               const xSlotStart = paddingLeft + idx * slotWidth;
+              const xCenter = xSlotStart + slotWidth / 2;
               const barX = xSlotStart + (slotWidth - barWidth) / 2;
-              const barHeight = Math.max((item.value / calculatedMax) * plotHeight, 4);
+              const safeVal = Math.max(0, Number(item.value) || 0);
+              const barHeight = Math.max(Math.min((safeVal / calculatedMax) * plotHeight, plotHeight), 4);
               const barY = paddingTop + plotHeight - barHeight;
               const isHovered = hoveredIndex === idx;
 
-              const defaultBarColor = '#f472b6';
-              const barFill = item.color || defaultBarColor;
+              const useDefaultGradient =
+                !item.color || item.color.toLowerCase() === '#f472b6' || item.color.toLowerCase() === '#ec4899';
+              const barFill = useDefaultGradient ? `url(#${barGradientId})` : item.color!;
+              const labelLines = wrappedLabels[idx] || [item.label];
 
               return (
                 <g
@@ -203,7 +303,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
                     fill="transparent"
                   />
 
-                  {/* Rounded bar with soft pink aesthetic from screenshot */}
+                  {/* Rounded bar with pink-blue gradient */}
                   <rect
                     x={barX}
                     y={barY}
@@ -212,37 +312,40 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
                     rx="10"
                     ry="10"
                     fill={barFill}
-                    opacity={isHovered ? 1 : 0.88}
+                    opacity={isHovered ? 1 : 0.9}
                     className="transition-all duration-200"
                     style={{
                       filter: isHovered
-                        ? `drop-shadow(0 4px 12px ${barFill}66)`
+                        ? useDefaultGradient
+                          ? 'drop-shadow(0 4px 12px rgba(236, 72, 153, 0.38))'
+                          : `drop-shadow(0 4px 12px ${item.color}66)`
                         : 'none',
                     }}
                   />
 
-                  {/* Category Label below X axis with multi-word wrapping for mobile */}
+                  {/* Wrapped Category Label below X axis */}
                   <text
-                    x={xSlotStart + slotWidth / 2}
-                    y={paddingTop + plotHeight + 18}
+                    x={xCenter}
+                    y={paddingTop + plotHeight + 17}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize={labelFontSize}
                     fontWeight={isHovered ? '600' : '400'}
                     fontFamily="system-ui, sans-serif"
                     fill={
                       isHovered
-                        ? (isDark ? '#ffffff' : '#0f172a')
-                        : (isDark ? '#a3a3a3' : '#525252')
+                        ? isDark
+                          ? '#ffffff'
+                          : '#0f172a'
+                        : isDark
+                        ? '#a3a3a3'
+                        : '#525252'
                     }
                   >
-                    {item.label.includes(' ') ? (
-                      <>
-                        <tspan x={xSlotStart + slotWidth / 2} dy="0">{item.label.split(' ')[0]}</tspan>
-                        <tspan x={xSlotStart + slotWidth / 2} dy="11">{item.label.split(' ').slice(1).join(' ')}</tspan>
-                      </>
-                    ) : (
-                      item.label
-                    )}
+                    {labelLines.map((line, lIdx) => (
+                      <tspan key={lIdx} x={xCenter} dy={lIdx === 0 ? 0 : 12}>
+                        {line}
+                      </tspan>
+                    ))}
                   </text>
                 </g>
               );
@@ -251,50 +354,74 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
           {/* Line Chart Mode */}
           {chartType === 'line' && (
             <g>
-              {/* Line path */}
               <path
                 d={data.reduce((acc, item, idx) => {
                   const x = paddingLeft + idx * slotWidth + slotWidth / 2;
-                  const y = paddingTop + plotHeight - (item.value / calculatedMax) * plotHeight;
+                  const safeVal = Math.max(0, Number(item.value) || 0);
+                  const y = paddingTop + plotHeight - Math.min((safeVal / calculatedMax) * plotHeight, plotHeight);
                   return `${acc} ${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
                 }, '')}
                 fill="none"
-                stroke="#f472b6"
+                stroke={`url(#${lineGradientId})`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
 
-              {/* Data points */}
               {data.map((item, idx) => {
                 const cx = paddingLeft + idx * slotWidth + slotWidth / 2;
-                const cy = paddingTop + plotHeight - (item.value / calculatedMax) * plotHeight;
+                const safeVal = Math.max(0, Number(item.value) || 0);
+                const cy = paddingTop + plotHeight - Math.min((safeVal / calculatedMax) * plotHeight, plotHeight);
                 const isHovered = hoveredIndex === idx;
+                const labelLines = wrappedLabels[idx] || [item.label];
+                const useDefaultGradient =
+                  !item.color || item.color.toLowerCase() === '#f472b6' || item.color.toLowerCase() === '#ec4899';
 
                 return (
                   <g
                     key={`point-${idx}`}
                     className="cursor-pointer"
                     onMouseEnter={() => setHoveredIndex(idx)}
+                    onTouchStart={() => setHoveredIndex(idx)}
+                    onClick={() => setHoveredIndex(idx)}
                   >
+                    <rect
+                      x={paddingLeft + idx * slotWidth}
+                      y={paddingTop}
+                      width={slotWidth}
+                      height={plotHeight + paddingBottom}
+                      fill="transparent"
+                    />
                     <circle
                       cx={cx}
                       cy={cy}
                       r={isHovered ? 7 : 5}
                       fill={isDark ? '#171717' : '#ffffff'}
-                      stroke="#f472b6"
+                      stroke={useDefaultGradient ? '#ec4899' : item.color}
                       strokeWidth="3"
                     />
                     <text
                       x={cx}
-                      y={paddingTop + plotHeight + 20}
+                      y={paddingTop + plotHeight + 17}
                       textAnchor="middle"
-                      fontSize="11"
+                      fontSize={labelFontSize}
                       fontWeight={isHovered ? '600' : '400'}
                       fontFamily="system-ui, sans-serif"
-                      fill={isDark ? '#a3a3a3' : '#525252'}
+                      fill={
+                        isHovered
+                          ? isDark
+                            ? '#ffffff'
+                            : '#0f172a'
+                          : isDark
+                          ? '#a3a3a3'
+                          : '#525252'
+                      }
                     >
-                      {item.label}
+                      {labelLines.map((line, lIdx) => (
+                        <tspan key={lIdx} x={cx} dy={lIdx === 0 ? 0 : 12}>
+                          {line}
+                        </tspan>
+                      ))}
                     </text>
                   </g>
                 );
@@ -302,24 +429,35 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
             </g>
           )}
 
-          {/* Floating Tooltip Pill from screenshot (e.g. Geometry | Score: 84) */}
-          {hoveredIndex !== null && data[hoveredIndex] && (
+          {/* Dynamic-Width Floating Tooltip Pill (never overflows box or SVG bounds) */}
+          {hoveredIndex !== null &&
+            data[hoveredIndex] &&
             (() => {
               const active = data[hoveredIndex];
               const xCenter = paddingLeft + hoveredIndex * slotWidth + slotWidth / 2;
-              const yVal = paddingTop + plotHeight - (active.value / calculatedMax) * plotHeight;
-              const tooltipWidth = 92;
+              const safeVal = Math.max(0, Number(active.value) || 0);
+              const yVal = paddingTop + plotHeight - Math.min((safeVal / calculatedMax) * plotHeight, plotHeight);
+
+              const titleText = truncateText(active.label, 28);
+              const metricUnitText = truncateText(unit, 16);
+              const metricFullText = `${metricUnitText} ${active.value}`;
+
+              const estTitleWidth = titleText.length * 6.5 + 26;
+              const estMetricWidth = metricFullText.length * 6.6 + 44;
+              const tooltipWidth = Math.max(108, Math.min(240, Math.ceil(Math.max(estTitleWidth, estMetricWidth))));
               const tooltipHeight = 44;
+
               const tooltipX = Math.max(
-                paddingLeft + 5,
-                Math.min(xCenter - tooltipWidth / 2, svgWidth - paddingRight - tooltipWidth - 5)
+                paddingLeft + 4,
+                Math.min(xCenter - tooltipWidth / 2, svgWidth - paddingRight - tooltipWidth - 4)
               );
-              // Position tooltip cleanly centered over the bar or slightly above it
-              const tooltipY = Math.max(paddingTop + 10, yVal - 15);
+              const tooltipY = Math.max(
+                6,
+                Math.min(yVal - 16, paddingTop + plotHeight - tooltipHeight - 4)
+              );
 
               return (
                 <g className="transition-all duration-150 pointer-events-none">
-                  {/* Tooltip Background Card */}
                   <rect
                     x={tooltipX}
                     y={tooltipY}
@@ -334,7 +472,6 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
                       filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.15))',
                     }}
                   />
-                  {/* Title: Category name */}
                   <text
                     x={tooltipX + tooltipWidth / 2}
                     y={tooltipY + 16}
@@ -344,32 +481,39 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ config, them
                     fontFamily="system-ui, sans-serif"
                     fill={isDark ? '#f5f5f5' : '#0f172a'}
                   >
-                    {active.label}
+                    {titleText}
                   </text>
-                  {/* Color dot indicator */}
                   <circle
-                    cx={tooltipX + 18}
+                    cx={tooltipX + 16}
                     cy={tooltipY + 30}
                     r="4"
-                    fill={active.color || '#f472b6'}
+                    fill={
+                      !active.color ||
+                      active.color.toLowerCase() === '#f472b6' ||
+                      active.color.toLowerCase() === '#ec4899'
+                        ? `url(#${barGradientId})`
+                        : active.color
+                    }
                   />
-                  {/* Value: Metric + number */}
                   <text
-                    x={tooltipX + 27}
+                    x={tooltipX + 25}
                     y={tooltipY + 34}
                     fontSize="11"
                     fontWeight="500"
                     fontFamily="system-ui, sans-serif"
                     fill={isDark ? '#d4d4d4' : '#475569'}
                   >
-                    {unit} <tspan fontWeight="700" fill={isDark ? '#ffffff' : '#0f172a'}>{active.value}</tspan>
+                    {metricUnitText}{' '}
+                    <tspan fontWeight="700" fill={isDark ? '#ffffff' : '#0f172a'}>
+                      {active.value}
+                    </tspan>
                   </text>
                 </g>
               );
-            })()
-          )}
+            })()}
         </svg>
       </div>
     </div>
   );
 };
+

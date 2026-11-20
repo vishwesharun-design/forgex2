@@ -25,10 +25,10 @@ export const LandingNav: React.FC<LandingNavProps> = ({
   const isDark = theme === 'dark';
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 px-2 sm:px-8 py-3 sm:py-4 transition-all duration-300">
+    <header className="fixed top-0 left-0 right-0 z-40 px-2.5 sm:px-8 py-2.5 sm:py-4 transition-all duration-300">
       <div
         id="forgex-landing-navbar"
-        className={`relative max-w-6xl mx-auto flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl md:rounded-3xl backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border ${
+        className={`relative max-w-6xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-2xl md:rounded-3xl backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border ${
           isDark
             ? 'bg-neutral-900/55 hover:bg-neutral-900/68 border-white/15 ring-1 ring-inset ring-white/10 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.75)] md:hover:-translate-y-0.5 md:hover:shadow-[0_22px_56px_-12px_rgba(0,0,0,0.85)] text-neutral-100'
             : 'bg-white/65 hover:bg-white/78 border-white/80 ring-1 ring-inset ring-white/90 shadow-[0_12px_40px_-10px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.06)] md:hover:-translate-y-0.5 md:hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.2)] text-neutral-800'
@@ -53,11 +53,11 @@ export const LandingNav: React.FC<LandingNavProps> = ({
           />
         </div>
         {/* Left: Brand */}
-        <div className="relative z-10 flex items-center gap-2.5 select-none cursor-pointer group shrink-0">
-          <div className="w-8 h-8 flex items-center justify-center shrink-0">
-            <ForgeXLogo className="w-6 h-6 text-neutral-900 dark:text-white" />
+        <div className="relative z-10 flex items-center gap-2 sm:gap-2.5 select-none cursor-pointer group shrink-0">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center shrink-0">
+            <ForgeXLogo className="w-5 h-5 sm:w-6 sm:h-6 text-neutral-900 dark:text-white" />
           </div>
-          <span className="font-display font-bold text-lg sm:text-xl tracking-tight flex items-center">
+          <span className="font-display font-bold text-base sm:text-xl tracking-tight flex items-center">
             Forge<span className="text-amber-500">X</span>
           </span>
         </div>

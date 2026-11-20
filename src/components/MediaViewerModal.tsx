@@ -74,10 +74,10 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 backdrop-blur-xl bg-black/80 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-8 backdrop-blur-xl bg-black/80 animate-in fade-in duration-200">
       <div
         id="modal-media-viewer"
-        className={`relative w-full max-w-5xl rounded-2xl sm:rounded-3xl border shadow-2xl overflow-y-auto md:overflow-hidden flex flex-col md:flex-row max-h-[92vh] ${
+        className={`relative w-full max-w-5xl rounded-2xl sm:rounded-3xl border shadow-2xl overflow-y-auto md:overflow-hidden flex flex-col md:flex-row max-h-[92dvh] ${
           isDark
             ? 'bg-neutral-950 border-neutral-800 text-white shadow-black'
             : 'bg-white border-neutral-200 text-neutral-900 shadow-2xl'
@@ -120,7 +120,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
         {/* Sidebar Info */}
         <div
-          className={`w-full md:w-80 p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l ${
+          className={`w-full md:w-80 p-4 sm:p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l ${
             isDark ? 'border-neutral-850 bg-neutral-900/60' : 'border-neutral-200 bg-neutral-50'
           }`}
         >

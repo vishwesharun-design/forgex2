@@ -789,7 +789,7 @@ export default function App() {
   return (
     <div
       id="forgex-app-root"
-      className={`min-h-screen relative font-sans transition-colors duration-300 ${
+      className={`min-h-[100dvh] w-full overflow-x-hidden relative font-sans transition-colors duration-300 ${
         isDark
           ? 'bg-neutral-950 text-neutral-100 dark'
           : 'bg-[#fafafa] text-neutral-900'
@@ -807,7 +807,7 @@ export default function App() {
 
       {/* VIEW 1: LANDING PAGE */}
       {!isInWorkspace ? (
-        <div className="relative z-10 min-h-screen flex flex-col justify-between">
+        <div className="relative z-10 min-h-[100dvh] flex flex-col justify-between overflow-x-hidden">
           <LandingNav
             theme={settings.theme}
             themeEffect={settings.themeEffect || 'connected_dots'}
@@ -834,10 +834,10 @@ export default function App() {
           </main>
 
           {/* Minimal Landing Footer */}
-          <footer className={`py-6 px-6 text-center text-xs border-t backdrop-blur-sm transition-colors ${
+          <footer className={`py-5 px-4 sm:px-6 text-center text-xs border-t backdrop-blur-sm transition-colors ${
             isDark ? 'text-neutral-500 border-neutral-900/50' : 'text-neutral-600 border-neutral-200/80 bg-white/40'
           }`}>
-            <div className="flex items-center justify-center gap-6">
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
               <button onClick={() => setIsAboutOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                 About ForgeX
               </button>
@@ -1174,10 +1174,10 @@ export default function App() {
                     id="workspace-reminder-below-bar"
                     role="status"
                     aria-live="polite"
-                    className="px-4 pb-3 pt-1 shrink-0"
+                    className="px-2.5 sm:px-4 pb-3 pt-1 shrink-0"
                   >
                     <div
-                      className={`max-w-3xl mx-auto flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border shadow-sm ${
+                      className={`max-w-3xl mx-auto flex items-center justify-between gap-2.5 sm:gap-3 px-3 sm:px-4 py-2.5 rounded-2xl border shadow-sm ${
                         isDark
                           ? 'bg-amber-500/10 border-amber-500/30 text-amber-100'
                           : 'bg-amber-50/95 border-amber-300/70 text-neutral-900'

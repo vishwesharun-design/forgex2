@@ -129,8 +129,8 @@ export const WebSearchWorkspace: React.FC<WebSearchWorkspaceProps> = ({
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-50 text-neutral-900'}`}>
       {/* Header */}
-      <div className={`px-4 sm:px-6 py-3 border-b flex items-center justify-between gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+      <div className={`px-3 sm:px-6 py-2.5 sm:py-3 border-b flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3 shrink-0 ${isDark ? 'border-neutral-850 bg-neutral-950/80' : 'border-neutral-200 bg-white/80'}`}>
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
             <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>

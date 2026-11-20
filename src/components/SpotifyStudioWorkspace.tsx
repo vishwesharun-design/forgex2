@@ -408,7 +408,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
             isDark ? 'border-neutral-850 bg-neutral-950/40' : 'border-neutral-200 bg-white/40'
           }`}>
             {/* Search Input */}
-            <div className="relative flex-1 min-w-[200px] max-w-md">
+            <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-md">
               <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${
                 isDark ? 'text-neutral-500' : 'text-neutral-400'
               }`} />
@@ -782,38 +782,38 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
         </div>
 
         {/* Right Column: High-End Music Player Dock with Real Audio Controls */}
-        <div className={`w-full md:w-[380px] lg:w-[420px] border-l flex flex-col shrink-0 overflow-y-auto ${
+        <div className={`w-full md:w-[380px] lg:w-[420px] md:border-l flex flex-col shrink-0 overflow-y-auto ${
           mobileTab === 'player' ? 'flex' : 'hidden md:flex'
         } ${isDark ? 'border-neutral-850 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-100/50'}`}>
           {/* Player Dock Header */}
-          <div className={`p-4 border-b flex items-center justify-between shrink-0 ${
+          <div className={`p-3.5 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 ${
             isDark ? 'border-neutral-850 bg-neutral-950/70' : 'border-neutral-200 bg-white/70'
           }`}>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#1DB954]/20 flex items-center justify-center text-[#1DB954] border border-[#1DB954]/30">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-[#1DB954]/20 flex items-center justify-center text-[#1DB954] border border-[#1DB954]/30 shrink-0">
                 <Disc3 className={`w-5 h-5 ${playerState.isPlaying ? 'animate-spin' : ''}`} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1DB954] flex items-center gap-1.5">
-                  Now Playing Real Song
+                  <span className="truncate">Now Playing Real Song</span>
                   {playerState.isPlaying && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
                   )}
                 </h3>
-                <p className={`text-[11px] ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <p className={`text-[11px] truncate ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
                   Master audio recording & live visualizer
                 </p>
               </div>
             </div>
 
             {/* Switch Mode: Master Audio vs Spotify Embed vs Music Video */}
-            <div className={`flex items-center rounded-xl p-0.5 border ${
+            <div className={`flex items-center rounded-xl p-0.5 border max-w-full overflow-x-auto no-scrollbar whitespace-nowrap shrink-0 self-start sm:self-auto ${
               isDark ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-200 bg-neutral-100'
             }`}>
               <button
                 type="button"
                 onClick={() => handleSelectPlaybackMode('real_audio')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ${
                   playbackMode === 'real_audio'
                     ? 'bg-[#1DB954] text-black shadow-sm'
                     : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
@@ -825,7 +825,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
               <button
                 type="button"
                 onClick={() => handleSelectPlaybackMode('spotify_embed')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ${
                   playbackMode === 'spotify_embed'
                     ? 'bg-[#1DB954] text-black shadow-sm'
                     : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'
@@ -837,7 +837,7 @@ export const SpotifyStudioWorkspace: React.FC<SpotifyStudioWorkspaceProps> = ({ 
               <button
                 type="button"
                 onClick={() => handleSelectPlaybackMode('video')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ${
                   playbackMode === 'video'
                     ? 'bg-[#1DB954] text-black shadow-sm'
                     : isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'

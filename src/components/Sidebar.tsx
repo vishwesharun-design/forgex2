@@ -467,7 +467,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 onDeleteChat(chat.id);
                               }}
                               title="Delete chat"
-                              className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity ${
+                              className={`opacity-70 md:opacity-0 md:group-hover:opacity-100 p-1 rounded transition-opacity shrink-0 ${
                                 isDark ? 'hover:text-red-400 text-neutral-400' : 'hover:text-red-600 text-neutral-500'
                               }`}
                             >
@@ -601,7 +601,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                  {accountMenuOpen && (
                    <div
                      id="menu-account-popover"
-                     className={`absolute bottom-full left-0 mb-2 w-64 rounded-2xl border p-2 shadow-2xl z-50 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${
+                     className={`absolute bottom-full left-0 mb-2 w-[min(16rem,calc(100vw-3rem))] rounded-2xl border p-2 shadow-2xl z-50 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${
                        isDark
                          ? 'bg-neutral-900/90 border-white/15 text-white shadow-black/80'
                          : 'bg-white/90 border-neutral-200/80 text-neutral-900 shadow-neutral-400/30'

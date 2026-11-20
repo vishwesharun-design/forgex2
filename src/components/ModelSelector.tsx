@@ -52,26 +52,26 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const effectiveVariant = variant || (compactRoundOnly ? 'round' : 'chatgpt');
 
   return (
-    <div ref={containerRef} className="relative inline-block text-left">
+    <div ref={containerRef} className="relative inline-block text-left min-w-0">
       {/* 1. ChatGPT-style Minimal Header Dropdown Button */}
       {effectiveVariant === 'chatgpt' && (
         <button
           id="btn-model-switcher-chatgpt"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-display font-semibold transition-all duration-150 ${
-            useShortName ? 'text-sm sm:text-base' : 'text-base sm:text-lg'
+          className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 rounded-xl font-display font-semibold transition-all duration-150 min-w-0 max-w-full ${
+            useShortName ? 'text-xs sm:text-base' : 'text-sm sm:text-lg'
           } ${
             isDark
               ? 'text-neutral-200 hover:text-white hover:bg-neutral-900/90'
               : 'text-neutral-800 hover:text-neutral-950 hover:bg-neutral-100'
           }`}
         >
-          <span className="truncate max-w-[160px] sm:max-w-none">
+          <span className="truncate max-w-[104px] sm:max-w-none">
             {useShortName ? currentModel.badge : currentModel.name}
           </span>
           <ChevronDown
-            className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${
+            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${
               isOpen ? 'rotate-180' : ''
             }`}
           />

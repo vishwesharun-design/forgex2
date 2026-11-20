@@ -179,7 +179,7 @@ export const InlineSongCard: React.FC<InlineSongCardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className="w-full max-w-2xl min-w-0">
       <AudioTrackPlayer
         song={localSong}
         isPlaying={isPlaying}
@@ -263,7 +263,7 @@ export const InlineSpotifyCard: React.FC<InlineSpotifyCardProps> = ({
 
   return (
     <div
-      className={`w-full max-w-2xl rounded-2xl border overflow-hidden ${
+      className={`w-full max-w-2xl min-w-0 rounded-2xl border overflow-hidden ${
         isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900 shadow-sm'
       }`}
     >
@@ -515,7 +515,7 @@ export const InlinePresentationCard: React.FC<InlinePresentationCardProps> = ({
 
   return (
     <div
-      className={`w-full max-w-2xl rounded-2xl border overflow-hidden ${
+      className={`w-full max-w-2xl min-w-0 rounded-2xl border overflow-hidden ${
         isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900 shadow-sm'
       }`}
     >
@@ -881,7 +881,7 @@ export const InlineCanvasCard: React.FC<InlineCanvasCardProps> = ({ board, theme
 
   return (
     <div
-      className={`w-full max-w-2xl rounded-2xl border overflow-hidden ${
+      className={`w-full max-w-2xl min-w-0 rounded-2xl border overflow-hidden ${
         isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900 shadow-sm'
       }`}
     >
@@ -1110,7 +1110,7 @@ export const InlineDataAnalysisCard: React.FC<InlineDataAnalysisCardProps> = ({
 
   return (
     <div
-      className={`w-full max-w-2xl rounded-2xl border overflow-hidden ${
+      className={`w-full max-w-2xl min-w-0 rounded-2xl border overflow-hidden ${
         isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900 shadow-sm'
       }`}
     >
@@ -1413,10 +1413,12 @@ export const InlineAgentCard: React.FC<InlineAgentCardProps> = ({
   }, [status]);
 
   return (
-    <div className="space-y-3 w-full max-w-2xl">
+    <div className="space-y-3 w-full max-w-3xl min-w-0">
       <div
         className={`rounded-2xl border overflow-hidden ${
-          isDark ? 'bg-neutral-900/90 border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900 shadow-sm'
+          isDark
+            ? 'bg-neutral-500/[0.05] border-neutral-800/80 text-neutral-100'
+            : 'bg-neutral-500/[0.03] border-neutral-200/80 text-neutral-900'
         }`}
       >
         <button
@@ -1520,15 +1522,15 @@ export const InlineAgentCard: React.FC<InlineAgentCardProps> = ({
           href={browserUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium max-w-full min-w-0 ${
             isDark
               ? 'border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-200'
               : 'border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-800'
           }`}
         >
-          <Globe className="w-3.5 h-3.5 text-sky-500" />
-          <span className="truncate max-w-xs">Open {browserUrl}</span>
-          <ExternalLink className="w-3 h-3" />
+          <Globe className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+          <span className="truncate min-w-0 flex-1">Open {browserUrl}</span>
+          <ExternalLink className="w-3 h-3 shrink-0" />
         </a>
       )}
 

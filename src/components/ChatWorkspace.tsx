@@ -1696,7 +1696,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {/* ChatGPT Style Rounded Capsule Input Container */}
         <div
           id="chat-input-container"
-          className={`relative rounded-3xl p-2 sm:p-2.5 border transition-all duration-200 shadow-sm flex items-center gap-2 ${
+          className={`relative rounded-3xl p-2 sm:p-2.5 border transition-all duration-200 shadow-sm flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2 ${
             isDark
               ? 'bg-neutral-900/90 border-neutral-800 focus-within:border-neutral-700 shadow-black/40'
               : 'bg-white border-neutral-300 focus-within:border-neutral-400 shadow-neutral-200/60'
@@ -1728,7 +1728,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 id="chat-plus-popover"
                 className={`absolute ${
                   showActiveLayout ? 'bottom-full mb-2.5' : 'top-full mt-2.5'
-                } left-0 w-[312px] sm:w-[348px] max-h-[min(420px,54vh)] overflow-y-auto custom-scrollbar rounded-2xl border p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.16)] z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                } left-0 w-[min(348px,calc(100vw-2.25rem))] max-h-[min(400px,52dvh)] overflow-y-auto custom-scrollbar rounded-2xl border p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.16)] z-50 animate-in fade-in zoom-in-95 duration-100 ${
                   isDark
                     ? 'bg-neutral-900 border-neutral-800 text-white shadow-black/60'
                     : 'bg-white border-neutral-200/90 text-neutral-900'
@@ -1992,57 +1992,60 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             )}
           </div>
 
-          {/* Active Project Chip if working inside a project */}
-          {activeProjectInChat && (
-            <button
-              type="button"
-              onClick={() => setActiveProjectInChat(null)}
-              title="Detach project context"
-              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                isDark
-                  ? 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
-                  : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
-              }`}
-            >
-              <Folder className="w-3.5 h-3.5" />
-              <span className="truncate max-w-[110px]">{activeProjectInChat.name}</span>
-              <X className="w-3 h-3 opacity-70" />
-            </button>
-          )}
+          {/* Active Project & Composer Tool Chips (wrap cleanly above input on narrow mobile) */}
+          {(activeProjectInChat || activeComposerTool !== 'none') && (
+            <div className="order-first w-full flex flex-wrap items-center gap-1.5 px-1 pb-1 sm:order-none sm:w-auto sm:px-0 sm:pb-0 sm:shrink-0">
+              {activeProjectInChat && (
+                <button
+                  type="button"
+                  onClick={() => setActiveProjectInChat(null)}
+                  title="Detach project context"
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    isDark
+                      ? 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                      : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
+                  }`}
+                >
+                  <Folder className="w-3.5 h-3.5" />
+                  <span className="truncate max-w-[110px]">{activeProjectInChat.name}</span>
+                  <X className="w-3 h-3 opacity-70" />
+                </button>
+              )}
 
-          {/* Active Composer Tool Chip when selected from + menu */}
-          {activeComposerTool !== 'none' && (
-            <button
-              type="button"
-              onClick={() => setActiveComposerTool('none')}
-              title="Clear selected tool"
-              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                TOOL_CHIP_META[activeComposerTool]?.badgeClass ||
-                'bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200'
-              }`}
-            >
-              {activeComposerTool === 'deep_research' && <Telescope className="w-3.5 h-3.5 text-sky-500" />}
-              {activeComposerTool === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'search' && <Globe className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'thinking' && <Brain className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'code' && <Code2 className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'music' && <Music className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'spotify' && <Headphones className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'agents' && <Bot className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'data_analysis' && <BarChart3 className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'vault' && <Database className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'files' && <FileText className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'writing' && <PenTool className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'presentation' && <Presentation className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'canvas' && <LayoutDashboard className="w-3.5 h-3.5" />}
-              {activeComposerTool === 'schedule' && <Clock className="w-3.5 h-3.5" />}
-              <span>{TOOL_CHIP_META[activeComposerTool]?.label || activeComposerTool}</span>
-              <X className="w-3 h-3 opacity-70" />
-            </button>
+              {activeComposerTool !== 'none' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveComposerTool('none')}
+                  title="Clear selected tool"
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs sm:text-[13px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                    TOOL_CHIP_META[activeComposerTool]?.badgeClass ||
+                    'bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200'
+                  }`}
+                >
+                  {activeComposerTool === 'deep_research' && <Telescope className="w-3.5 h-3.5 text-sky-500" />}
+                  {activeComposerTool === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'search' && <Globe className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'thinking' && <Brain className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'code' && <Code2 className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'music' && <Music className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'spotify' && <Headphones className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'agents' && <Bot className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'data_analysis' && <BarChart3 className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'vault' && <Database className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'files' && <FileText className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'writing' && <PenTool className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'presentation' && <Presentation className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'canvas' && <LayoutDashboard className="w-3.5 h-3.5" />}
+                  {activeComposerTool === 'schedule' && <Clock className="w-3.5 h-3.5" />}
+                  <span>{TOOL_CHIP_META[activeComposerTool]?.label || activeComposerTool}</span>
+                  <X className="w-3 h-3 opacity-70" />
+                </button>
+              )}
+            </div>
           )}
 
           {/* Text Area */}
-          <div className="flex-1 min-w-0 flex items-center">
+          <div className="flex-1 min-w-[110px] flex items-center">
             <textarea
               ref={textareaRef}
               id="chat-textarea"
@@ -2358,30 +2361,30 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               return (
                 <div
                   key={message.id}
-                  className={`group flex gap-3.5 ${isUser ? 'justify-end' : 'justify-start'}`}
+                  className={`group flex gap-3.5 min-w-0 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {isUser ? (
-                    <div className="flex flex-col items-end max-w-[85%] sm:max-w-[78%]">
+                    <div className="flex flex-col items-end max-w-[88%] sm:max-w-[78%] min-w-0">
                       {/* Attachments if any */}
                       {message.attachments && message.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                        <div className="flex flex-wrap gap-2 mb-2 justify-end max-w-full">
                           {message.attachments.map((att, i) => (
-                            <div key={i} className="flex flex-col gap-1 items-end">
+                            <div key={i} className="flex flex-col gap-1 items-end max-w-full">
                               {att.type === 'image' && att.url && (
                                 <img
                                   src={att.url}
                                   alt={att.name}
-                                  className={`max-h-48 max-w-xs rounded-xl object-cover border shadow-sm ${
+                                  className={`max-h-48 max-w-full sm:max-w-xs rounded-xl object-cover border shadow-sm ${
                                     isDark ? 'border-neutral-700' : 'border-neutral-200'
                                   }`}
                                 />
                               )}
                               <div
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit ${
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs w-fit max-w-full ${
                                   isDark ? 'bg-neutral-800/80 text-neutral-300' : 'bg-neutral-200 text-neutral-800 font-medium'
                                 }`}
                               >
-                                {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                                {att.type === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}
                                 <span className="truncate max-w-[140px]">{att.name}</span>
                               </div>
                             </div>
@@ -2391,7 +2394,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
                       {/* User message text bubble: Clean light/white style or tool-tinted badge matching Screenshot 2 */}
                       <div
-                        className={`rounded-2xl px-4 py-2.5 sm:px-4.5 sm:py-3 font-normal rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap font-sans transition-colors ${
+                        className={`max-w-full break-words [overflow-wrap:anywhere] rounded-2xl px-4 py-2.5 sm:px-4.5 sm:py-3 font-normal rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap font-sans transition-colors ${
                           message.toolBadge === 'deep_research'
                             ? isDark
                               ? 'bg-rose-950/30 border border-rose-800/45 text-neutral-100 shadow-md shadow-black/25'
@@ -2424,7 +2427,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       </div>
 
                       {/* Action Bar for User Messages */}
-                      <div className="mt-1 flex items-center justify-end px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="mt-1 flex items-center justify-end px-1 opacity-75 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => copyToClipboard(message.content, message.id)}
                           title="Copy message"
@@ -2490,7 +2493,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       // If message contains generated image(s), display ONLY the image with zero assistant text chatter and zero prompt
                       if (hasImages) {
                         return (
-                          <div className="flex flex-col gap-3 max-w-xl w-full animate-in fade-in duration-200">
+                          <div className="flex flex-col gap-3 max-w-xl w-full min-w-0 animate-in fade-in duration-200">
                             {message.generatedImages!.map((img) => (
                               <div
                                 key={img.id}
@@ -2650,7 +2653,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
                       return (
                         <div
-                          className={`relative w-full max-w-3xl py-1 transition-colors text-sm sm:text-[15px] leading-[1.75] ${
+                          className={`relative w-full max-w-3xl min-w-0 py-1 transition-colors text-sm sm:text-[15px] leading-[1.75] ${
                             isDark ? 'text-neutral-100' : 'text-neutral-900'
                           }`}
                         >
@@ -2663,7 +2666,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                                     <img
                                       src={att.url}
                                       alt={att.name}
-                                      className="max-h-48 max-w-xs rounded-xl object-cover border border-neutral-700 shadow-sm"
+                                      className="max-h-48 max-w-full sm:max-w-xs rounded-xl object-cover border border-neutral-700 shadow-sm"
                                     />
                                   )}
                                   <div
@@ -2680,7 +2683,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                           )}
 
                           {/* Message Body with rich Markdown rendering, Writing controls, or Document Quiz */}
-                          <div className="relative">
+                          <div className="relative min-w-0">
                             {message.writingMeta ? (
                               <InlineWritingCard
                                 content={message.content}
@@ -2921,7 +2924,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
         >
           <div
-            className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[80vh] ${
+            className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] ${
               isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
             }`}
           >
@@ -3043,7 +3046,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
         >
           <div
-            className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[80vh] ${
+            className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] ${
               isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
             }`}
           >

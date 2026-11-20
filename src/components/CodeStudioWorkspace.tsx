@@ -664,40 +664,40 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
     return (
       <div className="w-full h-full flex flex-col items-center justify-center p-2 sm:p-3 min-h-0 relative select-none">
         {/* Device Controls Bar */}
-        <div className="flex items-center gap-1.5 sm:gap-2 mb-2 px-3 py-1 rounded-full bg-neutral-900/90 border border-neutral-800 text-[11px] text-neutral-300 z-10 shrink-0 shadow-lg max-w-full overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 sm:gap-2 mb-2 px-3 py-1 rounded-full bg-neutral-900/90 border border-neutral-800 text-[11px] text-neutral-300 z-10 shrink-0 shadow-lg max-w-full overflow-x-auto no-scrollbar whitespace-nowrap">
           {isMobileScreen && !isFullscreen && (
             <>
               <button
                 type="button"
                 onClick={() => setMobilePreviewStyle('full')}
-                className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1"
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 shrink-0"
                 title="Return to full bleed mobile view"
               >
                 <span>Full Bleed</span>
               </button>
-              <span className="text-neutral-600">·</span>
+              <span className="text-neutral-600 shrink-0">·</span>
             </>
           )}
-          <span className="font-semibold text-amber-400">{activePreset.name}</span>
-          <span className="text-neutral-600">·</span>
-          <span className="font-mono text-[10px] text-neutral-400">{deviceWidth} × {deviceHeight}</span>
-          <span className="text-neutral-600">·</span>
+          <span className="font-semibold text-amber-400 shrink-0">{activePreset.name}</span>
+          <span className="text-neutral-600 shrink-0">·</span>
+          <span className="font-mono text-[10px] text-neutral-400 shrink-0">{deviceWidth} × {deviceHeight}</span>
+          <span className="text-neutral-600 shrink-0">·</span>
           {/* Preset selector */}
           <select
             value={phonePreset}
             onChange={(e) => setPhonePreset(e.target.value as PhonePresetKey)}
-            className="bg-transparent text-neutral-300 text-[10px] font-medium focus:outline-none cursor-pointer"
+            className="bg-transparent text-neutral-300 text-[10px] font-medium focus:outline-none cursor-pointer shrink-0"
           >
             <option value="iphone-15" className="bg-neutral-900 text-white">iPhone 15 Pro</option>
             <option value="iphone-se" className="bg-neutral-900 text-white">iPhone SE</option>
             <option value="pixel-8" className="bg-neutral-900 text-white">Pixel 8</option>
           </select>
-          <span className="text-neutral-600">·</span>
+          <span className="text-neutral-600 shrink-0">·</span>
           {/* Orientation rotate button */}
           <button
             type="button"
             onClick={() => setPhoneOrientation((prev) => (prev === 'portrait' ? 'landscape' : 'portrait'))}
-            className="p-0.5 hover:text-amber-400 transition-colors flex items-center gap-1"
+            className="p-0.5 hover:text-amber-400 transition-colors flex items-center gap-1 shrink-0"
             title={`Rotate to ${phoneOrientation === 'portrait' ? 'Landscape' : 'Portrait'}`}
           >
             <RotateCw className="w-3 h-3" />
@@ -705,19 +705,25 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
           </button>
         </div>
 
-        {/* Scaled Device Mockup Container */}
-        <div 
+        {/* Scaled Device Mockup Container (uses CSS size container queries so frame never stretches or clips) */}
+        <div
           className="relative transition-all duration-300 flex items-center justify-center w-full max-w-full flex-1 min-h-0 overflow-hidden"
+          style={{ containerType: 'size' }}
         >
-          <div 
-            className={`flex flex-col bg-neutral-950 shadow-2xl overflow-hidden relative transition-all duration-300 border-[6px] sm:border-[8px] border-neutral-800 ${
-              phoneOrientation === 'portrait' 
-                ? 'rounded-[36px] sm:rounded-[44px] w-full max-w-[380px] h-full max-h-full sm:max-h-[720px]' 
-                : 'rounded-[28px] sm:rounded-[36px] w-full max-w-[720px] h-full max-h-[380px]'
+          <div
+            className={`flex flex-col bg-neutral-950 shadow-2xl overflow-hidden relative transition-all duration-300 border-[6px] sm:border-[8px] border-neutral-800 box-border ${
+              phoneOrientation === 'portrait'
+                ? 'rounded-[32px] sm:rounded-[44px]'
+                : 'rounded-[24px] sm:rounded-[34px]'
             }`}
             style={{
+              width: `min(100cqw, calc(100cqh * ${deviceWidth} / ${deviceHeight}), ${
+                phoneOrientation === 'portrait' ? 380 : 720
+              }px)`,
+              aspectRatio: `${deviceWidth} / ${deviceHeight}`,
+              maxWidth: '100cqw',
+              maxHeight: '100cqh',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-              aspectRatio: phoneOrientation === 'portrait' ? `${deviceWidth} / ${deviceHeight}` : `${deviceHeight} / ${deviceWidth}`,
             }}
           >
             {/* Top Status Bar & Dynamic Island */}
@@ -943,7 +949,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
 
       {/* 2. AI CODE ASSISTANT TOOLBAR (Collapsible for maximum screen space) */}
       {!isAiCollapsed && (
-      <div className={`px-4 py-2.5 border-b text-xs flex flex-col gap-2 shrink-0 ${
+      <div className={`px-3 sm:px-4 py-2 sm:py-2.5 border-b text-xs flex flex-col gap-2 shrink-0 ${
         isDark ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-100/70'
       }`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1015,15 +1021,15 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
 
         {/* Tab 1: AI Generate Bar */}
         {activeTab === 'generate' && (
-          <div className="flex items-center gap-2 animate-in fade-in duration-200">
-            <div className="relative flex-1">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 animate-in fade-in duration-200">
+            <div className="relative flex-1 min-w-[180px]">
               <input
                 id="code-generate-input"
                 type="text"
                 value={generatePrompt}
                 onChange={(e) => setGeneratePrompt(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAIGenerate()}
-                placeholder={`Describe the code you want to generate in ${language} (e.g. "Create a responsive particle network canvas", "Fast LRU cache")...`}
+                placeholder={`Describe the code you want to generate in ${language}...`}
                 className={`w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
                   isDark
                     ? 'bg-neutral-950 border-neutral-800 text-white placeholder-neutral-500 focus:border-amber-400'
@@ -1035,7 +1041,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               id="code-generate-submit"
               onClick={() => handleAIGenerate()}
               disabled={isProcessing || !generatePrompt.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50 transition-all shrink-0"
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50 transition-all shrink-0 w-full sm:w-auto"
             >
               {isProcessing ? (
                 <>
@@ -1115,15 +1121,15 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             </div>
 
             {/* Custom Alter Prompt Input */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
               <input
                 id="code-alter-input"
                 type="text"
                 value={alterPrompt}
                 onChange={(e) => setAlterPrompt(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAIAlterOrCorrect('custom', alterPrompt)}
-                placeholder="Or specify custom alter instructions (e.g. 'Translate to TypeScript', 'Add dark mode support', 'Add error logging')..."
-                className={`flex-1 px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
+                placeholder="Custom alter instructions (e.g. 'Translate to TypeScript', 'Add dark mode')..."
+                className={`flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
                   isDark
                     ? 'bg-neutral-950 border-neutral-800 text-white placeholder-neutral-500 focus:border-amber-400'
                     : 'bg-white border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:border-amber-600'
@@ -1133,7 +1139,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 id="code-alter-submit"
                 onClick={() => handleAIAlterOrCorrect('custom', alterPrompt)}
                 disabled={isProcessing || !alterPrompt.trim()}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border disabled:opacity-50 transition-all shrink-0 ${
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border disabled:opacity-50 transition-all shrink-0 w-full sm:w-auto ${
                   isDark
                     ? 'bg-neutral-800 hover:bg-neutral-700 text-amber-400 border-amber-500/30'
                     : 'bg-neutral-100 hover:bg-neutral-200 text-amber-700 border-neutral-300'
@@ -1157,13 +1163,13 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
       )}
 
       {/* 3. MOBILE PANEL SWITCHER (Visible on screens < md) */}
-      <div className={`flex md:hidden items-center border-b px-2 py-1.5 gap-1 shrink-0 ${
+      <div className={`flex md:hidden items-center border-b px-1.5 py-1.5 gap-1 shrink-0 overflow-x-auto no-scrollbar ${
         isDark ? 'bg-neutral-900/80 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
       }`}>
         <button
           type="button"
           onClick={() => setMobilePanel('editor')}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-0 px-1.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
             mobilePanel === 'editor'
               ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
               : isDark
@@ -1171,7 +1177,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               : 'text-neutral-600 hover:text-black'
           }`}
         >
-          <Code2 className="w-3.5 h-3.5" />
+          <Code2 className="w-3 h-3 shrink-0" />
           <span>Editor</span>
         </button>
         <button
@@ -1180,7 +1186,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             setMobilePanel('preview');
             setRightPanelTab('preview');
           }}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-0 px-1.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
             mobilePanel === 'preview'
               ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
               : isDark
@@ -1188,7 +1194,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               : 'text-neutral-600 hover:text-black'
           }`}
         >
-          <Eye className="w-3.5 h-3.5" />
+          <Eye className="w-3 h-3 shrink-0" />
           <span>Preview</span>
         </button>
         <button
@@ -1197,7 +1203,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             setMobilePanel('console');
             setRightPanelTab('console');
           }}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-0 px-1.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
             mobilePanel === 'console'
               ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
               : isDark
@@ -1205,7 +1211,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               : 'text-neutral-600 hover:text-black'
           }`}
         >
-          <Terminal className="w-3.5 h-3.5" />
+          <Terminal className="w-3 h-3 shrink-0" />
           <span>Console</span>
         </button>
         <button
@@ -1214,7 +1220,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             setMobilePanel('fixes');
             setRightPanelTab('fixes');
           }}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-0 px-1.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
             mobilePanel === 'fixes'
               ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
               : isDark
@@ -1222,15 +1228,15 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
               : 'text-neutral-600 hover:text-black'
           }`}
         >
-          <CheckCircle2 className="w-3.5 h-3.5" />
+          <CheckCircle2 className="w-3 h-3 shrink-0" />
           <span>Fixes</span>
         </button>
       </div>
 
       {/* 4. DUAL-PANEL WORKSPACE (EDITOR + PREVIEW/CONSOLE) */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
         {/* LEFT PANEL: CODE EDITOR */}
-        <div className={`flex-1 flex flex-col min-w-0 border-r ${
+        <div className={`flex-1 flex flex-col min-w-0 min-h-0 border-r ${
           mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'
         } ${isDark ? 'border-neutral-800 bg-[#0d0d10]' : 'border-neutral-200 bg-white'}`}>
           {/* Editor Header Bar */}
@@ -1301,7 +1307,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
         </div>
 
         {/* RIGHT PANEL: LIVE PREVIEW & RUNTIME CONSOLE */}
-        <div className={`flex-1 flex flex-col min-w-0 ${
+        <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${
           mobilePanel !== 'editor' ? 'flex' : 'hidden md:flex'
         } md:max-w-[50%] lg:max-w-[45%] ${
           isDark ? 'bg-neutral-950' : 'bg-neutral-50'
@@ -1468,7 +1474,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 renderSimulatedMobile(false)
               ) : viewportMode === 'tablet' ? (
                 /* Interactive Tablet Frame */
-                <div className="w-full max-w-[768px] h-full max-h-[820px] my-auto mx-auto rounded-[18px] sm:rounded-[24px] border-[3px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all box-border">
+                <div className="w-full max-w-[768px] h-full max-h-full sm:max-h-[820px] my-auto mx-auto rounded-[18px] sm:rounded-[24px] border-[3px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative transition-all box-border">
                   <div className="h-6 bg-neutral-950 flex items-center justify-center border-b border-neutral-900/60 shrink-0 select-none">
                     <div className="w-2 h-2 rounded-full bg-neutral-800 border border-neutral-700" />
                   </div>
@@ -1792,7 +1798,7 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             {viewportMode === 'mobile' ? (
               renderSimulatedMobile(true)
             ) : viewportMode === 'tablet' ? (
-              <div className="w-full max-w-[768px] h-full max-h-[92vh] my-auto mx-auto rounded-[20px] sm:rounded-[24px] border-[4px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative">
+              <div className="w-full max-w-[768px] h-full max-h-full sm:max-h-[92dvh] my-auto mx-auto rounded-[20px] sm:rounded-[24px] border-[4px] sm:border-[6px] border-neutral-800 bg-neutral-950 shadow-2xl flex flex-col overflow-hidden relative box-border">
                 <div className="h-6 bg-neutral-950 flex items-center justify-center border-b border-neutral-900/60 shrink-0 select-none">
                   <div className="w-2 h-2 rounded-full bg-neutral-800 border border-neutral-700" />
                 </div>

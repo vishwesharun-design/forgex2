@@ -9,6 +9,12 @@
     --font-mono: 'JetBrains Mono', monospace;
   }
 
+  html, body, #root {
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
   body {
     font-family: var(--font-sans);
   }
@@ -16,6 +22,17 @@
   h1, h2, h3, .font-display {
     font-family: var(--font-display);
   }
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* ChatGPT-style Math LaTeX and Boxed Expressions */

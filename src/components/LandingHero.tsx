@@ -119,11 +119,11 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
       />
 
       {/* SECTION 1: HERO VIEWPORT WITH INTERACTIVE 3D MODEL */}
-      <section className="relative min-h-[calc(100vh-40px)] flex flex-col justify-center px-4 sm:px-8 pt-24 pb-12 max-w-6xl mx-auto">
+      <section className="relative min-h-[calc(100dvh-40px)] flex flex-col justify-center px-4 sm:px-8 pt-20 sm:pt-24 pb-10 sm:pb-12 max-w-6xl mx-auto">
         {/* Subtle ambient radial glow linked to scroll */}
         <motion.div
           style={reduceMotion ? undefined : { opacity: glowOpacity }}
-          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] sm:w-[640px] h-[360px] sm:h-[640px] rounded-full pointer-events-none blur-3xl ${
+          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(360px,88vw)] sm:w-[640px] h-[min(360px,88vw)] sm:h-[640px] rounded-full pointer-events-none blur-3xl ${
             isDark ? 'bg-amber-500/10' : 'bg-amber-500/6'
           }`}
         />
@@ -247,7 +247,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
               <button
                 id="hero-btn-getstarted"
                 onClick={onGetStarted}
-                className="w-full sm:w-auto px-7 py-3.5 rounded-2xl text-sm sm:text-base font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 flex items-center justify-center gap-2.5 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/35 active:scale-[0.98] transition-all duration-200 whitespace-nowrap shrink-0"
+                className="w-full sm:w-auto max-w-full px-4 sm:px-7 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 flex items-center justify-center gap-2 sm:gap-2.5 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/35 active:scale-[0.98] transition-all duration-200 whitespace-normal sm:whitespace-nowrap text-center"
               >
                 <BookOpen className="w-4 h-4 shrink-0" />
                 <span>Get Started — Learn How It Works</span>
@@ -257,7 +257,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
               <button
                 id="hero-btn-launch"
                 onClick={() => onLaunchStudio('chat')}
-                className={`w-full sm:w-auto px-7 py-3.5 rounded-2xl text-sm sm:text-base font-medium border flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap shrink-0 ${
+                className={`w-full sm:w-auto max-w-full px-5 sm:px-7 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-medium border flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap shrink-0 ${
                   isDark
                     ? 'bg-neutral-900/70 hover:bg-neutral-800 border-neutral-800 text-neutral-200 hover:text-white'
                     : 'bg-white hover:bg-neutral-50 border-neutral-300 text-neutral-900 shadow-xs'
@@ -282,7 +282,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             className="lg:col-span-5 w-full"
           >
             <div
-              className={`relative w-full h-[380px] sm:h-[440px] lg:h-[490px] rounded-3xl border overflow-hidden ${
+              className={`relative w-full h-[300px] sm:h-[440px] lg:h-[490px] rounded-3xl border overflow-hidden ${
                 isDark
                   ? 'bg-neutral-900/45 border-neutral-800/90'
                   : 'bg-white/75 border-neutral-200/90 shadow-sm'

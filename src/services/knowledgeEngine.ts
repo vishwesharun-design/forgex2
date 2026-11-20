@@ -28,11 +28,11 @@ $$(125 + 75) \\times 4 - 300 \\div 3 = \\boxed{700}$$
   "unit": "Score",
   "max": 120,
   "data": [
-    { "label": "Algebra", "value": 90, "color": "#f472b6" },
-    { "label": "Geometry", "value": 84, "color": "#f472b6" },
-    { "label": "Fractions", "value": 98, "color": "#f472b6" },
-    { "label": "Statistics", "value": 76, "color": "#f472b6" },
-    { "label": "Number Theory", "value": 88, "color": "#f472b6" }
+    { "label": "Algebra", "value": 90 },
+    { "label": "Geometry", "value": 84 },
+    { "label": "Fractions", "value": 98 },
+    { "label": "Statistics", "value": 76 },
+    { "label": "Number Theory", "value": 88 }
   ]
 }
 \`\`\`
@@ -111,6 +111,29 @@ print(f"Maximum: {max(numbers)}")
   "title": "Visual representation",
   "caption": "Not to scale. The three green sides require fencing.",
   "svg": "<svg viewBox=\\"0 0 640 340\\" xmlns=\\"http://www.w3.org/2000/svg\\"><text x=\\"320\\" y=\\"48\\" text-anchor=\\"middle\\" fill=\\"#1d8cf8\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">River — no fencing needed</text><line x1=\\"90\\" y1=\\"76\\" x2=\\"550\\" y2=\\"76\\" stroke=\\"#1d8cf8\\" stroke-width=\\"12\\" stroke-linecap=\\"round\\" /><rect x=\\"170\\" y=\\"92\\" width=\\"300\\" height=\\"175\\" fill=\\"#dff0ea\\" /><polyline points=\\"170,92 170,267 470,267 470,92 170,92\\" fill=\\"none\\" stroke=\\"#059669\\" stroke-width=\\"6\\" stroke-linejoin=\\"round\\" /><text x=\\"320\\" y=\\"172\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">Area</text><text x=\\"320\\" y=\\"208\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"28\\" font-weight=\\"700\\" font-family=\\"system-ui, sans-serif\\">1,250 m²</text><text x=\\"115\\" y=\\"186\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"22\\" font-family=\\"system-ui, sans-serif\\">25 m</text><text x=\\"525\\" y=\\"186\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"22\\" font-family=\\"system-ui, sans-serif\\">25 m</text><text x=\\"320\\" y=\\"308\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">50 m of fencing</text></svg>"
+}
+\`\`\`
+
+---
+
+✅ 7. Evaluation Scorecard
+
+\`\`\`scorecard
+{
+  "title": "Fact-checking performance",
+  "score": 72,
+  "maxScore": 100,
+  "subtitle": "Qualitative assessment, not an independently verified factual accuracy score.",
+  "columns": ["Capability", "Assessment"],
+  "items": [
+    { "label": "Detecting hallucinations", "status": "Good" },
+    { "label": "Admitting previous mistakes", "status": "Good" },
+    { "label": "Critical reasoning", "status": "Good" },
+    { "label": "Providing evidence", "status": "Weak" },
+    { "label": "Direct source citations", "status": "Missing" },
+    { "label": "Corrected statistics", "status": "Weak" },
+    { "label": "Self-consistency", "status": "Needs work" }
+  ]
 }
 \`\`\``;
 }

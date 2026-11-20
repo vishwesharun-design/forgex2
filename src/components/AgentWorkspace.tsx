@@ -1194,16 +1194,16 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                         ? 'border-amber-500/80 bg-amber-500/10 text-neutral-100'
                         : 'border-amber-500 bg-amber-50 text-neutral-900'
                     }`}>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <ShieldAlert className="w-5 h-5 text-amber-500 animate-bounce" />
+                          <ShieldAlert className="w-5 h-5 text-amber-500 animate-bounce shrink-0" />
                           <h4 className={`text-sm font-bold uppercase tracking-wider ${
                             isDark ? 'text-amber-400' : 'text-amber-900'
                           }`}>
                             Mission Authorization Required
                           </h4>
                         </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-600 dark:text-red-300 border border-red-500/30 font-bold">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-600 dark:text-red-300 border border-red-500/30 font-bold shrink-0">
                           CONFIRMATION NEEDED
                         </span>
                       </div>
@@ -1260,11 +1260,11 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                 </div>
 
                 {/* Bottom Mission Task Dispatch Bar */}
-                <div className={`p-4 border-t text-left ${
+                <div className={`p-3 sm:p-4 border-t text-left ${
                   isDark ? 'border-neutral-800 bg-neutral-950' : 'border-neutral-200 bg-white'
                 }`}>
                   {/* Quick Task Prompt Chips */}
-                  <div className="max-w-4xl mx-auto mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  <div className="max-w-4xl mx-auto mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
                     <span className={`text-[10px] font-mono uppercase font-bold shrink-0 flex items-center gap-1 mr-1 ${
                       isDark ? 'text-amber-400' : 'text-amber-800'
                     }`}>
@@ -1292,13 +1292,13 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     <input
                       id="agent-chat-input"
                       type="text"
-                      placeholder={`Direct ${activeAgent.name}... (e.g. "Open browser and search for latest NVIDIA news" or "Organize my Downloads folder")`}
+                      placeholder={`Direct ${activeAgent.name}...`}
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleSendMessage();
                       }}
-                      className={`flex-1 px-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 transition-colors ${
+                      className={`flex-1 min-w-0 px-3 sm:px-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:border-amber-500 transition-colors ${
                         isDark
                           ? 'bg-neutral-900 border-neutral-800 text-neutral-100 placeholder-neutral-500'
                           : 'bg-neutral-100 border-neutral-300 text-neutral-900 placeholder-neutral-500 font-medium'
@@ -1310,7 +1310,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       type="button"
                       onClick={() => handleSendMessage()}
                       disabled={isExecuting || !inputMessage.trim()}
-                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center gap-1.5 transition-all shrink-0 active:scale-95 cursor-pointer"
+                      className="px-3.5 sm:px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-sm shadow-amber-500/20 disabled:opacity-40 flex items-center gap-1.5 transition-all shrink-0 active:scale-95 cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5 fill-current" />
                       <span>Dispatch</span>
@@ -1320,9 +1320,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               </div>
             )}
 
-            {/* Right Side Drawer (Permissions / Files) */}
+            {/* Right Side Drawer (Permissions / Files) — overlay on < lg, docked on desktop */}
             {sideDrawerTab !== 'none' && activeAgent && (
-              <div className={`w-80 border-l flex flex-col shrink-0 overflow-hidden text-left ${
+              <div className={`fixed inset-y-0 right-0 z-40 w-[min(20rem,90vw)] shadow-2xl lg:static lg:w-80 lg:shadow-none border-l flex flex-col shrink-0 overflow-hidden text-left ${
                 isDark ? 'border-neutral-800 bg-neutral-950/95' : 'border-neutral-200 bg-neutral-50'
               }`}>
                 <div className={`p-3 border-b flex items-center justify-between ${

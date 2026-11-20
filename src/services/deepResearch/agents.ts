@@ -59,6 +59,7 @@ async function callGeminiWithRetry(
   const timeoutMs = params.timeoutMs ?? 24000;
 
   for (const model of AGENT_MODELS) {
+    const modelTimeoutMs = model.includes("flash-lite") ? Math.min(timeoutMs, 15000) : timeoutMs;
     for (let attempt = 0; attempt < 2; attempt++) {
       if (signal?.aborted) throw new Error("Research cancelled");
       if (attempt > 0) {
@@ -67,7 +68,14 @@ async function callGeminiWithRetry(
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
-      const config: any = {};
+      const attemptController = new AbortController();
+      const onAbort = () => attemptController.abort(signal?.reason);
+      if (signal) {
+        if (signal.aborted) attemptController.abort(signal.reason);
+        else signal.addEventListener("abort", onAbort, { once: true });
+      }
+
+      const config: any = { abortSignal: attemptController.signal };
       if (params.systemInstruction) config.systemInstruction = params.systemInstruction;
       if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
       if (params.responseSchema) config.responseSchema = params.responseSchema;
@@ -88,7 +96,11 @@ async function callGeminiWithRetry(
             config,
           }),
           new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error(`Model ${model} timed out after ${timeoutMs}ms`)), timeoutMs);
+            timer = setTimeout(() => {
+              const timeoutErr = new Error(`Model ${model} timed out after ${modelTimeoutMs}ms`);
+              attemptController.abort(timeoutErr);
+              reject(timeoutErr);
+            }, modelTimeoutMs);
           }),
         ]);
         recordTokenUsage(tokenAcc, res.usageMetadata);
@@ -98,6 +110,7 @@ async function callGeminiWithRetry(
         }
       } catch (err: any) {
         lastErr = err;
+        attemptController.abort(err);
         const msg = String(err?.message || "").toLowerCase();
         const isTransient =
           msg.includes("503") ||
@@ -110,6 +123,7 @@ async function callGeminiWithRetry(
         if (!isTransient) break;
       } finally {
         if (timer) clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onAbort);
       }
     }
   }

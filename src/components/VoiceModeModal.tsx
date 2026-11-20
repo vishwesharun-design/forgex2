@@ -988,7 +988,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
             voiceController.replayBlockedAudio(resumeListeningAfterSpeech);
           }
         }}
-        className="w-full max-w-[392px] h-[90dvh] max-h-[748px] rounded-[36px] border-2 border-white/80 shadow-[0_28px_80px_rgba(78,72,170,0.34)] flex flex-col relative overflow-hidden text-[#39328E]"
+        className="w-full max-w-[392px] h-[min(90dvh,748px)] rounded-[28px] sm:rounded-[36px] border-2 border-white/80 shadow-[0_28px_80px_rgba(78,72,170,0.34)] flex flex-col relative overflow-hidden text-[#39328E]"
         style={{
           background:
             'linear-gradient(172deg, #F6F2FF 0%, #EDE9FE 48%, #E1EBFF 100%)',
@@ -1021,7 +1021,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
         />
 
         {/* TOP BAR: Circular Menu/Back on Left, Circular Settings + Close on Right */}
-        <header className="relative z-30 shrink-0 px-5 pt-5 pb-2 flex items-center justify-between">
+        <header className="relative z-30 shrink-0 px-4 sm:px-5 pt-4 sm:pt-5 pb-2 flex items-center justify-between">
           <button
             type="button"
             onClick={() => {
@@ -1074,7 +1074,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
             </button>
 
             {showOptionsMenu && (
-              <div className="absolute right-0 top-full mt-2 w-64 p-2.5 rounded-2xl bg-white/95 backdrop-blur-2xl border border-white shadow-[0_18px_45px_rgba(52,46,128,0.22)] z-50 text-[#2E2775] animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-[min(16rem,calc(100vw-48px))] p-2.5 rounded-2xl bg-white/95 backdrop-blur-2xl border border-white shadow-[0_18px_45px_rgba(52,46,128,0.22)] z-50 text-[#2E2775] animate-in fade-in zoom-in-95 duration-150">
                 <div className="space-y-1 pb-2 mb-2 border-b border-indigo-950/10">
                   <button
                     type="button"
@@ -1170,7 +1170,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
         </header>
 
         {/* MAIN STAGE */}
-        <main className="relative z-10 flex-1 min-h-0 flex flex-col justify-between px-5 pb-5 pt-2 overflow-hidden">
+        <main className="relative z-10 flex-1 min-h-0 flex flex-col justify-between px-4 sm:px-5 pb-4 sm:pb-5 pt-2 overflow-hidden">
           {activeTab === 'stage' ? (
             <>
               {/* Centered Greeting + Live Status */}
@@ -1240,7 +1240,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                 />
 
                 {latestStageImage && (
-                  <div className="relative flex items-center gap-2.5 p-1.5 pr-2.5 rounded-2xl bg-white/90 border border-white shadow-[0_8px_24px_rgba(78,72,170,0.16)] max-w-[285px] animate-in fade-in zoom-in-95 duration-200">
+                  <div className="relative flex items-center gap-2.5 p-1.5 pr-2.5 rounded-2xl bg-white/90 border border-white shadow-[0_8px_24px_rgba(78,72,170,0.16)] max-w-full sm:max-w-[285px] animate-in fade-in zoom-in-95 duration-200">
                     <img
                       src={latestStageImage.url}
                       alt={latestStageImage.prompt}
@@ -1341,8 +1341,8 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                       key={idx}
                       className={`p-3 rounded-2xl text-[12.5px] leading-relaxed shadow-sm border ${
                         turn.role === 'user'
-                          ? 'bg-gradient-to-br from-[#5B54D6] to-[#473FA8] border-white/25 text-white ml-8 rounded-br-md'
-                          : 'bg-white/90 border-white text-[#2F297A] mr-8 rounded-bl-md'
+                          ? 'bg-gradient-to-br from-[#5B54D6] to-[#473FA8] border-white/25 text-white ml-4 sm:ml-8 rounded-br-md'
+                          : 'bg-white/90 border-white text-[#2F297A] mr-4 sm:mr-8 rounded-bl-md'
                       }`}
                     >
                       <div className="flex items-center justify-between text-[10px] opacity-75 font-semibold mb-1">
@@ -1393,7 +1393,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
           )}
 
           {/* Anchored Bottom Section: Live Reminder Strip + 2x2 Quick Prompt Cards + Input Pill + Mic */}
-          <div className="w-full shrink-0 flex flex-col gap-3">
+          <div className="w-full shrink-0 flex flex-col gap-2 sm:gap-3">
             {activeReminder && (
               <div
                 id="voice-reminder-below-bar"
@@ -1420,7 +1420,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
             )}
 
             {activeTab === 'stage' && (
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                 {QUICK_PROMPTS.map((item) => {
                   const isActiveMode = voiceToolMode === item.id;
                   return (
@@ -1428,7 +1428,7 @@ export const VoiceModeModal: React.FC<VoiceModeModalProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => handleQuickPromptClick(item)}
-                      className={`rounded-2xl border px-3 py-2.5 flex items-center gap-2 text-left text-[12px] font-medium transition-all active:scale-[0.98] cursor-pointer ${
+                      className={`rounded-2xl border px-2.5 sm:px-3 py-2 sm:py-2.5 flex items-center gap-2 text-left text-[12px] font-medium transition-all active:scale-[0.98] cursor-pointer ${
                         isActiveMode
                           ? 'bg-white border-[#8A82FF] text-[#352E96] shadow-[0_6px_20px_rgba(92,84,225,0.18)] ring-1 ring-[#8A82FF]/40'
                           : 'bg-white/85 hover:bg-white border-white shadow-[0_4px_14px_rgba(88,82,175,0.07)] text-[#473E9C] hover:shadow-[0_6px_18px_rgba(88,82,175,0.12)]'

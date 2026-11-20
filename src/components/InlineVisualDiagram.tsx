@@ -91,7 +91,19 @@ function sanitizeSvgMarkup(rawSvg: string): { svg: string; hasDarkCanvas: boolea
     .replace(/\s*\bclass\s*=\s*["'][^"']*["']/gi, '');
 
   if (!hasViewBox) {
-    attrs += ` viewBox="0 0 ${inferredW} ${inferredH}"`;
+    attrs += ` viewBox="-16 -12 ${inferredW + 32} ${inferredH + 24}"`;
+  } else {
+    // Add safe outer margin to viewBox when SVG has no full-bleed background rect so edge labels never clip
+    const hasFullBleedBg = /<rect[^>]+(?:width\s*=\s*["'](?:100%|6[0-9]{2}|[7-9]\d{2})["']|x\s*=\s*["']0["'][^>]+y\s*=\s*["']0["'][^>]+fill\s*=\s*["'](?!none)[^"']+["'])/i.test(
+      clean.slice(0, 700)
+    );
+    if (!hasFullBleedBg) {
+      attrs = attrs.replace(
+        /\bviewBox\s*=\s*["']\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*["']/i,
+        (_m, vx, vy, vw, vh) =>
+          `viewBox="${Number(vx) - 16} ${Number(vy) - 12} ${Number(vw) + 32} ${Number(vh) + 24}"`
+      );
+    }
   }
   attrs += ' preserveAspectRatio="xMidYMid meet" width="100%" style="display:block;max-width:100%;height:auto;"';
 
@@ -343,23 +355,23 @@ export const InlineVisualDiagram: React.FC<InlineVisualDiagramProps> = ({
   return (
     <>
       <div
-        className={`my-3.5 rounded-2xl border transition-colors ${
+        className={`my-3.5 w-full max-w-full min-w-0 overflow-hidden rounded-2xl border transition-colors ${
           isDark
             ? 'bg-[#161619] border-neutral-800 text-neutral-100'
             : 'bg-white border-neutral-200/90 text-neutral-900'
         } p-4 sm:p-5`}
       >
-        {/* Clean Header: Title on left, crisp minimal icon controls on right */}
-        <div className="flex items-center justify-between gap-3 mb-3">
+        {/* Clean Header: Title on left, quiet minimal icon controls on right */}
+        <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
           <h4
-            className={`text-[13px] sm:text-sm font-semibold tracking-tight font-display ${
+            className={`text-[13px] sm:text-sm font-semibold tracking-tight font-display min-w-0 break-words ${
               isDark ? 'text-neutral-200' : 'text-neutral-900'
             }`}
           >
             {config.title || 'Visual representation'}
           </h4>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 opacity-60 hover:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={() => setShowCode((v) => !v)}
@@ -430,12 +442,12 @@ export const InlineVisualDiagram: React.FC<InlineVisualDiagramProps> = ({
         ) : (
           <div
             id={`visual-diagram-${diagramId}`}
-            className={`w-full rounded-xl flex items-center justify-center overflow-hidden ${
+            className={`w-full min-w-0 rounded-xl flex items-center justify-center overflow-x-auto ${
               config.hasDarkCanvas
                 ? 'bg-[#0f172a] p-2 sm:p-4'
                 : isDark
                 ? 'bg-white p-3 sm:p-5 border border-neutral-800/40'
-                : 'bg-white px-1 py-2'
+                : 'bg-white px-2 py-2 sm:px-3'
             }`}
           >
             <div
@@ -448,7 +460,7 @@ export const InlineVisualDiagram: React.FC<InlineVisualDiagramProps> = ({
         {/* Quiet Caption Note Matching Reference Card Footer */}
         {config.caption && (
           <p
-            className={`mt-3 text-[11px] sm:text-xs leading-relaxed ${
+            className={`mt-3 text-[11px] sm:text-xs leading-relaxed break-words ${
               isDark ? 'text-neutral-400' : 'text-neutral-500'
             }`}
           >

@@ -690,7 +690,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
           </div>
 
           {/* Document Title Header */}
-          <div className={`px-6 py-3 border-b flex items-center justify-between gap-4 ${isDark ? 'border-neutral-850 bg-neutral-900/30' : 'border-neutral-200 bg-neutral-50'}`}>
+          <div className={`px-3 sm:px-6 py-2.5 sm:py-3 border-b flex flex-wrap items-center justify-between gap-2 sm:gap-4 ${isDark ? 'border-neutral-850 bg-neutral-900/30' : 'border-neutral-200 bg-neutral-50'}`}>
             <input
               type="text"
               value={docTitle}
@@ -713,9 +713,9 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
                 setDocuments(writingStudioService.getDocuments());
               }}
               placeholder="Document Title..."
-              className="text-base font-bold bg-transparent border-none focus:outline-none flex-1"
+              className="text-sm sm:text-base font-bold bg-transparent border-none focus:outline-none flex-1 min-w-0 w-full sm:w-auto"
             />
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* View Mode Switcher: Edit | Split | Markdown Preview */}
               <div className={`flex items-center gap-1 p-0.5 rounded-xl border ${
                 isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
@@ -772,7 +772,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
           </div>
 
           {/* Text Editor Area */}
-          <div className="flex-1 p-6 overflow-hidden flex flex-col">
+          <div className="flex-1 p-3 sm:p-6 overflow-hidden flex flex-col min-h-0">
             {isProcessing ? (
               <div className="flex flex-col items-center justify-center h-full space-y-3">
                 <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
@@ -780,7 +780,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
               </div>
             ) : viewMode === 'preview' ? (
               <div
-                className={`w-full flex-1 p-6 rounded-2xl border overflow-y-auto custom-scrollbar ${
+                className={`w-full flex-1 p-4 sm:p-6 rounded-2xl border overflow-y-auto custom-scrollbar ${
                   isDark
                     ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100'
                     : 'bg-white border-neutral-200 text-neutral-900'
@@ -789,7 +789,7 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
                 <MarkdownRenderer content={currentText || '*No content yet. Switch to Editor to start writing.*'} theme={theme} />
               </div>
             ) : viewMode === 'split' ? (
-              <div className="w-full flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden">
+              <div className="w-full flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 overflow-y-auto md:overflow-hidden min-h-0">
                 <textarea
                   id="writing-studio-editor"
                   value={currentText}
@@ -827,14 +827,14 @@ export const WritingStudioWorkspace: React.FC<WritingStudioWorkspaceProps> = ({
                     setDocuments(writingStudioService.getDocuments());
                   }}
                   placeholder="Type markdown content..."
-                  className={`w-full h-full p-4 rounded-2xl border text-sm leading-relaxed font-mono resize-none focus:outline-none focus:border-amber-500 transition-colors ${
+                  className={`w-full h-full min-h-[220px] p-4 rounded-2xl border text-sm leading-relaxed font-mono resize-none focus:outline-none focus:border-amber-500 transition-colors ${
                     isDark
                       ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100 placeholder-neutral-500'
                       : 'bg-white border-neutral-200 text-neutral-900 placeholder-neutral-400'
                   }`}
                 />
                 <div
-                  className={`w-full h-full p-4 rounded-2xl border overflow-y-auto custom-scrollbar ${
+                  className={`w-full h-full min-h-[220px] p-4 rounded-2xl border overflow-y-auto custom-scrollbar ${
                     isDark
                       ? 'bg-neutral-900/40 border-neutral-850 text-neutral-100'
                       : 'bg-white border-neutral-200 text-neutral-900'

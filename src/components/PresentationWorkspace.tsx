@@ -426,7 +426,7 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
         </div>
 
         {/* Right Slide Canvas & Editor */}
-        <div className={`flex-1 flex flex-col overflow-hidden ${
+        <div className={`flex-1 flex flex-col overflow-hidden min-w-0 ${
           mobileTab === 'slides' ? 'flex' : 'hidden md:flex'
         }`}>
           {!activeDeck ? (
@@ -440,8 +440,8 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Slide Navigator Carousel Bar */}
-              <div className={`px-6 py-3 border-b flex flex-wrap items-center justify-between gap-3 ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
-                <div className="flex items-center gap-2 overflow-x-auto py-1 max-w-[60%]">
+              <div className={`px-3 sm:px-6 py-2.5 sm:py-3 border-b flex flex-wrap items-center justify-between gap-2 sm:gap-3 ${isDark ? 'border-neutral-850 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
+                <div className="flex items-center gap-2 overflow-x-auto py-1 w-full md:w-auto md:max-w-[60%] no-scrollbar">
                   {activeDeck.slides.map((slide, idx) => (
                     <button
                       key={slide.id || idx}
@@ -518,10 +518,10 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
               </div>
 
               {/* Main Slide Card Viewport */}
-              <div className="flex-1 overflow-y-auto p-8 flex items-center justify-center">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-8 flex items-center justify-center">
                 {currentSlide ? (
                   <div
-                    className={`w-full max-w-3xl aspect-[16/9] rounded-3xl border p-8 flex flex-col justify-between shadow-2xl relative transition-all ${
+                    className={`w-full max-w-3xl min-h-[260px] sm:aspect-[16/9] rounded-2xl sm:rounded-3xl border p-4 sm:p-8 flex flex-col justify-between gap-4 shadow-2xl relative transition-all ${
                       themeStyle === 'dark-amber'
                         ? 'bg-gradient-to-br from-neutral-900 to-neutral-950 border-amber-500/30 text-white'
                         : themeStyle === 'cyber-blue'
@@ -533,18 +533,18 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                   >
                     {/* Slide Header */}
                     <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="text-xs font-mono uppercase tracking-widest font-bold text-amber-400">
+                      <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                        <span className="text-xs font-mono uppercase tracking-widest font-bold text-amber-400 shrink-0">
                           SLIDE {currentSlide.slideNumber}
                         </span>
-                        <span className="text-[11px] font-mono opacity-50 uppercase">{activeDeck.title}</span>
+                        <span className="text-[11px] font-mono opacity-50 uppercase truncate">{activeDeck.title}</span>
                       </div>
 
                       <input
                         type="text"
                         value={currentSlide.title}
                         onChange={(e) => handleUpdateSlide('title', e.target.value)}
-                        className="w-full text-2xl font-black bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1"
+                        className="w-full text-lg sm:text-2xl font-black bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1"
                         placeholder="Slide Title..."
                       />
 
@@ -552,15 +552,15 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                         type="text"
                         value={currentSlide.subtitle}
                         onChange={(e) => handleUpdateSlide('subtitle', e.target.value)}
-                        className="w-full text-sm font-semibold opacity-70 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1 mt-1"
+                        className="w-full text-xs sm:text-sm font-semibold opacity-70 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1 mt-1"
                         placeholder="Slide Subtitle..."
                       />
                     </div>
 
                     {/* Bullets List */}
-                    <div className="my-auto space-y-2.5">
+                    <div className="my-auto space-y-2 sm:space-y-2.5">
                       {currentSlide.bullets.map((bullet, bIdx) => (
-                        <div key={bIdx} className="flex items-start gap-3">
+                        <div key={bIdx} className="flex items-start gap-2.5 sm:gap-3">
                           <span className="w-2 h-2 rounded-full bg-amber-400 mt-2 shrink-0" />
                           <input
                             type="text"
@@ -570,25 +570,25 @@ export const PresentationWorkspace: React.FC<PresentationWorkspaceProps> = ({
                               newBullets[bIdx] = e.target.value;
                               handleUpdateSlide('bullets', newBullets);
                             }}
-                            className="w-full text-sm leading-relaxed bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1"
+                            className="w-full min-w-0 text-xs sm:text-sm leading-relaxed bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1"
                           />
                         </div>
                       ))}
                     </div>
 
                     {/* Footer / Takeaway Note */}
-                    <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-4 text-xs">
-                      <div className="flex items-center gap-2 flex-1">
-                        <span className="font-bold text-amber-400">Takeaway:</span>
+                    <div className="pt-3 sm:pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 sm:gap-4 text-xs">
+                      <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+                        <span className="font-bold text-amber-400 shrink-0">Takeaway:</span>
                         <input
                           type="text"
                           value={currentSlide.keyTakeaway}
                           onChange={(e) => handleUpdateSlide('keyTakeaway', e.target.value)}
-                          className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1 italic opacity-90"
+                          className="flex-1 min-w-0 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-amber-500 rounded p-1 italic opacity-90"
                         />
                       </div>
                       {currentSlide.visualNote && (
-                        <div className="text-[10px] opacity-40 font-mono italic max-w-xs truncate">
+                        <div className="text-[10px] opacity-40 font-mono italic max-w-full sm:max-w-xs truncate">
                           Art note: {currentSlide.visualNote}
                         </div>
                       )}

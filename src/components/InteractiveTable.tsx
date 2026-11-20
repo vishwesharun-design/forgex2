@@ -34,7 +34,7 @@ export const InteractiveTable: React.FC<InteractiveTableProps> = ({ children, th
 
   return (
     <div
-      className={`my-3 sm:my-4 rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs ${
+      className={`my-3 sm:my-4 w-full max-w-full min-w-0 rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs ${
         isDark ? 'bg-[#1e1e1e] border-neutral-800' : 'bg-white border-neutral-200'
       } ${
         isFullscreen
@@ -147,32 +147,40 @@ export const TableCellRenderer: React.FC<{
   const isDark = theme === 'dark';
   const rawText = extractRawText(content).trim();
 
-  // Format Difficulty badges: Easy, Medium, Hard
-  if (!isHeader && /^(easy|medium|hard)$/i.test(rawText)) {
+  // Format Difficulty & Assessment status badges
+  if (
+    !isHeader &&
+    /^(easy|medium|hard|good|great|strong|excellent|pass|passed|verified|supported|weak|needs work|moderate|fair|partial|missing|poor|fail|failed|unsupported|high|low)$/i.test(
+      rawText
+    )
+  ) {
     const lower = rawText.toLowerCase();
     let badgeClass = isDark
       ? 'bg-neutral-800 text-neutral-300 border-neutral-700'
       : 'bg-neutral-100 text-neutral-700 border-neutral-300';
 
-    if (lower === 'easy') {
+    if (/^(easy|good|great|strong|excellent|pass|passed|verified|supported|high)$/.test(lower)) {
       badgeClass = isDark
         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-        : 'bg-emerald-50 text-emerald-700 border-emerald-300';
-    } else if (lower === 'medium') {
+        : 'bg-emerald-100/80 text-emerald-800 border-emerald-200';
+    } else if (/^(medium|weak|needs work|moderate|fair|partial)$/.test(lower)) {
       badgeClass = isDark
-        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-        : 'bg-amber-50 text-amber-700 border-amber-300';
-    } else if (lower === 'hard') {
+        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+        : 'bg-orange-100/85 text-orange-800 border-orange-200';
+    } else if (/^(hard|missing|poor|fail|failed|unsupported|low)$/.test(lower)) {
       badgeClass = isDark
         ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-        : 'bg-rose-50 text-rose-700 border-rose-300';
+        : 'bg-rose-100/85 text-rose-800 border-rose-200';
     }
+
+    const formattedLabel =
+      rawText.charAt(0).toUpperCase() + rawText.slice(1).toLowerCase();
 
     return (
       <span
         className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[11px] font-medium border whitespace-nowrap ${badgeClass}`}
       >
-        {rawText.charAt(0).toUpperCase() + rawText.slice(1).toLowerCase()}
+        {formattedLabel}
       </span>
     );
   }

@@ -78,7 +78,7 @@ function getEffectiveApiKey(req: Request): string | undefined {
 }
 
 // Active Gemini model cascades & per-model execution profiles
-const FAST_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
+const FAST_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
 const PREMIER_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
 const SEARCH_GROUNDING_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
 const RESILIENT_MODELS = PREMIER_MODELS;
@@ -171,7 +171,7 @@ function getModelExecutionProfile(modelId?: string): ModelExecutionProfile {
         id: "forge-2-ultra",
         displayName: "Forge 2 Ultra",
         models: PREMIER_MODELS,
-        thinkingLevel: "XHIGH" as ThinkingLevel,
+        thinkingLevel: ThinkingLevel.XHIGH,
         instruction:
           "=== ACTIVE MODEL TIER: FORGE 2 ULTRA (HIGHEST CAPABILITY FLAGSHIP) ===\n" +
           "Operate at maximum flagship intelligence: perform exhaustive multi-step verification, synthesize deep cross-domain nuances and trade-offs, anticipate edge cases, and deliver authoritative excellence.",
@@ -207,7 +207,7 @@ function resolveChatThinkingLevel(
 
   if (profile.id === "forge-2") return ThinkingLevel.MEDIUM;
   if (profile.id === "forge-2-pro") return ThinkingLevel.HIGH;
-  return clean.length > 280 ? ("XHIGH" as ThinkingLevel) : ThinkingLevel.HIGH;
+  return clean.length > 280 ? ThinkingLevel.XHIGH : ThinkingLevel.HIGH;
 }
 
 function buildModelConfig(model: string, baseConfig?: any): any {
@@ -948,6 +948,22 @@ function isTransientUpstreamError(err: any): boolean {
   );
 }
 
+function isQuotaOrAuthError(err: any): boolean {
+  const status = err?.status || err?.code || err?.error?.code;
+  if (status === 429 || status === 403 || status === 401) return true;
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("429") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("permission_denied") ||
+    msg.includes("403") ||
+    msg.includes("api_key_invalid") ||
+    msg.includes("api key not valid")
+  );
+}
+
 function formatReadableGeminiError(err: any): string {
   let msg = err instanceof Error ? err.message : String(err || "Unknown error");
   // Unwrap nested JSON error messages emitted by @google/genai SDK
@@ -971,9 +987,36 @@ function formatReadableGeminiError(err: any): string {
     return "The AI model is temporarily experiencing high demand (503). Please try again in a few seconds.";
   }
   if (lower.includes("quota") || lower.includes("rate limit") || lower.includes("429") || lower.includes("resource_exhausted")) {
-    return "The AI service is temporarily rate-limited (429). Please wait a moment and try again.";
+    return "The AI service is temporarily rate-limited (429). Please wait a moment and try again, or verify your key quota in Settings > Secrets.";
   }
-  return msg.replace(/\s+/g, " ").trim() || "Failed to execute deep research";
+  if (lower.includes("permission_denied") || lower.includes("api_key_invalid") || lower.includes("api key not valid") || lower.includes("403")) {
+    return "API key permission or validation error. Please check your configured API key in Settings > Secrets.";
+  }
+  if (lower.includes("timed out")) {
+    return "The AI request took longer than expected to start responding. Please try again.";
+  }
+  return msg.replace(/\s+/g, " ").trim() || "Failed to execute AI request";
+}
+
+function linkAbortSignals(external?: AbortSignal): {
+  controller: AbortController;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const onExternalAbort = () => controller.abort(external?.reason);
+  if (external) {
+    if (external.aborted) {
+      controller.abort(external.reason);
+    } else {
+      external.addEventListener("abort", onExternalAbort, { once: true });
+    }
+  }
+  return {
+    controller,
+    cleanup: () => {
+      if (external) external.removeEventListener("abort", onExternalAbort);
+    },
+  };
 }
 
 async function generateContentResilient(
@@ -983,97 +1026,120 @@ async function generateContentResilient(
     config?: any;
   },
   preferredModels: string[] = FAST_MODELS,
-  options?: { timeoutMs?: number }
+  options?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
   const modelsToTry = hasGoogleSearchTool(request.config)
     ? prioritizeGoogleSearchModels(preferredModels)
     : preferredModels;
 
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const model = modelsToTry[i];
-    const hasNextModel = i < modelsToTry.length - 1;
-    const callTimeoutMs = options?.timeoutMs ?? (hasNextModel ? 14000 : 25000);
-
+  const invokeGenerate = async (model: string, config: any, timeoutMs: number, label: string) => {
+    if (options?.signal?.aborted) {
+      throw new Error("Request cancelled");
+    }
+    const { controller, cleanup } = linkAbortSignals(options?.signal);
     try {
-      const modelConfig = buildModelConfig(model, request.config);
       const response = await raceWithTimeout(
         ai.models.generateContent({
           model,
           contents: request.contents,
-          config: modelConfig,
+          config: { ...config, abortSignal: controller.signal },
         }),
-        callTimeoutMs,
-        `generateContent (${model})`
+        timeoutMs,
+        label
       );
       const candidate = response.candidates?.[0];
       const text = response.text || candidate?.content?.parts?.[0]?.text || "";
-      if (text) {
-        return { text, model, groundingMetadata: candidate?.groundingMetadata };
+      return { text, groundingMetadata: candidate?.groundingMetadata };
+    } catch (err) {
+      controller.abort(err);
+      throw err;
+    } finally {
+      cleanup();
+    }
+  };
+
+  let primaryError: any = null;
+  for (let i = 0; i < modelsToTry.length; i++) {
+    if (options?.signal?.aborted) break;
+    const model = modelsToTry[i];
+    const hasNextModel = i < modelsToTry.length - 1;
+    const isFlashLite = model.includes("flash-lite");
+    const defaultTimeout = isFlashLite ? 10000 : hasNextModel ? 24000 : 28000;
+    const callTimeoutMs = options?.timeoutMs
+      ? isFlashLite
+        ? Math.min(options.timeoutMs, 10000)
+        : options.timeoutMs
+      : defaultTimeout;
+
+    try {
+      const modelConfig = buildModelConfig(model, request.config);
+      const res = await invokeGenerate(model, modelConfig, callTimeoutMs, `generateContent (${model})`);
+      if (res.text) {
+        return { text: res.text, model, groundingMetadata: res.groundingMetadata };
       }
     } catch (err: any) {
       lastError = err;
-      // On timeout when another model exists in cascade, fail over immediately instead of retrying the stalled model
-      if (err?.isTimeout && hasNextModel) {
-        continue;
-      }
-      // If XHIGH was rejected on this SDK/endpoint, immediately retry with ThinkingLevel.HIGH
-      if (!err?.isTimeout && (request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
-        try {
-          const highConfig = buildModelConfig(model, {
-            ...request.config,
-            thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH },
-          });
-          const response = await raceWithTimeout(
-            ai.models.generateContent({
-              model,
-              contents: request.contents,
-              config: highConfig,
-            }),
-            callTimeoutMs,
-            `generateContent-HIGH (${model})`
-          );
-          const candidate = response.candidates?.[0];
-          const text = response.text || candidate?.content?.parts?.[0]?.text || "";
-          if (text) {
-            return { text, model, groundingMetadata: candidate?.groundingMetadata };
+      if (!primaryError) primaryError = err;
+      if (options?.signal?.aborted) throw err;
+
+      // Never burn extra quota retrying the same model on 429/403/401
+      if (!isQuotaOrAuthError(err)) {
+        const requestedThinking = request.config?.thinkingConfig?.thinkingLevel as string | undefined;
+        const isDeepThinking = requestedThinking === "XHIGH" || requestedThinking === "HIGH";
+
+        // If deep thinking failed or timed out on primary model, retry once at LOW thinking
+        if (isDeepThinking && !isFlashLite) {
+          try {
+            const lowConfig = buildModelConfig(model, {
+              ...request.config,
+              thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.LOW },
+            });
+            const res = await invokeGenerate(model, lowConfig, 18000, `generateContent-LOW (${model})`);
+            if (res.text) {
+              return { text: res.text, model, groundingMetadata: res.groundingMetadata };
+            }
+          } catch (lowErr: any) {
+            lastError = lowErr;
+            if (options?.signal?.aborted) throw lowErr;
           }
-        } catch (highErr: any) {
-          lastError = highErr;
-          if (highErr?.isTimeout && hasNextModel) continue;
+        }
+
+        // If error occurred with tools (e.g. search stall), retry this model without tools
+        if (request.config?.tools && request.config.tools.length > 0 && !isFlashLite) {
+          try {
+            const configWithoutTools = { ...request.config };
+            delete configWithoutTools.tools;
+            if (configWithoutTools.thinkingConfig) {
+              configWithoutTools.thinkingConfig = {
+                ...configWithoutTools.thinkingConfig,
+                thinkingLevel: ThinkingLevel.LOW,
+              };
+            }
+            const retryConfig = buildModelConfig(model, configWithoutTools);
+            const res = await invokeGenerate(model, retryConfig, 18000, `generateContent-noTools (${model})`);
+            if (res.text) {
+              return { text: res.text, model, groundingMetadata: res.groundingMetadata };
+            }
+          } catch (retryErr: any) {
+            lastError = retryErr;
+            if (options?.signal?.aborted) throw retryErr;
+          }
         }
       }
-      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
-      if (!err?.isTimeout && request.config?.tools && request.config.tools.length > 0) {
-        try {
-          const configWithoutTools = { ...request.config };
-          delete configWithoutTools.tools;
-          if ((configWithoutTools.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
-            configWithoutTools.thinkingConfig = { ...configWithoutTools.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH };
-          }
-          const retryConfig = buildModelConfig(model, configWithoutTools);
-          const response = await raceWithTimeout(
-            ai.models.generateContent({
-              model,
-              contents: request.contents,
-              config: retryConfig,
-            }),
-            callTimeoutMs,
-            `generateContent-noTools (${model})`
-          );
-          const candidate = response.candidates?.[0];
-          const text = response.text || candidate?.content?.parts?.[0]?.text || "";
-          if (text) {
-            return { text, model, groundingMetadata: candidate?.groundingMetadata };
-          }
-        } catch (retryErr: any) {
-          lastError = retryErr;
+
+      if (hasNextModel) {
+        console.warn(`[Gemini] ${model} failed (${formatReadableGeminiError(err)}), failing over...`);
+        if (isTransientUpstreamError(err)) {
+          await new Promise((r) => setTimeout(r, 800));
         }
       }
       continue;
     }
   }
-  throw lastError || new Error("All Gemini models failed to generate content.");
+  const reportedError =
+    lastError?.isTimeout && primaryError && !primaryError?.isTimeout ? primaryError : lastError;
+  throw reportedError || new Error("All Gemini models failed to generate content.");
 }
 
 async function* generateContentStreamResilient(
@@ -1083,86 +1149,107 @@ async function* generateContentStreamResilient(
     config?: any;
   },
   preferredModels: string[] = FAST_MODELS,
-  options?: { firstChunkTimeoutMs?: number }
+  options?: { firstChunkTimeoutMs?: number; initTimeoutMs?: number; signal?: AbortSignal }
 ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
   let lastError: any = null;
 
   const streamSingleAttempt = async function* (
     model: string,
     config: any,
+    initTimeoutMs: number,
     firstChunkTimeoutMs: number
   ): AsyncGenerator<{ text: string; model: string; done?: boolean; groundingMetadata?: any }> {
-    const responseStream = await raceWithTimeout(
-      ai.models.generateContentStream({
-        model,
-        contents: request.contents,
-        config,
-      }),
-      firstChunkTimeoutMs,
-      `streamInit (${model})`
-    );
-
-    let emittedAny = false;
-    const mergedQueries: string[] = [];
-    const mergedChunks: any[] = [];
-    let mergedSearchEntryPoint: any = undefined;
-    const iter = responseStream[Symbol.asyncIterator]();
-
-    while (true) {
-      const nextPromise = iter.next();
-      const step = emittedAny
-        ? await nextPromise
-        : await raceWithTimeout(nextPromise, firstChunkTimeoutMs, `firstChunk (${model})`);
-      if (step.done) break;
-      const chunk = step.value;
-      const text = chunk.text || "";
-      const grounding = chunk.candidates?.[0]?.groundingMetadata;
-      if (grounding) {
-        if (Array.isArray(grounding.webSearchQueries)) {
-          for (const q of grounding.webSearchQueries) {
-            if (typeof q === "string" && !mergedQueries.includes(q)) mergedQueries.push(q);
-          }
-        }
-        if (Array.isArray(grounding.groundingChunks)) {
-          for (const gc of grounding.groundingChunks) {
-            const uri = gc?.web?.uri;
-            if (!uri || !mergedChunks.some((c) => c?.web?.uri === uri)) {
-              mergedChunks.push(gc);
-            }
-          }
-        }
-        if (grounding.searchEntryPoint) {
-          mergedSearchEntryPoint = grounding.searchEntryPoint;
-        }
-      }
-      const snapshotGrounding =
-        mergedQueries.length > 0 || mergedChunks.length > 0 || mergedSearchEntryPoint
-          ? {
-              webSearchQueries: mergedQueries,
-              groundingChunks: mergedChunks,
-              ...(mergedSearchEntryPoint ? { searchEntryPoint: mergedSearchEntryPoint } : {}),
-            }
-          : grounding;
-      if (text) {
-        emittedAny = true;
-        yield { text, model, groundingMetadata: snapshotGrounding };
-      } else if (grounding && emittedAny) {
-        yield { text: "", model, groundingMetadata: snapshotGrounding };
-      }
+    if (options?.signal?.aborted) {
+      throw new Error("Stream cancelled");
     }
 
-    if (emittedAny) {
-      const finalGrounding =
-        mergedQueries.length > 0 || mergedChunks.length > 0 || mergedSearchEntryPoint
-          ? {
-              webSearchQueries: mergedQueries,
-              groundingChunks: mergedChunks,
-              ...(mergedSearchEntryPoint ? { searchEntryPoint: mergedSearchEntryPoint } : {}),
+    const { controller, cleanup } = linkAbortSignals(options?.signal);
+    try {
+      const responseStream = await raceWithTimeout(
+        ai.models.generateContentStream({
+          model,
+          contents: request.contents,
+          config: { ...config, abortSignal: controller.signal },
+        }),
+        initTimeoutMs,
+        `streamInit (${model})`
+      );
+
+      let emittedAnyText = false;
+      let receivedAnyChunk = false;
+      const mergedQueries: string[] = [];
+      const mergedChunks: any[] = [];
+      let mergedSearchEntryPoint: any = undefined;
+      const iter = responseStream[Symbol.asyncIterator]();
+
+      while (true) {
+        if (options?.signal?.aborted) {
+          throw new Error("Stream cancelled");
+        }
+        const nextPromise = iter.next();
+        const waitMs = emittedAnyText ? 30000 : receivedAnyChunk ? 30000 : firstChunkTimeoutMs;
+        const step = await raceWithTimeout(
+          nextPromise,
+          waitMs,
+          emittedAnyText ? `streamChunk (${model})` : `firstChunk (${model})`
+        );
+        if (step.done) break;
+        receivedAnyChunk = true;
+        const chunk = step.value;
+        const text = chunk.text || "";
+        const grounding = chunk.candidates?.[0]?.groundingMetadata;
+        if (grounding) {
+          if (Array.isArray(grounding.webSearchQueries)) {
+            for (const q of grounding.webSearchQueries) {
+              if (typeof q === "string" && !mergedQueries.includes(q)) mergedQueries.push(q);
             }
-          : undefined;
-      yield { text: "", model, done: true, groundingMetadata: finalGrounding };
-    } else {
-      throw new Error(`Stream ended without text chunks (${model})`);
+          }
+          if (Array.isArray(grounding.groundingChunks)) {
+            for (const gc of grounding.groundingChunks) {
+              const uri = gc?.web?.uri;
+              if (!uri || !mergedChunks.some((c) => c?.web?.uri === uri)) {
+                mergedChunks.push(gc);
+              }
+            }
+          }
+          if (grounding.searchEntryPoint) {
+            mergedSearchEntryPoint = grounding.searchEntryPoint;
+          }
+        }
+        const snapshotGrounding =
+          mergedQueries.length > 0 || mergedChunks.length > 0 || mergedSearchEntryPoint
+            ? {
+                webSearchQueries: mergedQueries,
+                groundingChunks: mergedChunks,
+                ...(mergedSearchEntryPoint ? { searchEntryPoint: mergedSearchEntryPoint } : {}),
+              }
+            : grounding;
+        if (text) {
+          emittedAnyText = true;
+          yield { text, model, groundingMetadata: snapshotGrounding };
+        } else if (grounding && emittedAnyText) {
+          yield { text: "", model, groundingMetadata: snapshotGrounding };
+        }
+      }
+
+      if (emittedAnyText) {
+        const finalGrounding =
+          mergedQueries.length > 0 || mergedChunks.length > 0 || mergedSearchEntryPoint
+            ? {
+                webSearchQueries: mergedQueries,
+                groundingChunks: mergedChunks,
+                ...(mergedSearchEntryPoint ? { searchEntryPoint: mergedSearchEntryPoint } : {}),
+              }
+            : undefined;
+        yield { text: "", model, done: true, groundingMetadata: finalGrounding };
+      } else {
+        throw new Error(`Stream ended without text chunks (${model})`);
+      }
+    } catch (err) {
+      controller.abort(err);
+      throw err;
+    } finally {
+      cleanup();
     }
   };
 
@@ -1170,67 +1257,97 @@ async function* generateContentStreamResilient(
     ? prioritizeGoogleSearchModels(preferredModels)
     : preferredModels;
 
+  let primaryError: any = null;
   for (let i = 0; i < modelsToTry.length; i++) {
+    if (options?.signal?.aborted) break;
     const model = modelsToTry[i];
     const hasNextModel = i < modelsToTry.length - 1;
-    const firstChunkTimeoutMs = hasNextModel
-      ? options?.firstChunkTimeoutMs ?? 15000
-      : Math.max(options?.firstChunkTimeoutMs ?? 25000, 25000);
+    const isFlashLite = model.includes("flash-lite");
+
+    const baseFirstChunk = options?.firstChunkTimeoutMs ?? 24000;
+    const initTimeoutMs = isFlashLite
+      ? 10000
+      : options?.initTimeoutMs ?? (hasNextModel ? 18000 : 22000);
+    const firstChunkTimeoutMs = isFlashLite
+      ? 12000
+      : hasNextModel
+      ? baseFirstChunk
+      : Math.max(baseFirstChunk, 26000);
 
     try {
       const modelConfig = buildModelConfig(model, request.config);
       let completed = false;
-      for await (const item of streamSingleAttempt(model, modelConfig, firstChunkTimeoutMs)) {
+      for await (const item of streamSingleAttempt(model, modelConfig, initTimeoutMs, firstChunkTimeoutMs)) {
         if (item.done) completed = true;
         yield item;
       }
       if (completed) return;
     } catch (err: any) {
       lastError = err;
-      if (err?.isTimeout && hasNextModel) {
-        continue;
-      }
-      // If XHIGH was rejected on this SDK/endpoint, immediately retry with ThinkingLevel.HIGH
-      if (!err?.isTimeout && (request.config?.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
-        try {
-          const highConfig = buildModelConfig(model, {
-            ...request.config,
-            thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH },
-          });
-          let completed = false;
-          for await (const item of streamSingleAttempt(model, highConfig, firstChunkTimeoutMs)) {
-            if (item.done) completed = true;
-            yield item;
+      if (!primaryError) primaryError = err;
+      if (options?.signal?.aborted) throw err;
+
+      // Never burn extra quota retrying the same model on 429/403/401
+      if (!isQuotaOrAuthError(err)) {
+        const requestedThinking = request.config?.thinkingConfig?.thinkingLevel as string | undefined;
+        const isDeepThinking = requestedThinking === "XHIGH" || requestedThinking === "HIGH";
+
+        // If HIGH/XHIGH was rejected OR timed out before streaming text on primary model, retry once at LOW thinking
+        if (isDeepThinking && !isFlashLite) {
+          try {
+            const lowConfig = buildModelConfig(model, {
+              ...request.config,
+              thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.LOW },
+            });
+            let completed = false;
+            for await (const item of streamSingleAttempt(model, lowConfig, 15000, 18000)) {
+              if (item.done) completed = true;
+              yield item;
+            }
+            if (completed) return;
+          } catch (lowErr: any) {
+            lastError = lowErr;
+            if (options?.signal?.aborted) throw lowErr;
           }
-          if (completed) return;
-        } catch (highErr: any) {
-          lastError = highErr;
-          if (highErr?.isTimeout && hasNextModel) continue;
+        }
+
+        // If error/timeout occurred with tools (e.g. search stall), retry this model without tools
+        if (request.config?.tools && request.config.tools.length > 0 && !isFlashLite) {
+          try {
+            const configWithoutTools = { ...request.config };
+            delete configWithoutTools.tools;
+            if (configWithoutTools.thinkingConfig) {
+              configWithoutTools.thinkingConfig = {
+                ...configWithoutTools.thinkingConfig,
+                thinkingLevel: ThinkingLevel.LOW,
+              };
+            }
+            const retryConfig = buildModelConfig(model, configWithoutTools);
+            let completed = false;
+            for await (const item of streamSingleAttempt(model, retryConfig, 15000, 18000)) {
+              if (item.done) completed = true;
+              yield item;
+            }
+            if (completed) return;
+          } catch (retryErr: any) {
+            lastError = retryErr;
+            if (options?.signal?.aborted) throw retryErr;
+          }
         }
       }
-      // If error occurred with tools (e.g. search quota 429), retry this model immediately without tools
-      if (!err?.isTimeout && request.config?.tools && request.config.tools.length > 0) {
-        try {
-          const configWithoutTools = { ...request.config };
-          delete configWithoutTools.tools;
-          if ((configWithoutTools.thinkingConfig?.thinkingLevel as string) === "XHIGH") {
-            configWithoutTools.thinkingConfig = { ...configWithoutTools.thinkingConfig, thinkingLevel: ThinkingLevel.HIGH };
-          }
-          const retryConfig = buildModelConfig(model, configWithoutTools);
-          let completed = false;
-          for await (const item of streamSingleAttempt(model, retryConfig, firstChunkTimeoutMs)) {
-            if (item.done) completed = true;
-            yield item;
-          }
-          if (completed) return;
-        } catch (retryErr: any) {
-          lastError = retryErr;
+
+      if (hasNextModel) {
+        console.warn(`[GeminiStream] ${model} failed (${formatReadableGeminiError(err)}), failing over...`);
+        if (isTransientUpstreamError(err)) {
+          await new Promise((r) => setTimeout(r, 800));
         }
       }
       continue;
     }
   }
-  throw lastError || new Error("All streaming models failed.");
+  const reportedError =
+    lastError?.isTimeout && primaryError && !primaryError?.isTimeout ? primaryError : lastError;
+  throw reportedError || new Error("All streaming models failed.");
 }
 
 // Generate prompt-specific real AI image using Black Forest Labs FLUX / Imagen 3 pipeline
@@ -1570,8 +1687,17 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
      $$(125 + 75) \\times 4 - 300 \\div 3 = \\boxed{700}$$
    - For expressions inside tables or inline sentences, use inline math: $25 \\times 16$, $144 \\div 12$, $17^2$, $\\frac{3}{4} + \\frac{2}{5}$, $\\sqrt{2025}$.
 
+6B. AUTOMATIC SITUATIONAL UI SELECTION (PROACTIVE IN EVERY SITUATION):
+   - NEVER wait for the user to explicitly ask for a "chart", "bar chart", "visual representation", or "scorecard". Automatically choose and emit the right interactive UI block whenever the user's question calls for it (unless the user requested exact sentence/bullet counts or plain-text-only output):
+     • Math Sums / Word Problems with Shapes & Dimensions (rectangle, triangle, circle, cylinder, cone, sphere, cube, cuboid, prism, pyramid, fencing/river, ladder, area, perimeter, volume, surface area, angles, vectors) OR Physics / Engineering / Process / Architecture Diagrams -> ALWAYS emit a \`\`\`visual labeled SVG diagram alongside the LaTeX steps and \\boxed{...} answer.
+     • Quantitative Data, World/Country/Continent Population, Working Population / Workforce, Demographics, GDP, Market Share, Scores, Sales, Rankings, Budgets, or Time-Series Trends -> ALWAYS emit an interactive \`\`\`chart (\`"type": "bar"\` for category comparisons, \`"type": "line"\` for trends over time) with concise 1–3 word labels.
+     • Evaluations, Fact-Checking, Grading, Audits, Quality Reviews, or Benchmarks -> ALWAYS emit an interactive \`\`\`scorecard block with overall score and criterion assessments.
+     • Multi-item Feature Comparisons, Schedules, Specs, or Problem Sets -> Clean Markdown Table (\`| ... |\`).
+     • Practice Tests, Trivia, or Knowledge Checks -> Interactive \`\`\`quiz.
+     • Calculations, Identities, & Formulas -> Clean LaTeX \`$$ ... $$\` with \`\\boxed{...}\`.
+
 7. INTERACTIVE CHARTS & VISUALIZATIONS:
-   - When the user asks for a chart, graph, score comparison, trends, or numerical data visualization, generate a \`\`\`chart code block with valid JSON:
+   - Use an interactive \`\`\`chart code block PROACTIVELY whenever the user asks about numerical data, comparisons, world/country population, working population / workforce, demographics, market share, GDP, sales, scores, rankings, or trends — even if they do not explicitly ask for a chart (keep "label" concise 1–3 words so axes stay crisp and readable; use "bar" for categories and "line" for time-series):
      \`\`\`chart
      {
        "type": "bar",
@@ -1580,29 +1706,51 @@ ZERO-ERROR, HIGH-SPEED & MAXIMUM ACCURACY MANDATE:
        "unit": "Score",
        "max": 120,
        "data": [
-         {"label": "Algebra", "value": 90, "color": "#f472b6"},
-         {"label": "Geometry", "value": 84, "color": "#f472b6"},
-         {"label": "Fractions", "value": 98, "color": "#f472b6"},
-         {"label": "Statistics", "value": 76, "color": "#f472b6"},
-         {"label": "Number Theory", "value": 88, "color": "#f472b6"}
+         {"label": "Algebra", "value": 90},
+         {"label": "Geometry", "value": 84},
+         {"label": "Fractions", "value": 98},
+         {"label": "Statistics", "value": 76},
+         {"label": "Number Theory", "value": 88}
        ]
      }
      \`\`\`
 
 7B. INLINE VISUAL REPRESENTATIONS & CONCEPTUAL DIAGRAMS:
-   - Whenever the user asks for a "visual representation", schematic, labeled geometry figure, spatial optimization setup (e.g. fencing along a river, triangle/circle geometry), physics free-body/circuit/ray diagram, process cycle, flowchart, or system architecture — OR whenever a crisp labeled diagram significantly clarifies a quantitative/spatial solution — emit an interactive \`\`\`visual code block with valid JSON containing "title", optional "caption", and a crisp self-contained "svg":
+   - PROACTIVELY emit an interactive \`\`\`visual code block whenever the user asks a math problem involving shapes or dimensions (area, perimeter, volume, surface area, triangles, circles, rectangles, cylinders, cones, fencing, ladders, angles, geometry, mensuration), a physics diagram (free-body forces, circuits, optics/rays, pulleys), a process/cycle/architecture flowchart, OR explicitly asks for a "visual representation" — even if the user never uses the words "diagram" or "visual"! Format with valid JSON containing "title", optional "caption", and a crisp self-contained "svg":
      \`\`\`visual
      {
        "title": "Visual representation",
-       "caption": "Not to scale. Brief explanation of the labeled elements.",
-       "svg": "<svg viewBox=\\"0 0 640 340\\" xmlns=\\"http://www.w3.org/2000/svg\\">...</svg>"
+       "caption": "Not to scale. The three green sides require fencing.",
+       "svg": "<svg viewBox=\\"0 0 640 340\\" xmlns=\\"http://www.w3.org/2000/svg\\"><text x=\\"320\\" y=\\"48\\" text-anchor=\\"middle\\" fill=\\"#1d8cf8\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">River — no fencing needed</text><line x1=\\"90\\" y1=\\"76\\" x2=\\"550\\" y2=\\"76\\" stroke=\\"#1d8cf8\\" stroke-width=\\"12\\" stroke-linecap=\\"round\\" /><rect x=\\"170\\" y=\\"92\\" width=\\"300\\" height=\\"175\\" fill=\\"#dff0ea\\" /><polyline points=\\"170,92 170,267 470,267 470,92 170,92\\" fill=\\"none\\" stroke=\\"#059669\\" stroke-width=\\"6\\" stroke-linejoin=\\"round\\" /><text x=\\"320\\" y=\\"172\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">Area</text><text x=\\"320\\" y=\\"208\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"28\\" font-weight=\\"700\\" font-family=\\"system-ui, sans-serif\\">1,250 m²</text><text x=\\"115\\" y=\\"186\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"22\\" font-family=\\"system-ui, sans-serif\\">25 m</text><text x=\\"525\\" y=\\"186\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"22\\" font-family=\\"system-ui, sans-serif\\">25 m</text><text x=\\"320\\" y=\\"308\\" text-anchor=\\"middle\\" fill=\\"#111827\\" font-size=\\"24\\" font-family=\\"system-ui, sans-serif\\">50 m of fencing</text></svg>"
      }
      \`\`\`
    - Design rules for clean, publication-grade SVGs:
-     1) Always define explicit viewBox="0 0 640 340" (or proportional size) with 48px+ outer padding so side labels never clip at edges.
-     2) Use crisp, clean vector styling on a transparent/light canvas: high-contrast #111827 labels, clean "system-ui, sans-serif" typography (font-size 18 to 26), clean colors (#2563eb / #1d8cf8 blue, #059669 emerald green with soft fill #e1f0ea, #d97706 amber), rounded linecaps (stroke-linecap="round"), and non-overlapping spacing between shapes and dimension text.
+     1) Always define explicit viewBox="0 0 640 340" (or proportional size) with 56px+ outer padding so side labels never clip at edges.
+     2) Use crisp, clean vector styling on a transparent/light canvas: high-contrast #111827 labels, clean "system-ui, sans-serif" typography (font-size 18 to 26), clean colors (#2563eb / #1d8cf8 blue, #059669 emerald green with soft fill #dff0ea, #d97706 amber), rounded linecaps (stroke-linecap="round"), and non-overlapping spacing between shapes and dimension text.
      3) Never put complex explanations inside the SVG — keep labels concise (e.g., "25 m", "Area", "1,250 m²", "50 m of fencing", "River — no fencing needed") and put detailed steps in normal markdown above/below.
      4) Do NOT wrap a diagram in Python/matplotlib/HTML code blocks when the user wants a visual representation directly in the chat; use \`\`\`visual instead.
+
+7C. INTERACTIVE SCORECARDS, EVALUATIONS & RUBRICS:
+   - PROACTIVELY emit an interactive \`\`\`scorecard code block whenever the user asks to evaluate, grade, fact-check, audit, benchmark, rate, critique, or score a response, essay, code, resume, model, product, or performance across multiple criteria/capabilities:
+     \`\`\`scorecard
+     {
+       "title": "Fact-checking performance",
+       "score": 72,
+       "maxScore": 100,
+       "subtitle": "My qualitative assessment, not an independently verified factual accuracy score.",
+       "columns": ["Capability", "Assessment"],
+       "items": [
+         { "label": "Detecting hallucinations", "status": "Good" },
+         { "label": "Admitting previous mistakes", "status": "Good" },
+         { "label": "Critical reasoning", "status": "Good" },
+         { "label": "Providing evidence", "status": "Weak" },
+         { "label": "Direct source citations", "status": "Missing" },
+         { "label": "Corrected statistics", "status": "Weak" },
+         { "label": "Self-consistency", "status": "Needs work" }
+       ]
+     }
+     \`\`\`
+   - Use clear status labels such as "Good", "Strong", "Excellent", "Pass", "Weak", "Needs work", "Fair", "Partial", "Missing", "Poor", or "Fail" so the UI renders crisp progress bars and color-coded status pills.
 
 8. INTERACTIVE TABLES:
    - For comparisons, difficulty tiers, or lists of math problems and answers, generate a clean markdown table with math notation:
@@ -1828,12 +1976,12 @@ async function startServer() {
       hasEnvKey,
       timestamp: Date.now(),
       modelsSupported: [
-        "veo-3.1-lite-generate-preview",
-        "veo-2.0-generate-001",
+        "gemini-4-hydrogen",
+        "gemini-3.1-flash-lite",
         "gemini-3.1-flash-lite-image",
-        "gemini-3.1-flash-image",
-        "gemini-3.8-flash",
-        "gemini-flash-latest",
+        "gemini-nano-banana-2.1",
+        "gemini-3.8-flash-lite-tts",
+        "gemini-omni-1.2-flash",
       ],
     });
   });
@@ -1847,6 +1995,52 @@ async function startServer() {
       /\bquiz\s+me\b/i.test(clean) ||
       /\b(?:give|make|create|generate)\s+(?:a\s+|an\s+|some\s+)?quiz\b/i.test(clean)
     );
+  }
+
+  function detectSituationalUiDirective(text: string): string {
+    if (!text) return "";
+    const clean = text.trim();
+    if (!clean) return "";
+
+    const isPureCodeRequest =
+      /\b(?:write|create|build|code|implement|give\s+me)\s+(?:a\s+|an\s+)?(?:python|javascript|typescript|java|c\+\+|cpp|c#|go|rust|html|css|react|sql|bash)\s+(?:program|script|function|app|component|code)\b/i.test(clean) &&
+      !/\b(?:visual\s+representation|chart|graph|scorecard)\b/i.test(clean);
+    if (isPureCodeRequest) return "";
+
+    const hints: string[] = [];
+
+    const hasShapeOrDimensionMath =
+      (/\b(?:triangle|triangles|rectangle|rectangles|rectangular|square|squares|circle|circles|circular|semicircle|cylinder|cylinders|cone|cones|sphere|spheres|cube|cuboid|prism|pyramid|trapezoid|parallelogram|rhombus|pentagon|hexagon|polygon|perimeter|area|surface\s+area|volume|circumference|radius|diameter|hypotenuse|diagonal|pythagorean|fenc(?:e|ing)|garden\s+plot|river|ladder|shadow|angle\s+of\s+(?:elevation|depression)|mensuration|geometry)\b/i.test(clean) &&
+        (/\d/.test(clean) || /\b(?:find|calculate|compute|solve|what\s+is|determine|maximi[sz]e|minimi[sz]e|dimensions?|how\s+(?:tall|wide|long|big|much)|prove|explain)\b/i.test(clean))) ||
+      /\b(?:visual\s+representation|free[\s-]body\s+diagram|inclined\s+plane|circuit\s+diagram|ray\s+diagram|optics\s+diagram|labeled\s+diagram|geometry\s+diagram|flowchart|system\s+architecture\s+diagram|architecture\s+diagram)\b/i.test(clean);
+
+    if (hasShapeOrDimensionMath) {
+      hints.push(
+        `- VISUAL REPRESENTATION REQUIRED (\`\`\`visual): This query involves shapes, dimensions, spatial geometry, or a structural diagram. Automatically include an interactive \`\`\`visual JSON block with a clean, self-contained SVG (viewBox="0 0 640 340", generous 56px+ padding, clear #111827 dimension labels with zero text overlap) depicting the exact shape/setup and dimensions alongside your LaTeX step-by-step math and \\boxed{...} final answer.`
+      );
+    }
+
+    const hasQuantitativeChartTopic =
+      /\b(?:world\s+population|population\s+(?:of|by|across|in|growth|distribution)|work\s+population|working[\s-]age\s+population|working\s+population|workforce|labor\s+force|labour\s+force|employment\s+(?:rate|by|across)|unemployment\s+(?:rate|by|across)|demographics|gdp\s+(?:of|by|across|comparison)|market\s+share|revenue\s+(?:by|comparison|of)|sales\s+(?:by|growth|comparison)|test\s+scores|exam\s+scores|emissions?\s+(?:by|of|across)|energy\s+(?:consumption|mix|by)|top\s+\d+\s+(?:countries|continents|cities|economies|companies|states)|(?:compare|comparison|breakdown|distribution|statistics|stats|trend|growth)\s+(?:of|by|across)?\s*(?:countries|continents|regions|sectors|industries|years|months|quarters|ages?|populations?))\b/i.test(clean) ||
+      /\b(?:bar\s+chart|line\s+chart|graph|plot\s+(?:a\s+)?chart)\b/i.test(clean);
+
+    if (hasQuantitativeChartTopic) {
+      hints.push(
+        `- INTERACTIVE CHART REQUIRED (\`\`\`chart): This query involves population, workforce, statistical breakdown, or numerical comparisons. Automatically include an interactive \`\`\`chart JSON block ("type": "bar" for categorical comparisons like countries/continents/sectors, or "type": "line" for multi-year/monthly trends) with concise 1–3 word labels, clear "unit", and accurate figures alongside concise analysis.`
+      );
+    }
+
+    const hasEvaluationScorecardTopic =
+      /\b(?:fact[\s-]?check|evaluat(?:e|ion)|grade\s+(?:this|my|the)|score\s+(?:this|my|the)|scorecard|scoreboard|audit\s+(?:this|my|the)|rubric|assess\s+(?:this|my|the|performance)|critique\s+(?:this|my|the)|benchmark\s+(?:this|my|the|performance)|rate\s+(?:this|my|the)\s+(?:response|answer|essay|code|resume|draft|performance))\b/i.test(clean);
+
+    if (hasEvaluationScorecardTopic) {
+      hints.push(
+        `- EVALUATION SCORECARD REQUIRED (\`\`\`scorecard): This query requests an evaluation, audit, grading, or fact-check. Automatically include an interactive \`\`\`scorecard JSON block with "title", "score", "maxScore", optional "subtitle", "columns", and multi-row criteria "items" using status labels ("Good", "Strong", "Excellent", "Pass", "Weak", "Needs work", "Fair", "Partial", "Missing", "Poor", "Fail").`
+      );
+    }
+
+    if (hints.length === 0) return "";
+    return `\n\n=== SITUATIONAL UI SELECTION DIRECTIVE ===\nChoose the matching interactive UI widget(s) below proactively for this response:\n${hints.join("\n")}`;
   }
 
   type ChatPart = { text?: string; inlineData?: { mimeType: string; data: string } };
@@ -2079,6 +2273,11 @@ The user attached one or more images to analyze.
 3. When asked to read text, solve problems, or identify details from a photo or screenshot, inspect the visual pixels directly and answer accurately without guessing.`;
       }
 
+      const queryConstraints = extractFormatConstraints(cleanMessage);
+      const hasStrictConstraintNonStream = Boolean(
+        queryConstraints.exactSentences || queryConstraints.exactBullets
+      );
+
       if (isQuizQuery(cleanMessage)) {
         enhancedSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
 The user requested an interactive quiz ("${cleanMessage}").
@@ -2086,10 +2285,14 @@ The user requested an interactive quiz ("${cleanMessage}").
 2. NEVER output a console application or code block like \`\`\`python.
 3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
 The UI renders this as an interactive playable quiz widget!`;
+      } else if (!hasStrictConstraintNonStream && !customSystemInstruction?.includes("Visual Answers (Less)")) {
+        const situationalDirective = detectSituationalUiDirective(cleanMessage);
+        if (situationalDirective) {
+          enhancedSystemInstruction += situationalDirective;
+        }
       }
 
       const preResolvedCurrentAttParts = await resolveAttachmentParts(attachments);
-      const queryConstraints = extractFormatConstraints(cleanMessage);
       const contents = await buildNormalizedGeminiContents(
         history,
         cleanMessage,
@@ -2131,6 +2334,11 @@ The UI renders this as an interactive playable quiz widget!`;
             ? prioritizeGoogleSearchModels(baseCascade)
             : baseCascade;
 
+          const chatTimeoutMs =
+            adaptiveThinking === ThinkingLevel.HIGH || adaptiveThinking === ThinkingLevel.XHIGH || useGoogleSearch
+              ? 24000
+              : 18000;
+
           const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
             {
@@ -2138,7 +2346,7 @@ The UI renders this as an interactive playable quiz widget!`;
               config: requestConfig,
             },
             modelCascade,
-            { timeoutMs: 16000 }
+            { timeoutMs: chatTimeoutMs }
           );
 
           if (replyText) {
@@ -2208,8 +2416,8 @@ The UI renders this as an interactive playable quiz widget!`;
               groundingSources: hasActiveSearch ? validation.sanitizedSources : [],
             });
           }
-        } catch (_geminiErr: unknown) {
-          // Continue to next key candidate or fallback
+        } catch (geminiErr: unknown) {
+          console.warn("[/api/chat] Gemini attempt failed:", geminiErr instanceof Error ? geminiErr.message : geminiErr);
         }
       }
 
@@ -2283,9 +2491,11 @@ The UI renders this as an interactive playable quiz widget!`;
     }
 
     let streamClosed = false;
+    const streamAbortController = new AbortController();
     res.on("close", () => {
       if (!res.writableFinished) {
         streamClosed = true;
+        streamAbortController.abort(new Error("Client closed connection"));
       }
     });
 
@@ -2390,6 +2600,14 @@ The user attached one or more images to analyze.
 3. When asked to read text, solve problems, or identify details from a photo or screenshot, inspect the visual pixels directly and answer accurately without guessing.`;
       }
 
+      const queryConstraints = extractFormatConstraints(cleanMessage);
+      const hasStrictConstraint = Boolean(
+        queryConstraints.exactSentences || queryConstraints.exactBullets || queryConstraints.ignorePreviousTopic
+      );
+      const hasStrictCountConstraint = Boolean(
+        queryConstraints.exactSentences || queryConstraints.exactBullets
+      );
+
       if (isQuizQuery(cleanMessage)) {
         finalSystemInstruction += `\n\n=== MANDATORY SYSTEM DIRECTIVE: INTERACTIVE QUIZ ===
 The user requested an interactive quiz ("${cleanMessage}").
@@ -2397,13 +2615,14 @@ The user requested an interactive quiz ("${cleanMessage}").
 2. NEVER output a console application or code block like \`\`\`python.
 3. You MUST output ONLY the interactive \`\`\`quiz code block with valid JSON containing "title", "topic", "difficulty", and "questions" (array of question objects, each with "question", "options" array of 4 choices, "correctIndex" integer 0-3, and "explanation").
 The UI renders this as an interactive playable quiz widget!`;
+      } else if (!hasStrictCountConstraint && !customSystemInstruction?.includes("Visual Answers (Less)")) {
+        const situationalDirective = detectSituationalUiDirective(cleanMessage);
+        if (situationalDirective) {
+          finalSystemInstruction += situationalDirective;
+        }
       }
 
       const preResolvedCurrentAttParts = await resolveAttachmentParts(attachments);
-      const queryConstraints = extractFormatConstraints(cleanMessage);
-      const hasStrictConstraint = Boolean(
-        queryConstraints.exactSentences || queryConstraints.exactBullets || queryConstraints.ignorePreviousTopic
-      );
       const contents = await buildNormalizedGeminiContents(
         history,
         cleanMessage,
@@ -2450,6 +2669,12 @@ The UI renders this as an interactive playable quiz widget!`;
         let bufferedStrictText = "";
 
         try {
+          const isDeepOrSearch =
+            adaptiveThinking === ThinkingLevel.HIGH ||
+            adaptiveThinking === ThinkingLevel.XHIGH ||
+            useGoogleSearch;
+          const firstChunkBudgetMs = isDeepOrSearch ? 26000 : 18000;
+
           for await (const chunk of generateContentStreamResilient(
             ai,
             {
@@ -2457,7 +2682,11 @@ The UI renders this as an interactive playable quiz widget!`;
               config: requestConfig,
             },
             streamCascade,
-            { firstChunkTimeoutMs: 14000 }
+            {
+              initTimeoutMs: 18000,
+              firstChunkTimeoutMs: firstChunkBudgetMs,
+              signal: streamAbortController.signal,
+            }
           )) {
             if (streamClosed || res.writableEnded) break;
             if (chunk.groundingMetadata) {
@@ -2612,18 +2841,22 @@ The UI renders this as an interactive playable quiz widget!`;
             return res.end();
           }
         } catch (streamErr: unknown) {
-          console.error("Stream generation error:", streamErr);
-          // Only attempt non-streaming failover if no partial text was already emitted to the SSE client
-          if (!streamedAny && !streamClosed && !res.writableEnded) {
+          console.warn("[/api/chat/stream] Stream notice:", formatReadableGeminiError(streamErr));
+          // Only attempt non-streaming failover if no partial text was already emitted and error isn't a hard quota/auth rejection
+          if (!streamedAny && !streamClosed && !res.writableEnded && !isQuotaOrAuthError(streamErr)) {
             try {
+              const failoverConfig = {
+                ...requestConfig,
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              };
               const nonStreamResult = await generateContentResilient(
                 ai,
                 {
                   contents,
-                  config: requestConfig,
+                  config: failoverConfig,
                 },
                 streamCascade,
-                { timeoutMs: 24000 }
+                { timeoutMs: 18000, signal: streamAbortController.signal }
               );
               if (nonStreamResult.text) {
                 let recoveredText = sanitizeAiBrandMentions(nonStreamResult.text);
@@ -2784,8 +3017,8 @@ The UI renders this as an interactive playable quiz widget!`;
           let response;
           // Ultra-fast and high-quota multimodal models for robust audio transcription
           const candidateModels = [
-            "gemini-3.1-flash-lite",
             "gemini-4-hydrogen",
+            "gemini-3.1-flash-lite",
             "gemini-3.5-transcribe",
           ];
           let lastErr: any = null;
@@ -2796,6 +3029,9 @@ The UI renders this as an interactive playable quiz widget!`;
             const ai = getGenAiClient(apiKey);
             for (const model of candidateModels) {
             try {
+              const transcribeConfig = buildModelConfig(model, {
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              });
               response = await ai.models.generateContent({
                 model,
                 contents: [
@@ -2814,9 +3050,7 @@ The UI renders this as an interactive playable quiz widget!`;
                     ],
                   },
                 ],
-                config: {
-                  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-                },
+                config: transcribeConfig,
               });
               const rawText = response?.text || response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
               if (rawText) {
@@ -5485,7 +5719,12 @@ Explain recent developments, user reception, and best practices.`;
               contents: `You are an expert Presentation Deck Designer. Create a complete, professional ${count}-slide presentation on the topic: "${topic}".\n\nReturn a strict JSON object with keys:\n"title": string (engaging presentation title)\n"slides": array of objects with keys:\n  "slideNumber": number\n  "title": string\n  "subtitle": string\n  "bullets": string[] (3-4 concise points)\n  "keyTakeaway": string\n  "visualNote": string (description of recommended visual/graphic)\n  "layout": "title" | "split" | "bullets" | "stats" | "quote"\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
               config: {
                 systemInstruction: modelProfile.instruction,
-                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+                thinkingConfig: {
+                  thinkingLevel:
+                    modelProfile.id === "forge-1" || modelProfile.id === "forge-1.5"
+                      ? ThinkingLevel.LOW
+                      : ThinkingLevel.MEDIUM,
+                },
               },
             },
             modelProfile.models
@@ -5861,8 +6100,8 @@ ${currentContent}
               { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Forge 1 (Voice)" },
             ]
           : [
-              { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Forge 1 (Voice)" },
               { model: "gemini-4-hydrogen", thinking: ThinkingLevel.LOW, label: "Forge 2 Ultra (Voice)" },
+              { model: "gemini-3.1-flash-lite", thinking: ThinkingLevel.MINIMAL, label: "Forge 1 (Voice)" },
             ];
 
         for (const currentKey of candidateKeys) {
@@ -6384,7 +6623,12 @@ Return only the clean lyrics with section headers.`;
               contents: `You are an AI Mindmap and Diagram Architect. Create an interconnected ${canvasType} for the topic: "${topic}".\n\nReturn a strict JSON object with:\n"name": string\n"nodes": array of objects with keys:\n  "id": string (e.g. "node-1")\n  "type": "idea" | "mindmap" | "process" | "decision" | "note"\n  "title": string\n  "content": string\n  "x": number (between 50 and 800)\n  "y": number (between 50 and 600)\n  "width": number (around 180-220)\n  "height": number (around 100-140)\n  "color": string (hex color, e.g. "#f59e0b", "#3b82f6", "#10b981", "#8b5cf6")\n"edges": array of objects with keys:\n  "id": string\n  "fromId": string\n  "toId": string\n  "label": string\n\nOutput ONLY valid JSON in a \`\`\`json block.`,
               config: {
                 systemInstruction: modelProfile.instruction,
-                thinkingConfig: { thinkingLevel: modelProfile.thinkingLevel },
+                thinkingConfig: {
+                  thinkingLevel:
+                    modelProfile.id === "forge-1" || modelProfile.id === "forge-1.5"
+                      ? ThinkingLevel.LOW
+                      : ThinkingLevel.MEDIUM,
+                },
               },
             },
             modelProfile.models

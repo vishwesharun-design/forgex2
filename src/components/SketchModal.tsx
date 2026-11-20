@@ -418,23 +418,23 @@ export const SketchModal: React.FC<SketchModalProps> = ({
       className="fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150"
     >
       <div
-        className="relative w-full max-w-[680px] h-[540px] sm:h-[590px] max-h-[90vh] bg-white text-neutral-900 rounded-[28px] border border-neutral-200/90 shadow-2xl shadow-black/20 flex flex-col overflow-hidden select-none"
+        className="relative w-full max-w-[680px] h-[min(560px,88dvh)] sm:h-[590px] max-h-[92dvh] bg-white text-neutral-900 rounded-[24px] sm:rounded-[28px] border border-neutral-200/90 shadow-2xl shadow-black/20 flex flex-col overflow-hidden select-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header Bar: X on left, Pill Toolbar centered, Undo/Redo on right */}
-        <div className="relative z-20 px-4 pt-3.5 pb-2 flex items-center justify-between">
+        <div className="relative z-20 px-2.5 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-1">
           {/* Close button */}
           <button
             type="button"
             onClick={onClose}
             title="Close sketch"
-            className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-700 hover:bg-neutral-100 transition-colors cursor-pointer"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-neutral-700 hover:bg-neutral-100 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4 stroke-[2]" />
           </button>
 
           {/* Centered Tool Pill */}
-          <div className="relative flex items-center gap-0.5 bg-neutral-100/95 border border-neutral-200/80 rounded-full p-1 shadow-2xs">
+          <div className="relative flex items-center gap-0.5 bg-neutral-100/95 border border-neutral-200/80 rounded-full p-0.5 sm:p-1 shadow-2xs">
             <button
               type="button"
               onClick={() => {
@@ -442,13 +442,13 @@ export const SketchModal: React.FC<SketchModalProps> = ({
                 setShowShapeMenu(false);
               }}
               title="Select & Move"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 activeTool === 'select'
                   ? 'bg-neutral-200/90 text-neutral-950 shadow-2xs'
                   : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
               }`}
             >
-              <MousePointer2 className="w-4 h-4" />
+              <MousePointer2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             <button
@@ -458,13 +458,13 @@ export const SketchModal: React.FC<SketchModalProps> = ({
                 setShowShapeMenu(false);
               }}
               title="Freehand Pen"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 activeTool === 'pen'
                   ? 'bg-neutral-200/90 text-neutral-950 shadow-2xs'
                   : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
               }`}
             >
-              <SquigglePenIcon className="w-4 h-4" />
+              <SquigglePenIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             <button
@@ -474,13 +474,13 @@ export const SketchModal: React.FC<SketchModalProps> = ({
                 setShowShapeMenu(false);
               }}
               title="Add Text"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 activeTool === 'text'
                   ? 'bg-neutral-200/90 text-neutral-950 shadow-2xs'
                   : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
               }`}
             >
-              <Type className="w-4 h-4" />
+              <Type className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             <div className="relative">
@@ -491,13 +491,13 @@ export const SketchModal: React.FC<SketchModalProps> = ({
                   setShowShapeMenu((p) => !p);
                 }}
                 title="Shapes"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                   activeTool === 'shapes'
                     ? 'bg-neutral-200/90 text-neutral-950 shadow-2xs'
                     : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
                 }`}
               >
-                <Shapes className="w-4 h-4" />
+                <Shapes className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
               {showShapeMenu && (
@@ -542,50 +542,50 @@ export const SketchModal: React.FC<SketchModalProps> = ({
                 setShowShapeMenu(false);
               }}
               title="Eraser"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 activeTool === 'eraser'
                   ? 'bg-neutral-200/90 text-neutral-950 shadow-2xs'
                   : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
               }`}
             >
-              <Eraser className="w-4 h-4" />
+              <Eraser className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
 
           {/* Undo & Redo + Clear on Top-Right */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 shrink-0">
             <button
               type="button"
               onClick={handleUndo}
               disabled={!canUndo}
               title="Undo"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-colors ${
                 canUndo
                   ? 'text-neutral-700 hover:bg-neutral-100 cursor-pointer'
                   : 'text-neutral-300 cursor-not-allowed'
               }`}
             >
-              <Undo2 className="w-4 h-4" />
+              <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button
               type="button"
               onClick={handleRedo}
               disabled={!canRedo}
               title="Redo"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-colors ${
                 canRedo
                   ? 'text-neutral-700 hover:bg-neutral-100 cursor-pointer'
                   : 'text-neutral-300 cursor-not-allowed'
               }`}
             >
-              <Redo2 className="w-4 h-4" />
+              <Redo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             {hasContent && (
               <button
                 type="button"
                 onClick={handleClearCanvas}
                 title="Clear canvas"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-red-600 hover:bg-neutral-100 transition-colors cursor-pointer"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-red-600 hover:bg-neutral-100 transition-colors cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -684,7 +684,7 @@ export const SketchModal: React.FC<SketchModalProps> = ({
               onBlur={commitPendingText}
               placeholder="Type text..."
               style={{
-                left: Math.min(textInputState.cssLeft, 480),
+                left: Math.min(textInputState.cssLeft, Math.max(120, (canvasWrapperRef.current?.clientWidth || 320) - 140)),
                 top: Math.max(12, textInputState.cssTop - 16),
                 color,
               }}
