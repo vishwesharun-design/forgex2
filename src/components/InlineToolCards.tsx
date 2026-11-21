@@ -179,7 +179,7 @@ export const InlineSongCard: React.FC<InlineSongCardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl min-w-0">
+    <div className="w-full max-w-md min-w-0">
       <AudioTrackPlayer
         song={localSong}
         isPlaying={isPlaying}

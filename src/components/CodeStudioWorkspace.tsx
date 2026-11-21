@@ -32,7 +32,10 @@ import {
   ChevronUp,
   Wifi,
   Battery,
-  X
+  X,
+  GripVertical,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import {
   CodeLanguage,
@@ -288,10 +291,38 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
   const [phonePreset, setPhonePreset] = useState<'iphone-15' | 'iphone-se' | 'pixel-8'>('iphone-15');
   const [phoneOrientation, setPhoneOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [isFullscreenPreview, setIsFullscreenPreview] = useState(false);
+  const [previewWidthPct, setPreviewWidthPct] = useState<number>(48);
+  const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
+  const [isResizingSplit, setIsResizingSplit] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
   const [mobilePreviewStyle, setMobilePreviewStyle] = useState<'full' | 'frame'>('full');
   const [fullscreenConsoleOpen, setFullscreenConsoleOpen] = useState(false);
   const [isAiCollapsed, setIsAiCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    if (!isResizingSplit) return;
+    const handlePointerMove = (e: PointerEvent) => {
+      const container = splitContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const rightPct = ((rect.right - e.clientX) / rect.width) * 100;
+      const clamped = Math.max(28, Math.min(82, Math.round(rightPct)));
+      setPreviewWidthPct(clamped);
+    };
+    const handlePointerUp = () => {
+      setIsResizingSplit(false);
+    };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isResizingSplit]);
 
   // Auto-detect screen resize for responsive mode
   useEffect(() => {
@@ -1234,8 +1265,12 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
       </div>
 
       {/* 4. DUAL-PANEL WORKSPACE (EDITOR + PREVIEW/CONSOLE) */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+      <div
+        ref={splitContainerRef}
+        className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0 relative"
+      >
         {/* LEFT PANEL: CODE EDITOR */}
+        {(!isPreviewExpanded || isMobileScreen) && (
         <div className={`flex-1 flex flex-col min-w-0 min-h-0 border-r ${
           mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'
         } ${isDark ? 'border-neutral-800 bg-[#0d0d10]' : 'border-neutral-200 bg-white'}`}>
@@ -1305,13 +1340,45 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
             />
           </div>
         </div>
+        )}
+
+        {/* DRAGGABLE DESKTOP RESIZER DIVIDER */}
+        {!isPreviewExpanded && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize code preview width"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              setIsResizingSplit(true);
+            }}
+            title="Drag left to make preview screen bigger"
+            className={`hidden md:flex w-2 shrink-0 items-center justify-center cursor-col-resize select-none transition-colors ${
+              isResizingSplit
+                ? 'bg-amber-500/40 text-amber-300'
+                : isDark
+                ? 'bg-neutral-900 hover:bg-amber-500/25 text-neutral-600 hover:text-amber-400'
+                : 'bg-neutral-100 hover:bg-amber-500/20 text-neutral-400 hover:text-amber-600'
+            }`}
+          >
+            <GripVertical className="w-3 h-3" />
+          </div>
+        )}
 
         {/* RIGHT PANEL: LIVE PREVIEW & RUNTIME CONSOLE */}
-        <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${
-          mobilePanel !== 'editor' ? 'flex' : 'hidden md:flex'
-        } md:max-w-[50%] lg:max-w-[45%] ${
-          isDark ? 'bg-neutral-950' : 'bg-neutral-50'
-        }`}>
+        <div
+          style={
+            !isMobileScreen
+              ? {
+                  width: isPreviewExpanded ? '100%' : `${previewWidthPct}%`,
+                  flex: '0 0 auto',
+                }
+              : undefined
+          }
+          className={`flex-1 md:flex-none flex flex-col min-w-0 min-h-0 ${
+            mobilePanel !== 'editor' ? 'flex' : 'hidden md:flex'
+          } ${isDark ? 'bg-neutral-950' : 'bg-neutral-50'}`}
+        >
           {/* Right Panel Tabs */}
           <div className={`px-3 py-1.5 border-b flex flex-wrap items-center justify-between text-xs gap-2 shrink-0 ${
             isDark ? 'border-neutral-800 bg-neutral-900/50' : 'border-neutral-200 bg-white'
@@ -1447,11 +1514,63 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
                 </button>
               )}
 
+              {/* Inline Preview Width Controls (Desktop) */}
+              {!isMobileScreen && (
+                <div className="flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPreviewExpanded(false);
+                      setPreviewWidthPct(48);
+                    }}
+                    title="Default split preview (48%)"
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                      !isPreviewExpanded && previewWidthPct <= 55
+                        ? 'bg-neutral-700 text-white'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Split
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPreviewExpanded(false);
+                      setPreviewWidthPct(72);
+                    }}
+                    title="Larger wide preview (72%)"
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                      !isPreviewExpanded && previewWidthPct > 55
+                        ? 'bg-amber-500 text-neutral-950 font-bold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Wide
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPreviewExpanded((prev) => !prev)}
+                    title={isPreviewExpanded ? 'Show code editor alongside preview' : 'Expand preview to full panel width'}
+                    className={`p-1 rounded transition-colors cursor-pointer ${
+                      isPreviewExpanded
+                        ? 'bg-amber-500 text-neutral-950 font-bold'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    {isPreviewExpanded ? (
+                      <PanelLeftOpen className="w-3 h-3" />
+                    ) : (
+                      <PanelLeftClose className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Fullscreen Preview button */}
               <button
                 type="button"
                 onClick={() => setIsFullscreenPreview(true)}
-                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
                 title="Open live preview in full screen"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
@@ -1470,6 +1589,9 @@ export const CodeStudioWorkspace: React.FC<CodeStudioWorkspaceProps> = ({
           {/* Tab Content 1: Live Preview (iFrame sandbox with Device Viewport support) */}
           {rightPanelTab === 'preview' && (
             <div className="flex-1 flex flex-col relative overflow-hidden bg-neutral-950 items-center justify-center p-0 md:p-3 min-h-0 w-full h-full">
+              {isResizingSplit && (
+                <div className="absolute inset-0 z-20 cursor-col-resize" />
+              )}
               {viewportMode === 'mobile' ? (
                 renderSimulatedMobile(false)
               ) : viewportMode === 'tablet' ? (

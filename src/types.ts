@@ -619,6 +619,8 @@ export interface GeneratedSong {
   voiceProfile?: SongVoiceProfile;
   vocalStyle?: SongVocalStyle;
   vocalAudioUrl?: string;
+  chordFrequencies?: number[][];
+  melodyPattern?: number[];
 }
 
 export type ThemeEffectType = 

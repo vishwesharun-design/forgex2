@@ -32,17 +32,44 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Preset seeds and sample covers
+let sharedUnlockCtx: AudioContext | null = null;
+
+function createGenreCoverDataUri(genre: SongGenre, palette: [string, string, string]): string {
+  const [bg1, bg2, accent] = palette;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${bg1}"/>
+        <stop offset="60%" stop-color="${bg2}"/>
+        <stop offset="100%" stop-color="#09090b"/>
+      </linearGradient>
+      <radialGradient id="r" cx="50%" cy="45%" r="55%">
+        <stop offset="0%" stop-color="${accent}" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="${accent}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="400" height="400" fill="url(#g)"/>
+    <circle cx="200" cy="190" r="170" fill="url(#r)"/>
+    <circle cx="200" cy="190" r="118" fill="none" stroke="${accent}" stroke-opacity="0.22" stroke-width="1.5"/>
+    <circle cx="200" cy="190" r="84" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1"/>
+    <circle cx="200" cy="190" r="24" fill="${accent}" fill-opacity="0.9"/>
+    <circle cx="200" cy="190" r="7" fill="#09090b"/>
+    <text x="200" y="346" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="700" letter-spacing="3" fill="#fafafa" fill-opacity="0.88">${genre.toUpperCase()}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+// Resilient inline album artwork per genre (never fails in offline/hermetic environments)
 const COVER_IMAGES: Record<SongGenre, string> = {
-  Synthwave: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?q=80&w=800&auto=format&fit=crop',
-  'Lo-Fi': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop',
-  Cinematic: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop',
-  EDM: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800&auto=format&fit=crop',
-  Rock: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?q=80&w=800&auto=format&fit=crop',
-  Acoustic: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?q=80&w=800&auto=format&fit=crop',
-  Ambient: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop',
-  'Hip-Hop': 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=800&auto=format&fit=crop',
-  Classical: 'https://images.unsplash.com/photo-1520523839898-50712825e3a7?q=80&w=800&auto=format&fit=crop',
+  Synthwave: createGenreCoverDataUri('Synthwave', ['#1e1b4b', '#3b0764', '#f59e0b']),
+  'Lo-Fi': createGenreCoverDataUri('Lo-Fi', ['#1c1917', '#422006', '#fbbf24']),
+  Cinematic: createGenreCoverDataUri('Cinematic', ['#0f172a', '#1e293b', '#38bdf8']),
+  EDM: createGenreCoverDataUri('EDM', ['#09090b', '#064e3b', '#34d399']),
+  Rock: createGenreCoverDataUri('Rock', ['#18181b', '#450a0a', '#fb7185']),
+  Acoustic: createGenreCoverDataUri('Acoustic', ['#1c1917', '#3f2e18', '#fcd34d']),
+  Ambient: createGenreCoverDataUri('Ambient', ['#042f2e', '#0f172a', '#2dd4bf']),
+  'Hip-Hop': createGenreCoverDataUri('Hip-Hop', ['#18181b', '#312e81', '#f59e0b']),
+  Classical: createGenreCoverDataUri('Classical', ['#1e1b4b', '#172554', '#eab308']),
 };
 
 export interface LyricsSection {
@@ -360,6 +387,24 @@ export const musicService = {
     return songs;
   },
 
+  unlockAudio(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!sharedUnlockCtx || sharedUnlockCtx.state === 'closed') {
+        sharedUnlockCtx = new AudioContextClass();
+      }
+      if (sharedUnlockCtx.state === 'suspended') {
+        void sharedUnlockCtx.resume();
+      }
+    } catch {
+      // Ignore audio context unlock warnings
+    }
+  },
+
   async generateSong(params: {
     prompt: string;
     genre: SongGenre;
@@ -375,7 +420,7 @@ export const musicService = {
   }): Promise<GeneratedSong> {
     const cleanPrompt = params.prompt.trim() || 'Cosmic Odyssey';
     const words = cleanPrompt.split(' ');
-    const title = words.length > 4 ? words.slice(0, 4).join(' ') : cleanPrompt;
+    let title = words.length > 4 ? words.slice(0, 4).join(' ') : cleanPrompt;
     // Auto-detect if user requested a duration in their prompt (e.g. "make a 4 minute song" or "2 min track")
     const requestedDuration = extractDurationFromPrompt(cleanPrompt, params.durationSeconds || 180);
     const duration = Math.max(30, Math.min(300, requestedDuration));
@@ -384,26 +429,79 @@ export const musicService = {
     const vocalStyle = params.vocalStyle || 'Melodic Singing';
 
     let lyrics = params.customLyrics;
-    if ((params.includeLyrics || hasVoice) && !lyrics) {
-      try {
-        const resp = await fetch('/api/song-lyrics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: cleanPrompt,
-            genre: params.genre,
-            mood: params.mood,
-            durationSeconds: duration,
-          }),
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.lyrics) {
-            lyrics = data.lyrics;
-          }
+    let resolvedBpm = params.tempoBpm || 110;
+    let chordFrequencies: number[][] | undefined;
+    let melodyPattern: number[] | undefined;
+    let vocalAudioUrl: string | undefined;
+
+    let musicEndpointResponded = false;
+    try {
+      const musicResp = await fetch('/api/generate-music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(22000),
+        body: JSON.stringify({
+          prompt: cleanPrompt,
+          genre: params.genre,
+          mood: params.mood,
+          tempoBpm: resolvedBpm,
+          durationSeconds: duration,
+          includeLyrics: Boolean(params.includeLyrics || hasVoice) && !lyrics,
+          hasVoice,
+          voiceProfile,
+          vocalStyle,
+          modelId: params.modelId,
+        }),
+      });
+      if (musicResp.ok) {
+        musicEndpointResponded = true;
+        const data = await musicResp.json();
+        if (typeof data.title === 'string' && data.title.trim()) {
+          title = data.title.trim();
         }
-      } catch (err) {
-        console.warn('AI lyrics fetch fallback:', err);
+        if (typeof data.bpm === 'number' && data.bpm >= 65 && data.bpm <= 165) {
+          resolvedBpm = data.bpm;
+        }
+        if (Array.isArray(data.chordFrequencies) && data.chordFrequencies.length >= 2) {
+          chordFrequencies = data.chordFrequencies;
+        }
+        if (Array.isArray(data.melodyPattern) && data.melodyPattern.length >= 4) {
+          melodyPattern = data.melodyPattern;
+        }
+        if (!lyrics && typeof data.lyrics === 'string' && data.lyrics.trim()) {
+          lyrics = data.lyrics.trim();
+        }
+        if (typeof data.vocalAudioUrl === 'string' && data.vocalAudioUrl.startsWith('data:audio')) {
+          vocalAudioUrl = data.vocalAudioUrl;
+        }
+      }
+    } catch (err) {
+      console.warn('AI music blueprint fallback:', err);
+    }
+
+    if ((params.includeLyrics || hasVoice) && !lyrics) {
+      if (!musicEndpointResponded) {
+        try {
+          const resp = await fetch('/api/song-lyrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(12000),
+            body: JSON.stringify({
+              prompt: cleanPrompt,
+              genre: params.genre,
+              mood: params.mood,
+              durationSeconds: duration,
+            }),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.lyrics) {
+              lyrics = data.lyrics;
+            }
+          }
+        } catch (err) {
+          console.warn('AI lyrics fetch fallback:', err);
+        }
       }
 
       if (!lyrics) {
@@ -419,7 +517,7 @@ export const musicService = {
       prompt: cleanPrompt,
       genre: params.genre,
       mood: params.mood,
-      tempoBpm: params.tempoBpm,
+      tempoBpm: resolvedBpm,
       durationSeconds: duration,
       lyrics,
       coverUrl: cover || COVER_IMAGES[params.genre],
@@ -430,6 +528,9 @@ export const musicService = {
       hasVoice,
       voiceProfile,
       vocalStyle,
+      vocalAudioUrl,
+      chordFrequencies,
+      melodyPattern,
     };
 
     const current = this.getSongs();
@@ -684,13 +785,17 @@ Forever resonant and true...`;
     onTick?: (currentTime: number, duration: number) => void,
     onEnded?: () => void,
     startOffset: number = 0,
-    initialVolume: number = 0.5
+    initialVolume: number = 0.85
   ): { stop: () => void; setVolume: (vol: number) => void; setVocalVolume: (vol: number) => void; setBeatVolume: (vol: number) => void } {
     this.stopPlayback();
     playbackManager.notifyPlaying('music_service');
 
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+    }
+
     const masterGain = ctx.createGain();
     masterGain.gain.setValueAtTime(Math.max(0, Math.min(1, initialVolume)), ctx.currentTime);
     masterGain.connect(ctx.destination);
@@ -761,15 +866,45 @@ Forever resonant and true...`;
       ],
     };
 
-    const chords = chordProgressions[song.genre] || chordProgressions.Synthwave;
+    const chords =
+      song.chordFrequencies && song.chordFrequencies.length >= 2
+        ? song.chordFrequencies
+        : chordProgressions[song.genre] || chordProgressions.Synthwave;
+    const melodyMotif =
+      song.melodyPattern && song.melodyPattern.length >= 4
+        ? song.melodyPattern
+        : [0, 2, 1, 3, 2, -1, 4, 2, 1, 0, 2, 3, 2, 1, 0, -1];
     const bpm = song.tempoBpm || 120;
     const beatDuration = 60 / bpm;
     const totalDuration = Math.min(300, Math.max(30, song.durationSeconds || 180));
 
     let isStopped = false;
     const oscillators: OscillatorNode[] = [];
-    const lyricsSections = song.lyrics ? parseLyricsSections(song.lyrics, totalDuration) : [];
-    const triggeredSpeechSections = new Set<string>();
+    const bufferSources: AudioBufferSourceNode[] = [];
+
+    // Shared crisp white-noise buffer for snare & hi-hat percussion
+    const noiseLen = Math.floor(ctx.sampleRate * 0.25);
+    const noiseBuffer = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+      noiseData[i] = Math.random() * 2 - 1;
+    }
+
+    // Optional real AI vocal stem playback synced to the track
+    if (song.hasVoice !== false && song.vocalAudioUrl && startOffset < 25) {
+      fetch(song.vocalAudioUrl)
+        .then((r) => r.arrayBuffer())
+        .then((arr) => ctx.decodeAudioData(arr))
+        .then((decoded) => {
+          if (isStopped || ctx.state === 'closed') return;
+          const src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(vocalGain);
+          src.start(ctx.currentTime + 0.25);
+          bufferSources.push(src);
+        })
+        .catch(() => {});
+    }
 
     // Schedule musical loops across duration with startOffset
     const safeOffset = Math.max(0, Math.min(totalDuration - 0.5, startOffset));
@@ -866,23 +1001,48 @@ Forever resonant and true...`;
             oscillators.push(snareNoise);
           }
 
-          // Hi-Hats on 8th notes (driving groove)
+          // Hi-Hats on 8th notes (filtered crisp noise burst)
           const hatTime = beatTime + beatDuration / 2;
           if (hatTime < startTime + totalDuration && hatTime >= ctx.currentTime) {
-            const hatOsc = ctx.createOscillator();
+            const hatSrc = ctx.createBufferSource();
+            hatSrc.buffer = noiseBuffer;
+            const hatFilter = ctx.createBiquadFilter();
+            hatFilter.type = 'highpass';
+            hatFilter.frequency.setValueAtTime(6500, hatTime);
             const hatG = ctx.createGain();
-            hatOsc.type = 'highpass' as any; // or triangle frequency
-            hatOsc.type = 'triangle';
-            hatOsc.frequency.setValueAtTime(8000, hatTime);
-            hatG.gain.setValueAtTime(0.06, hatTime);
-            hatG.gain.exponentialRampToValueAtTime(0.001, hatTime + 0.04);
-            hatOsc.connect(hatG);
+            hatG.gain.setValueAtTime(0.08, hatTime);
+            hatG.gain.exponentialRampToValueAtTime(0.001, hatTime + 0.055);
+            hatSrc.connect(hatFilter);
+            hatFilter.connect(hatG);
             hatG.connect(beatGain);
-            hatOsc.start(hatTime);
-            hatOsc.stop(hatTime + 0.05);
-            oscillators.push(hatOsc);
+            hatSrc.start(hatTime);
+            hatSrc.stop(hatTime + 0.06);
+            bufferSources.push(hatSrc);
           }
         }
+      }
+
+      // 3b. AI-Composed Lead Melody Arpeggio
+      const scaleRatios = [1, 1.125, 1.2, 1.333, 1.5, 1.667, 1.8, 2];
+      const stepDur = beatDuration / 2;
+      for (let step = 0; step < 8; step++) {
+        const stepTime = barTime + step * stepDur;
+        if (stepTime >= startTime + totalDuration || stepTime < ctx.currentTime) continue;
+        const deg = melodyMotif[(barIndex * 8 + step) % melodyMotif.length];
+        if (deg < 0) continue;
+        const leadFreq = chord[0] * 2 * (scaleRatios[deg % scaleRatios.length] || 1);
+        const leadSynth = ctx.createOscillator();
+        const leadG = ctx.createGain();
+        leadSynth.type = song.genre === 'Lo-Fi' || song.genre === 'Acoustic' ? 'sine' : 'triangle';
+        leadSynth.frequency.setValueAtTime(leadFreq, stepTime);
+        leadG.gain.setValueAtTime(0.001, stepTime);
+        leadG.gain.exponentialRampToValueAtTime(0.085, stepTime + 0.03);
+        leadG.gain.exponentialRampToValueAtTime(0.001, stepTime + stepDur * 0.92);
+        leadSynth.connect(leadG);
+        leadG.connect(beatGain);
+        leadSynth.start(stepTime);
+        leadSynth.stop(stepTime + stepDur * 0.95);
+        oscillators.push(leadSynth);
       }
 
       // 4. AI Vocal Formant Singing Synthesizer (True Melodic Singing, Not Spoken Reading)
@@ -1046,7 +1206,11 @@ Forever resonant and true...`;
           oscillators.forEach((osc) => {
             try { osc.stop(); } catch {}
           });
+          bufferSources.forEach((src) => {
+            try { src.stop(); } catch {}
+          });
           oscillators.length = 0;
+          bufferSources.length = 0;
           ctx.close();
         }, 120);
       } catch (e) {

@@ -85,6 +85,7 @@ export default function App() {
   const [selectedModelId, setSelectedModelId] = useState<ForgeXModelId>('forge-2-ultra');
   const [selectedRoleId, setSelectedRoleId] = useState<ChatRoleId>('general');
   const [pendingComposerTool, setPendingComposerTool] = useState<ComposerToolId>('none');
+  const [pendingDraftPrompt, setPendingDraftPrompt] = useState<string>('');
 
   // App Settings & Theme (default background effect is none)
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -519,7 +520,10 @@ export default function App() {
   };
 
   // Handlers for Navigation: all studios open inline inside Chat like Deep Research
-  const handleLaunchStudio = (initialWorkspace?: ActiveWorkspace) => {
+  const handleLaunchStudio = (initialWorkspace?: ActiveWorkspace, initialPrompt?: string) => {
+    if (initialPrompt && initialPrompt.trim()) {
+      setPendingDraftPrompt(initialPrompt.trim());
+    }
     if (initialWorkspace === 'library') {
       setActiveWorkspace('library');
       setPendingComposerTool('none');
@@ -790,15 +794,15 @@ export default function App() {
     <div
       id="forgex-app-root"
       className={`min-h-[100dvh] w-full overflow-x-hidden relative font-sans transition-colors duration-300 ${
-        isDark
-          ? 'bg-neutral-950 text-neutral-100 dark'
+        !isInWorkspace || isDark
+          ? 'bg-[#0e0e10] text-neutral-100 dark'
           : 'bg-[#fafafa] text-neutral-900'
       }`}
     >
       {/* Interactive Cursor-Reactive Star Background */}
       {settings.enableStarBackground && (
         <StarField
-          theme={settings.theme}
+          theme={!isInWorkspace ? 'dark' : settings.theme}
           effect={settings.themeEffect || 'connected_dots'}
           reduceMotion={settings.reduceMotion}
           intensity={isInWorkspace ? 'subtle' : 'full'}
@@ -809,7 +813,7 @@ export default function App() {
       {!isInWorkspace ? (
         <div className="relative z-10 min-h-[100dvh] flex flex-col justify-between overflow-x-hidden">
           <LandingNav
-            theme={settings.theme}
+            theme="dark"
             themeEffect={settings.themeEffect || 'connected_dots'}
             onSelectThemeEffect={handleSelectThemeEffect}
             onToggleTheme={handleToggleTheme}
@@ -822,7 +826,7 @@ export default function App() {
 
           <main className="flex-1 flex flex-col">
             <LandingHero
-              theme={settings.theme}
+              theme="dark"
               onGetStarted={() => setIsAboutOpen(true)}
               onLaunchStudio={handleLaunchStudio}
               onExplore={() => setIsAboutOpen(true)}
@@ -834,14 +838,12 @@ export default function App() {
           </main>
 
           {/* Minimal Landing Footer */}
-          <footer className={`py-5 px-4 sm:px-6 text-center text-xs border-t backdrop-blur-sm transition-colors ${
-            isDark ? 'text-neutral-500 border-neutral-900/50' : 'text-neutral-600 border-neutral-200/80 bg-white/40'
-          }`}>
-            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-              <button onClick={() => setIsAboutOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+          <footer className="py-6 px-4 sm:px-6 text-center text-xs border-t border-white/[0.06] text-neutral-500 transition-colors">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              <button onClick={() => setIsAboutOpen(true)} className="hover:text-neutral-200 transition-colors">
                 About ForgeX
               </button>
-              <button onClick={() => setIsCreatorOpen(true)} className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+              <button onClick={() => setIsCreatorOpen(true)} className="hover:text-neutral-200 transition-colors">
                 Created by VishweshVarman
               </button>
               <button
@@ -849,7 +851,7 @@ export default function App() {
                   setSettingsInitialTab('personalization');
                   setIsSettingsOpen(true);
                 }}
-                className="hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                className="hover:text-neutral-200 transition-colors"
               >
                 Settings
               </button>
@@ -963,6 +965,8 @@ export default function App() {
                   theme={settings.theme}
                   initialComposerTool={pendingComposerTool}
                   onConsumeInitialTool={() => setPendingComposerTool('none')}
+                  initialDraftPrompt={pendingDraftPrompt}
+                  onConsumeInitialPrompt={() => setPendingDraftPrompt('')}
                   onNavigateToLibrary={() => setActiveWorkspace('library')}
                   onOpenVoiceMode={() => {
                     voiceController.unlockAudio();
@@ -1039,6 +1043,8 @@ export default function App() {
                   theme={settings.theme}
                   selectedModelId={selectedModelId}
                   onSelectModel={setSelectedModelId}
+                  initialPrompt={pendingDraftPrompt}
+                  onConsumeInitialPrompt={() => setPendingDraftPrompt('')}
                 />
               )}
 

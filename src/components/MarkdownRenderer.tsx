@@ -14,6 +14,8 @@ import {
   ArrowRightToLine,
   X,
   Sparkles,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { ForgeXTheme } from '../types';
 import { FormattedMathText, MathView } from './MathView';
@@ -693,6 +695,30 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
   const [executionDuration, setExecutionDuration] = useState<number | null>(null);
   const [isCanvasModalOpen, setIsCanvasModalOpen] = useState(false);
   const [editableCode, setEditableCode] = useState(code);
+  const [inlinePreviewHeight, setInlinePreviewHeight] = useState(440);
+  const [isDraggingPreviewHeight, setIsDraggingPreviewHeight] = useState(false);
+  const [canvasLayout, setCanvasLayout] = useState<'split' | 'wide-preview' | 'preview-only'>('split');
+  const [isModalExpanded, setIsModalExpanded] = useState(false);
+
+  React.useEffect(() => {
+    if (!isDraggingPreviewHeight) return;
+    const startHeight = inlinePreviewHeight;
+    let startY: number | null = null;
+    const onMove = (e: PointerEvent) => {
+      if (startY === null) startY = e.clientY;
+      const next = Math.max(280, Math.min(860, Math.round(startHeight + (e.clientY - startY))));
+      setInlinePreviewHeight(next);
+    };
+    const onUp = () => setIsDraggingPreviewHeight(false);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [isDraggingPreviewHeight]);
 
   const cleanLang = (language || 'text').toLowerCase();
   const displayLang = formatLanguageLabel(language);
@@ -761,6 +787,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
 
   const handleOpenCanvas = () => {
     setEditableCode(code);
+    setCanvasLayout('split');
+    setIsModalExpanded(false);
     setPreviewRefreshKey((k) => k + 1);
     setIsCanvasModalOpen(true);
   };
@@ -816,6 +844,43 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
 
           {isInteractiveMode ? (
             <div className="flex items-center gap-1">
+              {isHtmlPreviewable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInlinePreviewHeight((h) => (h < 560 ? 640 : h < 740 ? 780 : 440))
+                    }
+                    className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                      isDark
+                        ? 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                        : 'text-neutral-700 hover:text-neutral-950 hover:bg-neutral-200/75'
+                    }`}
+                    title="Resize inline preview height"
+                  >
+                    {inlinePreviewHeight >= 600 ? 'Compact' : 'Bigger'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditableCode(code);
+                      setCanvasLayout('preview-only');
+                      setIsModalExpanded(true);
+                      setPreviewRefreshKey((k) => k + 1);
+                      setIsCanvasModalOpen(true);
+                    }}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      isDark
+                        ? 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                        : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-200/75'
+                    }`}
+                    title="Expand preview fullscreen"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={handleDownloadCode}
@@ -899,14 +964,32 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
 
         {/* Interactive Mode vs Source Code View */}
         {isHtmlPreviewable && showLivePreview ? (
-          <div className={`border-t ${isDark ? 'border-neutral-800 bg-white' : 'border-neutral-200/80 bg-white'}`}>
+          <div className={`relative border-t ${isDark ? 'border-neutral-800 bg-white' : 'border-neutral-200/80 bg-white'}`}>
+            {isDraggingPreviewHeight && <div className="absolute inset-0 z-10 cursor-ns-resize" />}
             <iframe
               key={previewRefreshKey}
               srcDoc={buildHtmlPreviewDoc(code, cleanLang)}
-              className="w-full h-[340px] sm:h-[480px] border-0 bg-white block"
+              style={{ height: `${inlinePreviewHeight}px` }}
+              className="w-full border-0 bg-white block"
               sandbox="allow-scripts allow-modals allow-forms"
               title="Interactive Live Page"
             />
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setIsDraggingPreviewHeight(true);
+              }}
+              title="Drag down to make preview taller"
+              className={`h-3 w-full cursor-ns-resize flex items-center justify-center border-t transition-colors ${
+                isDark
+                  ? 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800'
+                  : 'bg-neutral-100 border-neutral-200 hover:bg-neutral-200'
+              }`}
+            >
+              <span className="w-10 h-1 rounded-full bg-neutral-500/60" />
+            </div>
           </div>
         ) : executionOutput !== null ? (
           <div className={`border-t p-4 min-h-[220px] ${
@@ -956,10 +1039,16 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsCanvasModalOpen(false);
           }}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
+          className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center ${
+            isModalExpanded ? 'p-0' : 'p-3 sm:p-6'
+          }`}
         >
           <div
-            className={`w-full max-w-6xl h-[90dvh] sm:h-[86dvh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col ${
+            className={`w-full border shadow-2xl overflow-hidden flex flex-col ${
+              isModalExpanded
+                ? 'max-w-none h-[100dvh] rounded-none'
+                : 'max-w-6xl h-[90dvh] sm:h-[86dvh] rounded-2xl'
+            } ${
               isDark ? 'bg-[#18181b] border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
             }`}
           >
@@ -973,6 +1062,37 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
               </div>
 
               <div className="flex items-center gap-1.5 flex-wrap">
+                {isHtmlPreviewable && (
+                  <div
+                    className={`flex items-center p-0.5 rounded-lg border text-xs ${
+                      isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
+                    }`}
+                  >
+                    {(
+                      [
+                        { id: 'split', label: 'Split' },
+                        { id: 'wide-preview', label: 'Wide Preview' },
+                        { id: 'preview-only', label: 'Full Preview' },
+                      ] as const
+                    ).map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => setCanvasLayout(mode.id)}
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+                          canvasLayout === mode.id
+                            ? isDark
+                              ? 'bg-neutral-800 text-white'
+                              : 'bg-white text-neutral-950 shadow-xs'
+                            : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {onOpenInCodeStudio && (
                   <button
                     type="button"
@@ -1025,6 +1145,17 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
 
                 <button
                   type="button"
+                  onClick={() => setIsModalExpanded((v) => !v)}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
+                  }`}
+                  title={isModalExpanded ? 'Restore modal size' : 'Maximize canvas'}
+                >
+                  {isModalExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setIsCanvasModalOpen(false)}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                     isDark ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'
@@ -1037,19 +1168,29 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code, isDark, onOpenInC
             </div>
 
             {/* Split Editor + Live Preview Body */}
-            <div className={`flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid ${isHtmlPreviewable ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-              <div className={`flex flex-col min-h-[220px] ${isHtmlPreviewable ? 'border-b lg:border-b-0 lg:border-r' : ''} ${
-                isDark ? 'border-neutral-800 bg-[#141416]' : 'border-neutral-200 bg-[#f7f7f7]'
-              }`}>
-                <textarea
-                  value={editableCode}
-                  onChange={(e) => setEditableCode(e.target.value)}
-                  spellCheck={false}
-                  className={`flex-1 w-full p-4 font-mono text-[13px] leading-relaxed bg-transparent outline-none resize-none ${
-                    isDark ? 'text-neutral-200' : 'text-neutral-800'
-                  }`}
-                />
-              </div>
+            <div
+              className={`flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid ${
+                !isHtmlPreviewable || canvasLayout === 'preview-only'
+                  ? 'grid-cols-1'
+                  : canvasLayout === 'wide-preview'
+                  ? 'grid-cols-1 lg:grid-cols-[28%_72%]'
+                  : 'grid-cols-1 lg:grid-cols-2'
+              }`}
+            >
+              {(!isHtmlPreviewable || canvasLayout !== 'preview-only') && (
+                <div className={`flex flex-col min-h-[220px] ${isHtmlPreviewable ? 'border-b lg:border-b-0 lg:border-r' : ''} ${
+                  isDark ? 'border-neutral-800 bg-[#141416]' : 'border-neutral-200 bg-[#f7f7f7]'
+                }`}>
+                  <textarea
+                    value={editableCode}
+                    onChange={(e) => setEditableCode(e.target.value)}
+                    spellCheck={false}
+                    className={`flex-1 w-full p-4 font-mono text-[13px] leading-relaxed bg-transparent outline-none resize-none ${
+                      isDark ? 'text-neutral-200' : 'text-neutral-800'
+                    }`}
+                  />
+                </div>
+              )}
 
               {isHtmlPreviewable && (
                 <div className="flex flex-col min-h-[260px] bg-white">

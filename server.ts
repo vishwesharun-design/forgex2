@@ -83,8 +83,22 @@ const PREMIER_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
 const SEARCH_GROUNDING_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
 const RESILIENT_MODELS = PREMIER_MODELS;
 
+let googleSearchQuotaBlockedUntil = 0;
+
 function hasGoogleSearchTool(config?: any): boolean {
   return Array.isArray(config?.tools) && config.tools.some((t: any) => t && "googleSearch" in t);
+}
+
+function stripGoogleSearchTool(config?: any): any {
+  if (!config || !Array.isArray(config.tools)) return config;
+  const remainingTools = config.tools.filter((t: any) => !(t && "googleSearch" in t));
+  const next = { ...config };
+  if (remainingTools.length > 0) {
+    next.tools = remainingTools;
+  } else {
+    delete next.tools;
+  }
+  return next;
 }
 
 function prioritizeGoogleSearchModels(models: string[]): string[] {
@@ -508,10 +522,31 @@ function decodeXmlEntities(str: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
     .replace(/&apos;/g, "'")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function unwrapAggregatorUrl(rawUrl: string): string {
+  const trimmed = (rawUrl || "").trim();
+  if (!trimmed) return "";
+  try {
+    const normalized = trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
+    const parsed = new URL(normalized);
+    if (parsed.hostname.includes("bing.com") && parsed.pathname.includes("apiclick")) {
+      const target = parsed.searchParams.get("url");
+      if (target && /^https?:\/\//i.test(target)) return target;
+    }
+    if (parsed.hostname.includes("duckduckgo.com") && parsed.pathname.startsWith("/l/")) {
+      const target = parsed.searchParams.get("uddg");
+      if (target && /^https?:\/\//i.test(target)) return target;
+    }
+    return normalized;
+  } catch {
+    return trimmed;
+  }
 }
 
 function parseRssNewsItems(xml: string, fallbackPublisher: string, maxAgeHours = 72): Array<WebGroundingSource & { pubMs: number }> {
@@ -527,14 +562,15 @@ function parseRssNewsItems(xml: string, fallbackPublisher: string, maxAgeHours =
     const rawPubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] || "";
     const rawDesc = block.match(/<description>([\s\S]*?)<\/description>/i)?.[1] || "";
     const sourceMatch = block.match(/<source(?:\s+url="([^"]*)")?>([\s\S]*?)<\/source>/i);
+    const bingSourceMatch = block.match(/<News:Source>([\s\S]*?)<\/News:Source>/i);
 
-    const publisher = decodeXmlEntities(sourceMatch?.[2] || fallbackPublisher) || fallbackPublisher;
+    const publisher = decodeXmlEntities(sourceMatch?.[2] || bingSourceMatch?.[1] || fallbackPublisher) || fallbackPublisher;
     let title = decodeXmlEntities(rawTitle);
     // Strip trailing " - Publisher" from aggregator titles
     if (publisher && title.endsWith(` - ${publisher}`)) {
       title = title.slice(0, -(` - ${publisher}`.length)).trim();
     }
-    const url = decodeXmlEntities(rawLink);
+    const url = unwrapAggregatorUrl(decodeXmlEntities(rawLink));
     const pubMs = rawPubDate ? Date.parse(rawPubDate.trim()) : now;
     if (!title || !url || !Number.isFinite(pubMs)) continue;
     if (now - pubMs > maxAgeMs) continue;
@@ -550,7 +586,7 @@ function parseRssNewsItems(xml: string, fallbackPublisher: string, maxAgeHours =
 
     const publishedLabel = new Date(pubMs).toUTCString().replace(":00 GMT", " UTC");
     const desc = decodeXmlEntities(rawDesc);
-    const snippetCore = desc && desc.length > 20 && !desc.includes(title) ? desc.slice(0, 260) : title;
+    const snippetCore = desc && desc.length > 20 && !desc.includes(title) ? desc.slice(0, 320) : title;
 
     items.push({
       title: `${title} (${publisher})`,
@@ -563,7 +599,51 @@ function parseRssNewsItems(xml: string, fallbackPublisher: string, maxAgeHours =
   return items;
 }
 
-async function fetchLiveNewsSources(rawQuery: string): Promise<WebGroundingSource[]> {
+async function fetchDuckDuckGoHtmlResults(query: string): Promise<WebGroundingSource[]> {
+  try {
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      signal: AbortSignal.timeout(2600),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const results: WebGroundingSource[] = [];
+    const blocks = html.split(/<div[^>]*class="[^"]*\bresults_links\b[^"]*"[^>]*>/i).slice(1);
+    for (const block of blocks) {
+      if (/\bresult--ad\b/i.test(block)) continue;
+      const linkMatch = block.match(/<a[^>]*class="[^"]*\bresult__a\b[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+      if (!linkMatch) continue;
+      const resolvedUrl = unwrapAggregatorUrl(decodeXmlEntities(linkMatch[1]));
+      if (!resolvedUrl || !/^https?:\/\//i.test(resolvedUrl) || resolvedUrl.includes("duckduckgo.com/y.js")) continue;
+      const title = decodeXmlEntities(linkMatch[2]);
+      const snippetMatch = block.match(/<a[^>]*class="[^"]*\bresult__snippet\b[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+        || block.match(/<div[^>]*class="[^"]*\bresult__snippet\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+      const snippet = snippetMatch ? decodeXmlEntities(snippetMatch[1]) : "";
+      let domain = "web";
+      try {
+        domain = new URL(resolvedUrl).hostname.replace(/^www\./, "");
+      } catch {}
+      if (title) {
+        results.push({
+          title,
+          url: resolvedUrl,
+          snippet: snippet || title,
+          sourceDomain: domain,
+        });
+      }
+      if (results.length >= 6) break;
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchLiveNewsSources(rawQuery: string, includeGeneralFeeds = true): Promise<WebGroundingSource[]> {
   const cleanTopic = rawQuery
     .replace(/\b(?:give\s+me|concise|well[\s-]organized|daily\s+roundup|daily\s+briefing|morning\s+briefing|scheduled|news\s+updates?|with\s+key\s+highlights|headlines|today(?:'s)?)\b/gi, " ")
     .replace(/\s+/g, " ")
@@ -572,32 +652,48 @@ async function fetchLiveNewsSources(rawQuery: string): Promise<WebGroundingSourc
   const wantsTechOrAi = /\b(?:tech|technology|ai|science|software|developer|coding|startup|breakthrough|space)\b/i.test(rawQuery);
   const feedPromises: Array<Promise<Array<WebGroundingSource & { pubMs: number }>>> = [];
 
-  // 1. Real-time Headline Feed (world/top stories)
+  // 1. Bing News RSS (returns rich live sports scores, breaking updates & real publisher URLs)
+  if (cleanTopic.length >= 3) {
+    const bingUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(cleanTopic)}&format=rss`;
+    feedPromises.push(
+      fetch(bingUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ForgeX/1.0)" },
+        signal: AbortSignal.timeout(2400),
+      })
+        .then((r) => (r.ok ? r.text() : ""))
+        .then((xml) => (xml ? parseRssNewsItems(xml, "Live News", 168).slice(0, 6) : []))
+        .catch(() => [])
+    );
+  }
+
+  // 2. Real-time Google News Headline Feed (topic search or world/top stories)
   const gNewsUrl =
     cleanTopic.length >= 4 && !/^(?:of|the|and|for|on|in|top|global|world)$/i.test(cleanTopic)
-      ? `https://news.google.com/rss/search?q=${encodeURIComponent(cleanTopic + " when:2d")}&hl=en-US&gl=US&ceid=US:en`
+      ? `https://news.google.com/rss/search?q=${encodeURIComponent(cleanTopic + " when:3d")}&hl=en-US&gl=US&ceid=US:en`
       : `https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en`;
 
   feedPromises.push(
-    fetch(gNewsUrl, { headers: { "User-Agent": "ForgeX/1.0" }, signal: AbortSignal.timeout(2200) })
+    fetch(gNewsUrl, { headers: { "User-Agent": "ForgeX/1.0" }, signal: AbortSignal.timeout(2400) })
       .then((r) => (r.ok ? r.text() : ""))
-      .then((xml) => (xml ? parseRssNewsItems(xml, "Live News Wire", 48).slice(0, 8) : []))
+      .then((xml) => (xml ? parseRssNewsItems(xml, "Live News Wire", 72).slice(0, 8) : []))
       .catch(() => [])
   );
 
-  // 2. BBC World News RSS
-  feedPromises.push(
-    fetch("https://feeds.bbci.co.uk/news/rss.xml", {
-      headers: { "User-Agent": "ForgeX/1.0" },
-      signal: AbortSignal.timeout(2000),
-    })
-      .then((r) => (r.ok ? r.text() : ""))
-      .then((xml) => (xml ? parseRssNewsItems(xml, "BBC News", 48).slice(0, 5) : []))
-      .catch(() => [])
-  );
+  // 3. BBC World News RSS for broad daily news requests
+  if (includeGeneralFeeds) {
+    feedPromises.push(
+      fetch("https://feeds.bbci.co.uk/news/rss.xml", {
+        headers: { "User-Agent": "ForgeX/1.0" },
+        signal: AbortSignal.timeout(2000),
+      })
+        .then((r) => (r.ok ? r.text() : ""))
+        .then((xml) => (xml ? parseRssNewsItems(xml, "BBC News", 48).slice(0, 5) : []))
+        .catch(() => [])
+    );
+  }
 
-  // 3. Tech/Science Feeds when query touches tech/AI/science
-  if (wantsTechOrAi) {
+  // 4. Tech/Science Feeds when query touches tech/AI/science
+  if (includeGeneralFeeds && wantsTechOrAi) {
     feedPromises.push(
       fetch("https://feeds.bbci.co.uk/news/technology/rss.xml", {
         headers: { "User-Agent": "ForgeX/1.0" },
@@ -667,15 +763,21 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
     .replace(/\s+/g, " ")
     .trim() || rawCoreTopic;
   const isNews = isLiveNewsQuery(searchQuery);
+  const isLiveOrRecent =
+    isNews ||
+    /\b(?:score|scores|scorecard|match|cricket|football|soccer|ipl|world\s*cup|test\s+match|odi|t20|weather|temperature|forecast|stock|price|crypto|bitcoin|btc|eth|latest|today|yesterday|tomorrow|current|currently|recent|recently|live|2024|2025|2026|2027|won|winner|standings|points\s*table|schedule|fixture|release|released|election|results)\b/i.test(
+      searchQuery
+    );
   const todayStamp = new Date().toISOString().split("T")[0];
-  const cacheKey = isNews ? `news:${todayStamp}:${coreTopic.toLowerCase()}` : coreTopic.toLowerCase();
-  const cacheTtlMs = isNews ? 2 * 60 * 1000 : 10 * 60 * 1000;
+  const cacheKey = isLiveOrRecent ? `live:${todayStamp}:${coreTopic.toLowerCase()}` : coreTopic.toLowerCase();
+  const cacheTtlMs = isLiveOrRecent ? 90 * 1000 : 10 * 60 * 1000;
   const cached = webGroundingCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return cached.result;
   }
 
   const newsSources: WebGroundingSource[] = [];
+  const ddgHtmlSources: WebGroundingSource[] = [];
   const exactSources: WebGroundingSource[] = [];
   const wikiRankedSources: WebGroundingSource[] = [];
   const ddgSources: WebGroundingSource[] = [];
@@ -683,20 +785,24 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
   const searchQueries: string[] = [isNews ? `${coreTopic} ${todayStamp}` : rawCoreTopic];
 
   try {
-    // 0. If this is a news/daily-briefing request, fetch real live timestamped news feeds FIRST
-    const newsPromise = isNews
-      ? fetchLiveNewsSources(searchQuery).then((items) => {
+    // 0. Live News / Sports / Current-Events RSS + Organic Web Search Results
+    const newsPromise = isLiveOrRecent
+      ? fetchLiveNewsSources(searchQuery, isNews).then((items) => {
           newsSources.push(...items);
         })
       : Promise.resolve();
 
-    // 1. DuckDuckGo Instant Answer API (queries clean topic for high hit rate)
+    const ddgHtmlPromise = fetchDuckDuckGoHtmlResults(coreTopic).then((items) => {
+      ddgHtmlSources.push(...items);
+    });
+
+    // 1. DuckDuckGo Instant Answer API (encyclopedic direct facts)
     const ddgPromise = (async () => {
       try {
         const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(coreTopic)}&format=json&no_html=1&skip_disambig=1`;
         const res = await fetch(ddgUrl, {
           headers: { "User-Agent": "ForgeX/1.0" },
-          signal: AbortSignal.timeout(1200),
+          signal: AbortSignal.timeout(1400),
         });
         if (res.ok) {
           const data = (await res.json()) as any;
@@ -736,7 +842,7 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
       } catch {}
     })();
 
-    // 2. Wikipedia Full-Text Search + Full Multi-Paragraph Plaintext Intro Extracts (skip for pure breaking news if live news succeeded)
+    // 2. Wikipedia Full-Text Search + Full Multi-Paragraph Plaintext Intro Extracts (skip for pure breaking news)
     const wikiFullPromise = isNews
       ? Promise.resolve()
       : (async () => {
@@ -744,7 +850,7 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
             const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(coreTopic)}&srlimit=4&format=json&origin=*`;
             const searchRes = await fetch(searchUrl, {
               headers: { "User-Agent": "ForgeX/1.0" },
-              signal: AbortSignal.timeout(1100),
+              signal: AbortSignal.timeout(1400),
             });
             if (!searchRes.ok) return;
             const searchData = (await searchRes.json()) as any;
@@ -755,7 +861,7 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
             const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|info&exintro=1&explaintext=1&inprop=url&redirects=1&titles=${encodeURIComponent(titlesParam)}&format=json&origin=*`;
             const extRes = await fetch(extractUrl, {
               headers: { "User-Agent": "ForgeX/1.0" },
-              signal: AbortSignal.timeout(1100),
+              signal: AbortSignal.timeout(1400),
             });
             if (extRes.ok) {
               const extData = (await extRes.json()) as any;
@@ -797,7 +903,7 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
             const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`;
             const res = await fetch(summaryUrl, {
               headers: { "User-Agent": "ForgeX/1.0" },
-              signal: AbortSignal.timeout(1000),
+              signal: AbortSignal.timeout(1200),
             });
             if (res.ok) {
               const data = (await res.json()) as any;
@@ -817,7 +923,7 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
               const defUrl = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(coreTopic.toLowerCase())}`;
               const defRes = await fetch(defUrl, {
                 headers: { "User-Agent": "ForgeX/1.0" },
-                signal: AbortSignal.timeout(900),
+                signal: AbortSignal.timeout(1000),
               });
               if (defRes.ok) {
                 const defData = (await defRes.json()) as any;
@@ -844,9 +950,9 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
           }
         })();
 
-    const timeoutGate = new Promise<void>((resolve) => setTimeout(resolve, isNews ? 2400 : 1500));
+    const timeoutGate = new Promise<void>((resolve) => setTimeout(resolve, isLiveOrRecent ? 3200 : 2400));
     await Promise.race([
-      Promise.allSettled([newsPromise, wikiFullPromise, ddgPromise, directSummaryPromise]),
+      Promise.allSettled([newsPromise, ddgHtmlPromise, wikiFullPromise, ddgPromise, directSummaryPromise]),
       timeoutGate,
     ]);
   } catch (err) {
@@ -866,10 +972,11 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
       sourceDomain: s.sourceDomain,
     }));
 
-  const sources: WebGroundingSource[] = [
-    ...newsSources,
-    ...relevantWikiAndDdg,
-  ];
+  // For live/current-event/score queries, prioritize live RSS + live web snippets ahead of encyclopedic Wikipedia stubs
+  const hasFreshLiveSources = newsSources.length > 0 || ddgHtmlSources.length > 0;
+  const sources: WebGroundingSource[] = isLiveOrRecent && hasFreshLiveSources
+    ? [...newsSources, ...ddgHtmlSources, ...relevantWikiAndDdg.slice(0, 1)]
+    : [...newsSources, ...ddgHtmlSources, ...relevantWikiAndDdg];
 
   // Deduplicate sources by URL, preferring richer snippets
   const uniqueSources: WebGroundingSource[] = [];
@@ -885,30 +992,25 @@ async function performLiveWebGrounding(searchQuery: string): Promise<WebGroundin
     }
   }
 
-  if (uniqueSources.length === 0) {
-    uniqueSources.push({
-      title: `Live Web Index: "${coreTopic}"`,
-      url: `https://duckduckgo.com/?q=${encodeURIComponent(coreTopic)}`,
-      snippet: `Real-time search index and authoritative reports for ${coreTopic}.`,
-      sourceDomain: "web",
-    });
-  }
-
-  // Format grounding context to feed into prompt
-  const maxContextSources = isNews ? 8 : 5;
-  const groundingContext = uniqueSources
-    .slice(0, maxContextSources)
-    .map((s, idx) => `[Source ${idx + 1}: ${s.title} (${s.sourceDomain})](${s.url})\n${s.snippet || ""}`)
-    .join("\n\n");
+  const maxContextSources = isLiveOrRecent ? 8 : 5;
+  const groundingContext =
+    uniqueSources.length > 0
+      ? uniqueSources
+          .slice(0, maxContextSources)
+          .map((s, idx) => `[Source ${idx + 1}: ${s.title} (${s.sourceDomain})](${s.url})\n${s.snippet || ""}`)
+          .join("\n\n")
+      : undefined;
 
   const result: WebGroundingResult = {
-    searchedWeb: true,
+    searchedWeb: uniqueSources.length > 0,
     searchQueries,
-    groundingSources: uniqueSources.slice(0, isNews ? 8 : 6),
+    groundingSources: uniqueSources.slice(0, isLiveOrRecent ? 8 : 6),
     groundingContext,
   };
 
-  webGroundingCache.set(cacheKey, { result, timestamp: Date.now() });
+  if (uniqueSources.length > 0) {
+    webGroundingCache.set(cacheKey, { result, timestamp: Date.now() });
+  }
   return result;
 }
 
@@ -1029,7 +1131,9 @@ async function generateContentResilient(
   options?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<{ text: string; model: string; groundingMetadata?: any }> {
   let lastError: any = null;
-  const modelsToTry = hasGoogleSearchTool(request.config)
+  const searchBlocked = hasGoogleSearchTool(request.config) && Date.now() < googleSearchQuotaBlockedUntil;
+  const effectiveBaseConfig = searchBlocked ? stripGoogleSearchTool(request.config) : request.config;
+  const modelsToTry = hasGoogleSearchTool(effectiveBaseConfig)
     ? prioritizeGoogleSearchModels(preferredModels)
     : preferredModels;
 
@@ -1065,15 +1169,20 @@ async function generateContentResilient(
     const model = modelsToTry[i];
     const hasNextModel = i < modelsToTry.length - 1;
     const isFlashLite = model.includes("flash-lite");
-    const defaultTimeout = isFlashLite ? 10000 : hasNextModel ? 24000 : 28000;
+    const defaultTimeout = isFlashLite ? 20000 : hasNextModel ? 24000 : 28000;
     const callTimeoutMs = options?.timeoutMs
       ? isFlashLite
-        ? Math.min(options.timeoutMs, 10000)
+        ? Math.min(options.timeoutMs, 22000)
         : options.timeoutMs
       : defaultTimeout;
 
+    const perModelBaseConfig =
+      hasGoogleSearchTool(effectiveBaseConfig) && Date.now() < googleSearchQuotaBlockedUntil
+        ? stripGoogleSearchTool(effectiveBaseConfig)
+        : effectiveBaseConfig;
+
     try {
-      const modelConfig = buildModelConfig(model, request.config);
+      const modelConfig = buildModelConfig(model, perModelBaseConfig);
       const res = await invokeGenerate(model, modelConfig, callTimeoutMs, `generateContent (${model})`);
       if (res.text) {
         return { text: res.text, model, groundingMetadata: res.groundingMetadata };
@@ -1083,47 +1192,52 @@ async function generateContentResilient(
       if (!primaryError) primaryError = err;
       if (options?.signal?.aborted) throw err;
 
-      // Never burn extra quota retrying the same model on 429/403/401
-      if (!isQuotaOrAuthError(err)) {
-        const requestedThinking = request.config?.thinkingConfig?.thinkingLevel as string | undefined;
+      const hadTools = Boolean(perModelBaseConfig?.tools && perModelBaseConfig.tools.length > 0);
+      const quotaOrAuth = isQuotaOrAuthError(err);
+
+      if (hadTools && quotaOrAuth && hasGoogleSearchTool(perModelBaseConfig)) {
+        googleSearchQuotaBlockedUntil = Date.now() + 60_000;
+      }
+
+      // If error occurred with tools (including 429/403 Search Grounding quota limits), retry without tools
+      if (hadTools) {
+        try {
+          const configWithoutTools = stripGoogleSearchTool(perModelBaseConfig);
+          if (configWithoutTools?.thinkingConfig) {
+            configWithoutTools.thinkingConfig = {
+              ...configWithoutTools.thinkingConfig,
+              thinkingLevel: ThinkingLevel.LOW,
+            };
+          }
+          const retryConfig = buildModelConfig(model, configWithoutTools);
+          const res = await invokeGenerate(model, retryConfig, 20000, `generateContent-noTools (${model})`);
+          if (res.text) {
+            return { text: res.text, model, groundingMetadata: res.groundingMetadata };
+          }
+        } catch (retryErr: any) {
+          lastError = retryErr;
+          if (options?.signal?.aborted) throw retryErr;
+        }
+      }
+
+      if (!quotaOrAuth) {
+        const requestedThinking = perModelBaseConfig?.thinkingConfig?.thinkingLevel as string | undefined;
         const isDeepThinking = requestedThinking === "XHIGH" || requestedThinking === "HIGH";
 
         // If deep thinking failed or timed out on primary model, retry once at LOW thinking
         if (isDeepThinking && !isFlashLite) {
           try {
             const lowConfig = buildModelConfig(model, {
-              ...request.config,
-              thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.LOW },
+              ...perModelBaseConfig,
+              thinkingConfig: { ...perModelBaseConfig.thinkingConfig, thinkingLevel: ThinkingLevel.LOW },
             });
-            const res = await invokeGenerate(model, lowConfig, 18000, `generateContent-LOW (${model})`);
+            const res = await invokeGenerate(model, lowConfig, 20000, `generateContent-LOW (${model})`);
             if (res.text) {
               return { text: res.text, model, groundingMetadata: res.groundingMetadata };
             }
           } catch (lowErr: any) {
             lastError = lowErr;
             if (options?.signal?.aborted) throw lowErr;
-          }
-        }
-
-        // If error occurred with tools (e.g. search stall), retry this model without tools
-        if (request.config?.tools && request.config.tools.length > 0 && !isFlashLite) {
-          try {
-            const configWithoutTools = { ...request.config };
-            delete configWithoutTools.tools;
-            if (configWithoutTools.thinkingConfig) {
-              configWithoutTools.thinkingConfig = {
-                ...configWithoutTools.thinkingConfig,
-                thinkingLevel: ThinkingLevel.LOW,
-              };
-            }
-            const retryConfig = buildModelConfig(model, configWithoutTools);
-            const res = await invokeGenerate(model, retryConfig, 18000, `generateContent-noTools (${model})`);
-            if (res.text) {
-              return { text: res.text, model, groundingMetadata: res.groundingMetadata };
-            }
-          } catch (retryErr: any) {
-            lastError = retryErr;
-            if (options?.signal?.aborted) throw retryErr;
           }
         }
       }
@@ -1253,7 +1367,9 @@ async function* generateContentStreamResilient(
     }
   };
 
-  const modelsToTry = hasGoogleSearchTool(request.config)
+  const searchBlocked = hasGoogleSearchTool(request.config) && Date.now() < googleSearchQuotaBlockedUntil;
+  const effectiveBaseConfig = searchBlocked ? stripGoogleSearchTool(request.config) : request.config;
+  const modelsToTry = hasGoogleSearchTool(effectiveBaseConfig)
     ? prioritizeGoogleSearchModels(preferredModels)
     : preferredModels;
 
@@ -1266,16 +1382,21 @@ async function* generateContentStreamResilient(
 
     const baseFirstChunk = options?.firstChunkTimeoutMs ?? 24000;
     const initTimeoutMs = isFlashLite
-      ? 10000
+      ? 14000
       : options?.initTimeoutMs ?? (hasNextModel ? 18000 : 22000);
     const firstChunkTimeoutMs = isFlashLite
-      ? 12000
+      ? 16000
       : hasNextModel
       ? baseFirstChunk
       : Math.max(baseFirstChunk, 26000);
 
+    const perModelBaseConfig =
+      hasGoogleSearchTool(effectiveBaseConfig) && Date.now() < googleSearchQuotaBlockedUntil
+        ? stripGoogleSearchTool(effectiveBaseConfig)
+        : effectiveBaseConfig;
+
     try {
-      const modelConfig = buildModelConfig(model, request.config);
+      const modelConfig = buildModelConfig(model, perModelBaseConfig);
       let completed = false;
       for await (const item of streamSingleAttempt(model, modelConfig, initTimeoutMs, firstChunkTimeoutMs)) {
         if (item.done) completed = true;
@@ -1287,20 +1408,49 @@ async function* generateContentStreamResilient(
       if (!primaryError) primaryError = err;
       if (options?.signal?.aborted) throw err;
 
-      // Never burn extra quota retrying the same model on 429/403/401
-      if (!isQuotaOrAuthError(err)) {
-        const requestedThinking = request.config?.thinkingConfig?.thinkingLevel as string | undefined;
+      const hadTools = Boolean(perModelBaseConfig?.tools && perModelBaseConfig.tools.length > 0);
+      const quotaOrAuth = isQuotaOrAuthError(err);
+
+      if (hadTools && quotaOrAuth && hasGoogleSearchTool(perModelBaseConfig)) {
+        googleSearchQuotaBlockedUntil = Date.now() + 60_000;
+      }
+
+      // If error/timeout/quota occurred with tools (e.g. search grounding 429 or stall), retry without tools
+      if (hadTools) {
+        try {
+          const configWithoutTools = stripGoogleSearchTool(perModelBaseConfig);
+          if (configWithoutTools?.thinkingConfig) {
+            configWithoutTools.thinkingConfig = {
+              ...configWithoutTools.thinkingConfig,
+              thinkingLevel: ThinkingLevel.LOW,
+            };
+          }
+          const retryConfig = buildModelConfig(model, configWithoutTools);
+          let completed = false;
+          for await (const item of streamSingleAttempt(model, retryConfig, 15000, 20000)) {
+            if (item.done) completed = true;
+            yield item;
+          }
+          if (completed) return;
+        } catch (retryErr: any) {
+          lastError = retryErr;
+          if (options?.signal?.aborted) throw retryErr;
+        }
+      }
+
+      if (!quotaOrAuth) {
+        const requestedThinking = perModelBaseConfig?.thinkingConfig?.thinkingLevel as string | undefined;
         const isDeepThinking = requestedThinking === "XHIGH" || requestedThinking === "HIGH";
 
         // If HIGH/XHIGH was rejected OR timed out before streaming text on primary model, retry once at LOW thinking
         if (isDeepThinking && !isFlashLite) {
           try {
             const lowConfig = buildModelConfig(model, {
-              ...request.config,
-              thinkingConfig: { ...request.config.thinkingConfig, thinkingLevel: ThinkingLevel.LOW },
+              ...perModelBaseConfig,
+              thinkingConfig: { ...perModelBaseConfig.thinkingConfig, thinkingLevel: ThinkingLevel.LOW },
             });
             let completed = false;
-            for await (const item of streamSingleAttempt(model, lowConfig, 15000, 18000)) {
+            for await (const item of streamSingleAttempt(model, lowConfig, 15000, 20000)) {
               if (item.done) completed = true;
               yield item;
             }
@@ -1308,30 +1458,6 @@ async function* generateContentStreamResilient(
           } catch (lowErr: any) {
             lastError = lowErr;
             if (options?.signal?.aborted) throw lowErr;
-          }
-        }
-
-        // If error/timeout occurred with tools (e.g. search stall), retry this model without tools
-        if (request.config?.tools && request.config.tools.length > 0 && !isFlashLite) {
-          try {
-            const configWithoutTools = { ...request.config };
-            delete configWithoutTools.tools;
-            if (configWithoutTools.thinkingConfig) {
-              configWithoutTools.thinkingConfig = {
-                ...configWithoutTools.thinkingConfig,
-                thinkingLevel: ThinkingLevel.LOW,
-              };
-            }
-            const retryConfig = buildModelConfig(model, configWithoutTools);
-            let completed = false;
-            for await (const item of streamSingleAttempt(model, retryConfig, 15000, 18000)) {
-              if (item.done) completed = true;
-              yield item;
-            }
-            if (completed) return;
-          } catch (retryErr: any) {
-            lastError = retryErr;
-            if (options?.signal?.aborted) throw retryErr;
           }
         }
       }
@@ -1601,11 +1727,14 @@ function generateFallbackChatReply(
       s.snippet &&
       s.snippet.trim().length > 25 &&
       !s.url.includes("google.com/search") &&
-      !s.snippet.startsWith("Wikipedia reference for ")
+      !s.url.includes("duckduckgo.com/?q=") &&
+      !s.title?.startsWith("Live Web Index:") &&
+      !s.snippet.startsWith("Wikipedia reference for ") &&
+      !s.snippet.startsWith("Real-time search index and authoritative reports for ")
   );
 
   if (informativeSources.length > 0) {
-    // Prefer full Wikipedia/DuckDuckGo article extract first
+    // Prefer live news/web snippets with rich content first
     const primary =
       informativeSources.find((s) => (s.snippet?.length || 0) > 160) || informativeSources[0];
     const related = informativeSources
@@ -2336,8 +2465,8 @@ The UI renders this as an interactive playable quiz widget!`;
 
           const chatTimeoutMs =
             adaptiveThinking === ThinkingLevel.HIGH || adaptiveThinking === ThinkingLevel.XHIGH || useGoogleSearch
-              ? 24000
-              : 18000;
+              ? 26000
+              : 24000;
 
           const { text: replyText, groundingMetadata } = await generateContentResilient(
             ai,
@@ -4142,7 +4271,9 @@ Format your response as:
           false
         );
         const safeThinking =
-          (rawThinking as string) === "XHIGH" ? ThinkingLevel.HIGH : rawThinking;
+          action === "generate" || (rawThinking as string) === "XHIGH" || (rawThinking as string) === "HIGH"
+            ? ThinkingLevel.LOW
+            : rawThinking;
         const codeTrained = retrieveTrainingContext(`${language} ${prompt || ""}`, 2800);
 
         for (const currentKey of candidateKeys) {
@@ -4169,7 +4300,7 @@ Format your response as:
                 },
               },
               candidateModels,
-              { timeoutMs: 8000 }
+              { timeoutMs: 24000 }
             );
 
             if (text && text.trim().length > 0) {
@@ -5651,21 +5782,24 @@ Explain recent developments, user reception, and best practices.`;
         }
       }
 
-      // Add general search portal source
-      webSources.push({
-        title: `Search "${effectiveSearchTerm}" on Web Index`,
-        url: `https://www.google.com/search?q=${encodeURIComponent(effectiveSearchTerm)}`,
-        snippet: `Real-time search results, official documentation, and community discussions for ${effectiveSearchTerm}.`,
-      });
-
       // 4. Fallback summary if live engine was unavailable
       if (!summaryText) {
         if (exactApp) {
           summaryText = `${didYouMean ? `### 💡 Did you mean: **${didYouMean}**?\n*(Corrected spelling from "${rawQuery}")*\n\n` : ""}### 🔍 Exact Application: **${exactApp.name}**\n\n**${exactApp.name}** is a leading **${exactApp.category}** created by **${exactApp.developer}**.\n\n- **Official Website**: [${exactApp.url}](${exactApp.url})\n- **Category**: ${exactApp.category}\n- **Developer**: ${exactApp.developer}\n- **Access**: ${exactApp.access || "Free / Web-based"}\n\n### ⚡ Key Capabilities\n${exactApp.description}\n\n${wikiData?.extract ? `### 📖 Grounded Knowledge\n${wikiData.extract}\n\n` : ""}- **Primary Workflow**: Direct browser-based access and seamless tool integration.\n- **Authentication**: Sign in via official account provider.\n- **Direct Link**: You can launch the official application directly at [${exactApp.url}](${exactApp.url}).`;
+        } else if (liveGrounding.groundingSources.length > 0) {
+          const formattedBullets = liveGrounding.groundingSources
+            .slice(0, 6)
+            .map((s) => {
+              const cleanSnippet = (s.snippet || "").replace(/\s+/g, " ").trim();
+              const domainLabel = s.sourceDomain ? ` *(${s.sourceDomain})*` : "";
+              return `- **[${s.title}](${s.url})**${domainLabel}${cleanSnippet ? `: ${cleanSnippet}` : ""}`;
+            })
+            .join("\n");
+          summaryText = `### Live Web Results for: "${effectiveSearchTerm}"\n\n${formattedBullets}`;
         } else if (wikiData?.extract) {
           summaryText = `### Web Overview for: "${effectiveSearchTerm}"\n\n${wikiData.extract}\n\n- **Authoritative Source**: Verified against real-time encyclopedic and digital indexes.\n- **Reference URL**: [${wikiData.url}](${wikiData.url})`;
         } else {
-          summaryText = `### Web Search Briefing for: "${effectiveSearchTerm}"\n\nRecent web indices and documentation confirm active developments regarding **${effectiveSearchTerm}**.\n\n- **Topic**: ${effectiveSearchTerm}\n- **Verification**: Cross-referenced against authoritative live search index nodes.\n- **Primary Portal**: [Web Live Index](https://www.google.com/search?q=${encodeURIComponent(effectiveSearchTerm)})`;
+          summaryText = `### No Live Results Found for: "${effectiveSearchTerm}"\n\nLive web search did not return matching articles or web pages right now. Try rephrasing your query with more specific keywords.`;
         }
       }
 
@@ -5986,10 +6120,11 @@ ${currentContent}
           }
 
           if (base64Audio) {
+            const playable = ensureWavBase64(base64Audio, "audio/pcm;rate=24000");
             return res.json({
               success: true,
-              audioBase64: base64Audio,
-              mimeType: "audio/pcm;rate=24000",
+              audioBase64: playable.base64,
+              mimeType: playable.mimeType,
               voiceName: chosenVoice,
               vocalStyle
             });
@@ -6584,7 +6719,12 @@ Return only the clean lyrics with section headers.`;
       if (apiKey) {
         try {
           const ai = getGenAiClient(apiKey);
-          const text = await generateGeminiText(ai, systemInstruction);
+          const text = await generateGeminiText(
+            ai,
+            systemInstruction,
+            { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
+            req.body?.modelId || "forge-1.5"
+          );
           if (text && text.trim()) {
             return res.json({ lyrics: text.trim() });
           }
@@ -6595,6 +6735,185 @@ Return only the clean lyrics with section headers.`;
 
       // Algorithmic lyrics fallback customized for the full duration
       return res.json({ lyrics: null, fallback: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ error: msg });
+    }
+  });
+
+  // ==========================================
+  // 6d. AI MUSIC COMPOSITION & VOCAL MASTERING ENDPOINT
+  // Uses standard Gemini models (gemini-4-hydrogen / gemini-3.8-flash-lite-tts)
+  // to compose bespoke chord progressions, lead melody motifs, structured lyrics, and vocal audio
+  // ==========================================
+  app.post("/api/generate-music", async (req: Request, res: Response) => {
+    try {
+      const {
+        prompt = "Midnight cyberpunk drive with warm synth leads",
+        genre = "Synthwave",
+        mood = "Energetic",
+        tempoBpm = 120,
+        durationSeconds = 180,
+        includeLyrics = true,
+        hasVoice = true,
+        voiceProfile = "Zephyr",
+        vocalStyle = "Melodic Singing",
+        modelId,
+      } = req.body || {};
+
+      const apiKey = getEffectiveApiKey(req);
+      const cleanPrompt = String(prompt || "Cosmic Odyssey").trim().slice(0, 600);
+      const validVoices = ["Zephyr", "Puck", "Kore", "Fenrir", "Charon", "Aoede"];
+      const chosenVoice = validVoices.includes(voiceProfile) ? voiceProfile : "Zephyr";
+
+      let composedTitle = cleanPrompt.split(/\s+/).slice(0, 4).join(" ");
+      composedTitle = composedTitle ? composedTitle.charAt(0).toUpperCase() + composedTitle.slice(1) : "ForgeX Odyssey";
+      let lyrics: string | null = null;
+      let chordFrequencies: number[][] | undefined;
+      let melodyPattern: number[] | undefined;
+      let resolvedBpm = Number(tempoBpm) || 120;
+
+      if (apiKey) {
+        try {
+          const ai = getGenAiClient(apiKey);
+          const composerPrompt = `You are a master music composer and songwriter. Compose an original musical blueprint for:
+Prompt: "${cleanPrompt}"
+Genre: ${genre}
+Mood: ${mood}
+Target BPM: ${resolvedBpm}
+Duration: ${durationSeconds} seconds
+Include Lyrics: ${includeLyrics || hasVoice ? "Yes" : "No"}
+
+Output ONLY valid JSON inside a \`\`\`json block matching these keys:
+- "title": short, evocative song title (2-4 words)
+- "bpm": integer tempo between 68 and 155 appropriate for the genre/mood
+- "chords": 4 chords, each an array of 3 or 4 note frequencies in Hz (between 90 and 520) that fit ${genre} harmony cleanly
+- "melodySteps": 16 integers (between -1 and 7) representing scale degrees for a catchy 16-step lead motif (-1 means musical rest)
+- "lyrics": ${includeLyrics || hasVoice ? "complete multi-section song lyrics with [Intro], [Verse 1], [Chorus], [Verse 2], [Bridge], [Outro] tags" : "empty string"}`;
+
+          const { text } = await generateContentResilient(
+            ai,
+            {
+              contents: [{ role: "user", parts: [{ text: composerPrompt }] }],
+              config: {
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              },
+            },
+            FAST_MODELS,
+            { timeoutMs: 14000 }
+          );
+
+          if (text) {
+            const jsonMatch =
+              text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) ||
+              text.match(/(\{[\s\S]*\})/) ||
+              [null, text];
+            const parsed = JSON.parse((jsonMatch[1] || text).trim());
+            if (typeof parsed.title === "string" && parsed.title.trim()) {
+              composedTitle = parsed.title.trim().slice(0, 64);
+            }
+            if (typeof parsed.bpm === "number" && parsed.bpm >= 65 && parsed.bpm <= 165) {
+              resolvedBpm = Math.round(parsed.bpm);
+            }
+            if (Array.isArray(parsed.chords) && parsed.chords.length >= 2) {
+              const sanitized = parsed.chords
+                .slice(0, 4)
+                .map((c: unknown) =>
+                  Array.isArray(c)
+                    ? c.map(Number).filter((f) => Number.isFinite(f) && f >= 65 && f <= 880).slice(0, 4)
+                    : []
+                )
+                .filter((c: number[]) => c.length >= 2);
+              if (sanitized.length >= 2) {
+                chordFrequencies = sanitized;
+              }
+            }
+            if (Array.isArray(parsed.melodySteps) && parsed.melodySteps.length >= 4) {
+              melodyPattern = parsed.melodySteps
+                .slice(0, 16)
+                .map((s: unknown) => {
+                  const n = Math.round(Number(s));
+                  return Number.isFinite(n) ? Math.max(-1, Math.min(7, n)) : 0;
+                });
+            }
+            if (typeof parsed.lyrics === "string" && parsed.lyrics.trim()) {
+              lyrics = parsed.lyrics.trim();
+            }
+          }
+        } catch (composeErr: any) {
+          console.warn("[/api/generate-music] blueprint notice:", composeErr?.message?.slice(0, 120));
+        }
+
+        // Optional vocal chorus stem synthesis via standard Gemini TTS
+        let vocalAudioUrl: string | undefined;
+        if (hasVoice && lyrics) {
+          try {
+            const chorusMatch = lyrics.match(/\[Chorus[^\]]*\]([\s\S]*?)(?=\n\[|$)/i);
+            const vocalSample = (chorusMatch?.[1] || lyrics)
+              .replace(/\[[^\]]+\]/g, "")
+              .trim()
+              .split(/\n+/)
+              .slice(0, 4)
+              .join(" ")
+              .slice(0, 320);
+
+            if (vocalSample) {
+              const ai = getGenAiClient(apiKey);
+              const singingPrompt = `Sing or perform rhythmically at ${resolvedBpm} BPM in a ${vocalStyle} style: "${vocalSample}"`;
+              for (const ttsModel of ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]) {
+                try {
+                  const ttsResp = await raceWithTimeout(
+                    ai.models.generateContent({
+                      model: ttsModel,
+                      contents: [{ role: "user", parts: [{ text: singingPrompt }] }],
+                      config: {
+                        // @ts-ignore
+                        responseModalities: ["AUDIO"],
+                        speechConfig: {
+                          voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: chosenVoice },
+                          },
+                        },
+                      },
+                    }),
+                    10000,
+                    `generate-music vocal (${ttsModel})`
+                  );
+                  const rawAudio = ttsResp.candidates?.[0]?.content?.parts?.find((p: any) => p?.inlineData?.data)?.inlineData?.data;
+                  if (rawAudio) {
+                    const playable = ensureWavBase64(rawAudio, "audio/pcm;rate=24000");
+                    vocalAudioUrl = `data:${playable.mimeType};base64,${playable.base64}`;
+                    break;
+                  }
+                } catch {
+                  continue;
+                }
+              }
+            }
+          } catch {
+            // Browser neural formant singing synthesis handles vocals automatically
+          }
+        }
+
+        return res.json({
+          success: true,
+          fallback: !chordFrequencies && !lyrics,
+          title: composedTitle,
+          bpm: resolvedBpm,
+          chordFrequencies,
+          melodyPattern,
+          lyrics,
+          vocalAudioUrl,
+        });
+      }
+
+      return res.json({
+        success: true,
+        fallback: true,
+        title: composedTitle,
+        bpm: resolvedBpm,
+        lyrics: null,
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ error: msg });

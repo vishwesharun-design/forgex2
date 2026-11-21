@@ -38,8 +38,8 @@ export function detectImageGenerationIntent(
   const isExcludedIntent =
     isDiagramOrSchemaRequest ||
     /not\s+working|keeps?\s+generating\s+this|why\s+is\s+it|broken|error|fix\s+this|issue\s+with/i.test(clean) ||
-    /^(?:quiz|quizzes|trivia|question|questions|test|practice\s+questions|function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm)\b/i.test(
-      clean.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:create|make|give\s+me|generate)\s+(?:a\s+|an\s+|some\s+)?/i, '').trim()
+    /^(?:quiz|quizzes|trivia|question|questions|test|practice\s+questions|function|script|code|component|table|list|essay|story|poem|song|music|track|tracks|beat|beats|melody|soundtrack|instrumental|symphony|lullaby|rap|anthem|tune|jingle|dockerfile|database|schema|website|app|class|algorithm)\b/i.test(
+      clean.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:create|make|give\s+me|generate|compose|produce)\s+(?:a\s+|an\s+|some\s+|new\s+)?(?:[a-z0-9-]+\s+){0,2}/i, '').trim()
     );
   if (isExcludedIntent) {
     return { isImage: false, prompt: '' };
@@ -161,7 +161,7 @@ export function detectImageGenerationIntent(
   );
   if (actionNounMatch) {
     const rawPrompt = (actionNounMatch[1] || '').trim();
-    if (!/^(?:a\s+)?(?:function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm|quiz|test|trivia)\b/i.test(rawPrompt)) {
+    if (!/^(?:a\s+)?(?:function|script|code|component|table|list|essay|story|poem|song|music|track|beat|melody|soundtrack|instrumental|symphony|lullaby|rap|anthem|tune|jingle|dockerfile|database|schema|website|app|class|algorithm|quiz|test|trivia)\b/i.test(rawPrompt)) {
       const finalPrompt = rawPrompt.replace(/[?!.]+$/, '').trim() || 'A stunning creative visual composition with vibrant lighting';
       return {
         isImage: true,
@@ -193,7 +193,10 @@ export function detectImageGenerationIntent(
   if (directCreateMatch && directCreateMatch[1]) {
     const candidate = directCreateMatch[1].trim();
     if (
-      !/^(?:function|script|code|component|table|list|essay|story|poem|song|dockerfile|database|schema|website|app|class|algorithm|test|tests|report|summary|presentation|document|quiz|quizzes|trivia|questions?)\b/i.test(
+      !/^(?:function|script|code|component|table|list|essay|story|poem|song|music|track|beat|melody|soundtrack|instrumental|symphony|lullaby|rap|anthem|tune|jingle|dockerfile|database|schema|website|app|class|algorithm|test|tests|report|summary|presentation|document|quiz|quizzes|trivia|questions?)\b/i.test(
+        candidate
+      ) &&
+      !/\b(?:song|music|track|beat|beats|melody|soundtrack|instrumental|symphony|lullaby|anthem|tune|jingle)\b/i.test(
         candidate
       )
     ) {

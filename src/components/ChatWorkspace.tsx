@@ -68,6 +68,8 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { detectWebSearchIntent } from '../utils/searchIntent';
 import { detectImageGenerationIntent } from '../utils/imageIntent';
+import { detectMusicGenerationIntent } from '../utils/musicIntent';
+import { musicService } from '../services/musicService';
 import { ImageGeneratingAnimation } from './ImageGeneratingAnimation';
 import { FullscreenImageModal } from './FullscreenImageModal';
 import { InlineDeepResearchCard } from './InlineDeepResearchCard';
@@ -109,6 +111,8 @@ interface ChatWorkspaceProps {
   theme: ForgeXTheme;
   initialComposerTool?: ComposerToolId;
   onConsumeInitialTool?: () => void;
+  initialDraftPrompt?: string;
+  onConsumeInitialPrompt?: () => void;
   onNavigateToLibrary?: () => void;
   onOpenVoiceMode?: () => void;
   activeReminder?: ActiveReminderAlert | null;
@@ -213,6 +217,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   theme,
   initialComposerTool,
   onConsumeInitialTool,
+  initialDraftPrompt,
+  onConsumeInitialPrompt,
   onNavigateToLibrary,
   onOpenVoiceMode,
   activeReminder,
@@ -425,6 +431,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       setTimeout(() => textareaRef.current?.focus(), 60);
     }
   }, [initialComposerTool, onConsumeInitialTool]);
+
+  useEffect(() => {
+    if (initialDraftPrompt && initialDraftPrompt.trim()) {
+      setInputText(initialDraftPrompt);
+      onConsumeInitialPrompt?.();
+      setTimeout(() => textareaRef.current?.focus(), 80);
+    }
+  }, [initialDraftPrompt, onConsumeInitialPrompt]);
 
   const isDark = theme === 'dark';
   const currentModel = FORGEX_MODELS.find((m) => m.id === selectedModelId) || FORGEX_MODELS[4];
@@ -1205,6 +1219,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const handleSendMessage = async (textToSend?: string) => {
     voiceController.unlockAudio();
+    musicService.unlockAudio();
     const rawTyped = (textToSend !== undefined ? textToSend : inputText).trim();
     const activeToolSnapshot = activeComposerTool;
     const canSubmitEmptyPrompt =
@@ -1281,7 +1296,18 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       'agents',
     ];
 
-    if (inlineSpecialTools.includes(activeToolSnapshot)) {
+    const autoMusicIntent =
+      activeToolSnapshot === 'none' && attachedFiles.length === 0
+        ? detectMusicGenerationIntent(text)
+        : { isMusic: false, prompt: '' };
+    const effectiveInlineTool: ComposerToolId =
+      activeToolSnapshot === 'none' && autoMusicIntent.isMusic
+        ? 'music'
+        : activeToolSnapshot;
+    const effectiveToolBadge: ChatMessage['toolBadge'] | undefined =
+      effectiveInlineTool !== 'none' ? effectiveInlineTool : activeToolBadge;
+
+    if (inlineSpecialTools.includes(effectiveInlineTool)) {
       const targetSessionId = currentSession?.id || 'chat_' + Date.now();
       const userMsg: ChatMessage = {
         id: 'usr_msg_' + Date.now(),
@@ -1289,7 +1315,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         content: text,
         timestamp: Date.now(),
         attachments: filesToAttach.length > 0 ? filesToAttach : undefined,
-        toolBadge: activeToolBadge,
+        toolBadge: effectiveToolBadge,
       };
 
       const statusLabels: Record<string, string> = {
@@ -1304,8 +1330,8 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         agents: 'Running autonomous AI Agent...',
       };
 
-      setPendingUserTurn({ text, attachments: filesToAttach, toolBadge: activeToolBadge });
-      setInlineToolStatus(statusLabels[activeToolSnapshot] || 'Running tool...');
+      setPendingUserTurn({ text, attachments: filesToAttach, toolBadge: effectiveToolBadge });
+      setInlineToolStatus(statusLabels[effectiveInlineTool] || 'Running tool...');
       setIsSubmitting(true);
 
       try {
@@ -1314,31 +1340,32 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           role: 'assistant',
           content: '',
           timestamp: Date.now() + 1,
-          toolBadge: activeToolBadge,
+          toolBadge: effectiveToolBadge,
           modelUsed: currentModel.name,
         };
 
-        if (activeToolSnapshot === 'music') {
-          const song = await executeInlineMusicTool(text, effectiveModelForTurn);
+        if (effectiveInlineTool === 'music') {
+          const songPrompt = autoMusicIntent.isMusic && autoMusicIntent.prompt ? autoMusicIntent.prompt : text;
+          const song = await executeInlineMusicTool(songPrompt, effectiveModelForTurn);
           assistantMsg.modelUsed = 'ForgeX Song Synthesizer';
           assistantMsg.content = `Created **${song.title}** (${song.genre} · ${song.mood} · ${song.tempoBpm} BPM).`;
           assistantMsg.generatedSong = song;
-        } else if (activeToolSnapshot === 'spotify') {
+        } else if (effectiveInlineTool === 'spotify') {
           const res = executeInlineSpotifySearch(rawTyped);
           assistantMsg.modelUsed = 'ForgeX Music Player';
           assistantMsg.content = res.summary;
           assistantMsg.spotifyTracks = res.tracks;
-        } else if (activeToolSnapshot === 'presentation') {
+        } else if (effectiveInlineTool === 'presentation') {
           const deck = await executeInlinePresentationTool(text, isDark);
           assistantMsg.modelUsed = 'ForgeX Presentations';
           assistantMsg.content = `Generated **${deck.title}** (${deck.slides.length} slides).`;
           assistantMsg.presentationDeck = deck;
-        } else if (activeToolSnapshot === 'canvas') {
+        } else if (effectiveInlineTool === 'canvas') {
           const board = await executeInlineCanvasTool(text);
           assistantMsg.modelUsed = 'ForgeX AI Canvas';
           assistantMsg.content = `Built interactive board **${board.name}** (${board.nodes.length} nodes).`;
           assistantMsg.canvasBoard = board;
-        } else if (activeToolSnapshot === 'data_analysis') {
+        } else if (effectiveInlineTool === 'data_analysis') {
           const { report, datasetSummary } = await executeInlineDataAnalysisTool(
             text,
             rawAttachmentsSnapshot
@@ -1347,19 +1374,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           assistantMsg.content = report.executiveSummary || report.summary;
           assistantMsg.dataReport = report;
           assistantMsg.dataDataset = datasetSummary;
-        } else if (activeToolSnapshot === 'writing') {
+        } else if (effectiveInlineTool === 'writing') {
           const res = await executeInlineWritingTool(text);
           assistantMsg.modelUsed = 'ForgeX Writing Assistant';
           assistantMsg.content = res.content;
           assistantMsg.writingMeta = { category: res.category, tone: res.tone };
-        } else if (activeToolSnapshot === 'files') {
+        } else if (effectiveInlineTool === 'files') {
           const res = await executeInlineDocumentTool(text, rawAttachmentsSnapshot);
           assistantMsg.modelUsed = 'ForgeX Document AI';
           assistantMsg.content = res.result || 'Document analysis complete.';
           if (Array.isArray(res.quiz) && res.quiz.length > 0) {
             assistantMsg.documentQuiz = res.quiz;
           }
-        } else if (activeToolSnapshot === 'code') {
+        } else if (effectiveInlineTool === 'code') {
           const codeMarkdown = await executeInlineCodeTool(
             text,
             rawAttachmentsSnapshot,
@@ -1367,7 +1394,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           );
           assistantMsg.modelUsed = 'ForgeX Code Engine';
           assistantMsg.content = codeMarkdown;
-        } else if (activeToolSnapshot === 'agents') {
+        } else if (effectiveInlineTool === 'agents') {
           const res = await executeInlineAgentTool(
             text,
             effectiveModelForTurn,
@@ -1400,9 +1427,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         const errMsg: ChatMessage = {
           id: 'asst_err_' + (Date.now() + 1),
           role: 'assistant',
-          content: `Could not complete ${TOOL_CHIP_META[activeToolSnapshot as Exclude<ComposerToolId, 'none'>]?.label || 'tool'} request: ${err?.message || 'Unexpected error'}.`,
+          content: `Could not complete ${TOOL_CHIP_META[effectiveInlineTool as Exclude<ComposerToolId, 'none'>]?.label || 'tool'} request: ${err?.message || 'Unexpected error'}.`,
           timestamp: Date.now() + 1,
-          toolBadge: activeToolBadge,
+          toolBadge: effectiveToolBadge,
         };
         const updatedSession = chatService.appendMessagesToSession(
           targetSessionId,

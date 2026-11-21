@@ -46,6 +46,8 @@ interface SongWorkspaceProps {
   theme: ForgeXTheme;
   selectedModelId: ForgeXModelId;
   onSelectModel: (modelId: ForgeXModelId) => void;
+  initialPrompt?: string;
+  onConsumeInitialPrompt?: () => void;
 }
 
 const GENRES: { id: SongGenre; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
@@ -99,6 +101,8 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   theme,
   selectedModelId,
   onSelectModel,
+  initialPrompt,
+  onConsumeInitialPrompt,
 }) => {
   const isDark = theme === 'dark';
   const [songs, setSongs] = useState<GeneratedSong[]>([]);
@@ -114,6 +118,14 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
   const [customLyrics, setCustomLyrics] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState('');
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) {
+      setPrompt(initialPrompt.trim());
+      onConsumeInitialPrompt?.();
+    }
+  }, [initialPrompt, onConsumeInitialPrompt]);
 
   // Active Playback State
   const [activeSongId, setActiveSongId] = useState<string | null>(null);
@@ -190,22 +202,12 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
 
   const handleGenerateSong = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    musicService.unlockAudio();
     const cleanPrompt = prompt.trim() || 'Midnight Cyberpunk Odyssey with driving synth leads and neon bass';
 
     setIsGenerating(true);
-    setGenerationStep('Composing musical scales and harmonic structure...');
-    await new Promise((r) => setTimeout(r, 600));
-
-    setGenerationStep(`Arranging ${selectedGenre} instrumentation and beat groove...`);
-    await new Promise((r) => setTimeout(r, 700));
-
-    if (includeLyrics || hasVoice) {
-      setGenerationStep(`Synthesizing ${hasVoice ? `AI Vocalist (${selectedVoiceProfile}) & ` : ''}lyrics score...`);
-      await new Promise((r) => setTimeout(r, 600));
-    }
-
-    setGenerationStep('Mastering dual beat/vocal stems and cover art...');
-    await new Promise((r) => setTimeout(r, 800));
+    setGenerationError(null);
+    setGenerationStep(`Composing ${selectedGenre} harmony, melody & AI vocals...`);
 
     try {
       const promptDetectedDuration = extractDurationFromPrompt(cleanPrompt, selectedDuration);
@@ -231,10 +233,11 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
       const updated = musicService.getSongs();
       setSongs(updated);
       setSelectedSongId(newSong.id);
-      // Auto-play newly created song!
+      // Auto-play newly created song with unlocked audio context
       handlePlaySong(newSong);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Song generation failed', err);
+      setGenerationError(err?.message || 'Unable to synthesize song right now. Please try again.');
     } finally {
       setIsGenerating(false);
       setGenerationStep('');
@@ -268,7 +271,8 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
         setActiveSongId(null);
         setPlaybackTime(0);
       },
-      0
+      0,
+      0.85
     );
   };
 
@@ -662,6 +666,12 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
             )}
           </div>
 
+          {generationError && (
+            <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs">
+              {generationError}
+            </div>
+          )}
+
           {/* Action Submit */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
@@ -723,32 +733,20 @@ export const SongWorkspace: React.FC<SongWorkspaceProps> = ({
               if (!featuredSong) return null;
 
               return (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      <Music className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Studio Audio Master & Lyrics Sections</span>
-                    </div>
-                    <span className="text-[11px] font-mono text-amber-400">
-                      Dual-Panel Acoustic Workspace
-                    </span>
-                  </div>
-
-                  <AudioTrackPlayer
-                    song={featuredSong}
-                    isPlaying={activeSongId === featuredSong.id}
-                    playbackTime={activeSongId === featuredSong.id ? playbackTime : 0}
-                    playbackDuration={activeSongId === featuredSong.id ? playbackDuration : featuredSong.durationSeconds}
-                    isDark={isDark}
-                    onPlayToggle={handlePlaySong}
-                    onSeek={handleSeekSong}
-                    onDownload={handleDownloadSong}
-                    onToggleFavorite={handleToggleFavorite}
-                    onDelete={handleDeleteSong}
-                    onVolumeChange={handleVolumeChange}
-                    onSaveToCloud={handleSaveToCloud}
-                  />
-                </div>
+                <AudioTrackPlayer
+                  song={featuredSong}
+                  isPlaying={activeSongId === featuredSong.id}
+                  playbackTime={activeSongId === featuredSong.id ? playbackTime : 0}
+                  playbackDuration={activeSongId === featuredSong.id ? playbackDuration : featuredSong.durationSeconds}
+                  isDark={isDark}
+                  onPlayToggle={handlePlaySong}
+                  onSeek={handleSeekSong}
+                  onDownload={handleDownloadSong}
+                  onToggleFavorite={handleToggleFavorite}
+                  onDelete={handleDeleteSong}
+                  onVolumeChange={handleVolumeChange}
+                  onSaveToCloud={handleSaveToCloud}
+                />
               );
             })()}
 

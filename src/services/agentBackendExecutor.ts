@@ -157,52 +157,100 @@ export async function executeAgentTool(
         const query = (args.query || '').trim();
         actionLogs.push(`🌐 Executing real-time web search for: "${query}"`);
 
-        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
-        let sources: any[] = [];
+        const sources: Array<{ title: string; url: string; snippet: string }> = [];
         let summary = '';
 
-        try {
-          const res = await fetch(ddgUrl, {
-            headers: { 'User-Agent': 'ForgeX-AgentLab/2.0' },
-            signal: AbortSignal.timeout(3000),
-          });
-          if (res.ok) {
-            const data = (await res.json()) as any;
-            if (data.AbstractText) {
-              summary = data.AbstractText;
-              sources.push({
-                title: data.Heading || `${query} Overview`,
-                url: data.AbstractURL || 'https://duckduckgo.com',
-                snippet: data.AbstractText,
-              });
-            }
-            if (Array.isArray(data.RelatedTopics)) {
-              for (const topic of data.RelatedTopics.slice(0, 4)) {
-                if (topic.Text && topic.FirstURL) {
-                  sources.push({
-                    title: topic.Text.split(' - ')[0] || topic.Text.slice(0, 50),
-                    url: topic.FirstURL,
-                    snippet: topic.Text,
-                  });
+        const decodeEntities = (raw: string) =>
+          raw
+            .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;|&apos;/g, "'")
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const unwrapUrl = (rawUrl: string) => {
+          try {
+            const parsed = new URL(rawUrl, 'https://duckduckgo.com');
+            const uddg = parsed.searchParams.get('uddg');
+            if (uddg) return uddg;
+            const bingTarget = parsed.searchParams.get('url');
+            if (bingTarget && /^https?:\/\//i.test(bingTarget)) return bingTarget;
+          } catch {}
+          return rawUrl;
+        };
+
+        await Promise.allSettled([
+          fetch(`https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ForgeX-AgentLab/2.0)' },
+            signal: AbortSignal.timeout(2500),
+          })
+            .then((r) => (r.ok ? r.text() : ''))
+            .then((xml) => {
+              const items = xml.match(/<item\b[^>]*>[\s\S]*?<\/item>/gi) || [];
+              for (const item of items.slice(0, 4)) {
+                const t = decodeEntities(item.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '');
+                const rawLink = decodeEntities(item.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i)?.[1] || '');
+                const desc = decodeEntities(item.match(/<description\b[^>]*>([\s\S]*?)<\/description>/i)?.[1] || '');
+                const link = unwrapUrl(rawLink);
+                if (t && /^https?:\/\//i.test(link)) {
+                  sources.push({ title: t, url: link, snippet: desc });
                 }
               }
-            }
-          }
-        } catch (_err) {}
+            }),
+          fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36' },
+            signal: AbortSignal.timeout(2500),
+          })
+            .then((r) => (r.ok ? r.text() : ''))
+            .then((html) => {
+              const blocks = html.split(/<div[^>]+class="[^"]*result\b[^"]*results_links[^"]*"[^>]*>/i).slice(1);
+              for (const block of blocks) {
+                if (/result--ad/i.test(block.slice(0, 120))) continue;
+                const aMatch = block.match(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+                if (!aMatch) continue;
+                const url = unwrapUrl(decodeEntities(aMatch[1]));
+                const title = decodeEntities(aMatch[2]);
+                const snippet = decodeEntities(block.match(/class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div|span)>/i)?.[1] || '');
+                if (title && /^https?:\/\//i.test(url) && !sources.some((s) => s.url === url)) {
+                  sources.push({ title, url, snippet });
+                }
+                if (sources.length >= 6) break;
+              }
+            }),
+          fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`, {
+            headers: { 'User-Agent': 'ForgeX-AgentLab/2.0' },
+            signal: AbortSignal.timeout(2000),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data: any) => {
+              if (!data) return;
+              if (data.AbstractText && data.AbstractURL) {
+                summary = data.AbstractText;
+                sources.push({
+                  title: data.Heading || `${query} Overview`,
+                  url: data.AbstractURL,
+                  snippet: data.AbstractText,
+                });
+              }
+            }),
+        ]);
 
-        if (sources.length === 0) {
-          sources.push({
-            title: `Live Web Index: "${query}"`,
-            url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-            snippet: `Live search query results for ${query}`,
-          });
-          summary = `Live web index lookup for "${query}" compiled.`;
+        if (!summary && sources.length > 0) {
+          summary = sources.slice(0, 3).map((s) => `${s.title}${s.snippet ? `: ${s.snippet}` : ''}`).join(' | ');
         }
 
-        actionLogs.push(`✓ Retrieved ${sources.length} verified web sources.`);
+        actionLogs.push(
+          sources.length > 0
+            ? `✓ Retrieved ${sources.length} verified web sources.`
+            : `⚠ No live web results matched "${query}".`
+        );
         return {
           success: true,
-          result: { query, summary, sources },
+          result: { query, summary: summary || `No live results returned for "${query}".`, sources },
           actionLogs,
         };
       }

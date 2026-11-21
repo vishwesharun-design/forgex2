@@ -17,7 +17,7 @@ import {
   WritingTone,
 } from '../types';
 import { codeStudioService } from './codeStudioService';
-import { musicService } from './musicService';
+import { musicService, extractDurationFromPrompt } from './musicService';
 import { presentationService } from './presentationService';
 import { canvasService } from './canvasService';
 import { dataAnalysisService, SAMPLE_DATASETS } from './dataAnalysisService';
@@ -137,12 +137,14 @@ export async function executeInlineMusicTool(
     Classical: 88,
   };
 
+  const durationSeconds = extractDurationFromPrompt(prompt, 180);
+
   return await musicService.generateSong({
     prompt,
     genre,
     mood,
     tempoBpm: bpmMap[genre],
-    durationSeconds: 180,
+    durationSeconds,
     modelId,
     includeLyrics: true,
     hasVoice: true,

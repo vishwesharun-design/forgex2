@@ -475,7 +475,7 @@ export const codeStudioService = {
         'Content-Type': 'application/json',
         ...(apiKey ? { 'x-api-key': apiKey } : {}),
       },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(65000),
       body: JSON.stringify({
         ...params,
         apiKey: apiKey || undefined,
